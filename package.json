@@ -2,7 +2,7 @@
   "name": "code",
   "version": "1.0.0",
   "description": "",
-  "main": "main.js",
+  "main": "examples/main.js",
   "scripts": {
     "dev": "webpack --mode development",
     "prod": "webpack --mode production",

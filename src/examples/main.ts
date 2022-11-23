@@ -1,6 +1,10 @@
 import $ from 'jquery';
 import {CheckWebGPU} from './helper';
 import {Shaders} from './shaders';
+import {Renderer} from "../framework/renderer";
+import {Node3d} from "../framework/node-3d";
+import {Object3d} from "../framework/object-3d";
+import {Camera} from "../framework/camera";
 
 const CreateTriangle = async (color='(1.0,1.0,1.0,1.0)') => {
     const checkgpu = CheckWebGPU();
@@ -70,3 +74,17 @@ $('#id-btn').on('click', ()=>{
     CreateTriangle(color);
 });
 
+
+
+const canvas = document.getElementById('canvas-webgpu') as HTMLCanvasElement;
+const renderer = new Renderer( canvas);
+
+const root = new Node3d();
+const cube = new Object3d();
+// add mesh and material data
+root.attach(cube);
+
+const camera = new Camera();
+
+// TODO: call every frame
+renderer.render(root,camera);
