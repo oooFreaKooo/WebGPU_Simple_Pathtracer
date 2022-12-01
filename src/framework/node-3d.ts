@@ -5,22 +5,16 @@ export class Node3d {
 
     private parent: Node3d | null = null;
 
-    private scale = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]);
-    private rotation = math.matrix([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
-    // private translate = math.matrix([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1]]);
     private transform: Matrix;
-    private temp: Node3d[];
+    private worldTransformMatrix: Matrix;
 
     /**
      * read only access to children, use atttach / detatch to modify
      */
     public children: Node3d[] = [];
     constructor(private position: Matrix = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
-        scale: Matrix, rotation: Matrix/*translate: Matrix*/) {
-
-        this.scale = scale;
-        this.rotation = rotation;
-        //  this.translate = translate;
+        private scale = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+        private rotation = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])) {
         this.calcTransformMat();
     }
 
@@ -35,18 +29,12 @@ export class Node3d {
 
             newChild.parent = this;
             this.children.push(newChild);
-            // TODO set transform to difference between transform and parent world transform
+            newChild.transform = math.subtract(newChild.transform, this.worldTransformMatrix);// TODO set transform to difference between transform and parent world transform
         } else {
             for (const node of newChild) {
                 this.attach(node);
             }
         }
-
-
-        // TODO:
-        // check if already attached
-        // detatch
-        // attach at new tree node
     }
 
     public detatch(newChild: Node3d | Node3d[]) {
@@ -59,7 +47,7 @@ export class Node3d {
                 this.children.splice(idx, 1);
                 newChild.parent = null;
 
-                // TODO: this.transform = this.worldTransform
+                this.transform = this.calcWorldTransMatrix();
             }
         } else {
             for (const nodeNC of newChild) {
@@ -67,17 +55,16 @@ export class Node3d {
             }
         }
     }
-    // public equals(node: Node3d) {
-    //     if (node.position != this.position || node.scale != this.scale || node.translate != this.translate || node.rotation != this.rotation) {
-    //         return false;
-    //     }
-    //     return true;
 
-    // }
     public calcTransformMat() {
         this.transform = math.multiply(this.scale, this.position);
         this.transform = math.multiply(this.rotation, this.transform);
-        // this.transform = math.multiply(this.translate, this.transform);
+    }
+    public calcWorldTransMatrix() {
+        if (this.parent) {
+            return this.worldTransformMatrix = math.multiply(this.parent.worldTransformMatrix, this.transform);
+        }
+        return this.transform;
     }
     // TODO:
     // position
