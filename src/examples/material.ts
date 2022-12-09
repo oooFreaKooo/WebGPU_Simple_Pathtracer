@@ -1,5 +1,6 @@
 import shader from './shader.wgsl';
- 
+import {RenderElement} from '../framework/render-element'
+
  export class Material{
 
     public readonly vertexShader;
