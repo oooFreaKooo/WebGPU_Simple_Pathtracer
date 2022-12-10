@@ -1,20 +1,20 @@
-import math, { Matrix } from 'mathjs';
-import { node } from 'webpack';
+import { mat4 } from "gl-matrix"
+import { node } from "webpack";
 
 export class Node3d {
 
     private parent: Node3d | null = null;
 
-    private transform: Matrix;
-    private worldTransformMatrix: Matrix;
+    private transform: mat4;
+    private worldTransformMatrix: mat4;
 
     /**
      * read only access to children, use atttach / detatch to modify
      */
     public children: Node3d[] = [];
-    constructor(private position: Matrix = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
-        private scale = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
-        private rotation = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])) {
+    constructor(private position: mat4 = mat4.create(),
+        private scale = mat4.create(),
+        private rotation = mat4.create()) {
         this.calcTransformMat();
     }
 
@@ -29,7 +29,7 @@ export class Node3d {
 
             newChild.parent = this;
             this.children.push(newChild);
-            newChild.transform = math.subtract(newChild.transform, this.worldTransformMatrix);// TODO set transform to difference between transform and parent world transform
+            mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix);// TODO set transform to difference between transform and parent world transform
         } else {
             for (const node of newChild) {
                 this.attach(node);
@@ -57,12 +57,12 @@ export class Node3d {
     }
 
     public calcTransformMat() {
-        this.transform = math.multiply(this.scale, this.position);
-        this.transform = math.multiply(this.rotation, this.transform);
+        mat4.multiply(this.transform, this.scale, this.position);
+        mat4.multiply(this.transform, this.rotation, this.transform);
     }
     public calcWorldTransMatrix() {
         if (this.parent) {
-            return this.worldTransformMatrix = math.multiply(this.parent.worldTransformMatrix, this.transform);
+            return this.worldTransformMatrix = mat4.multiply(this.worldTransformMatrix, this.parent.worldTransformMatrix, this.transform);
         }
         return this.transform;
     }
