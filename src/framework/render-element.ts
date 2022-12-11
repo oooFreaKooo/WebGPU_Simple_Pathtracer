@@ -163,6 +163,15 @@
             this.device.queue.submit([commandEncoder.finish()]);
     
             requestAnimationFrame(this.render);
+
+            // tick function that updates CameraPosition after requestAnimationFrame(this.render);
+            const myCamera = new Camera( ... );
+            render() {
+                requestAnimationframe(render);
+                if (myCamera.tick()){
+                    myCamera.computeProjection();
+                }
+            }
         }
    
     */
