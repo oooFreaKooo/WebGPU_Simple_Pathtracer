@@ -13,9 +13,6 @@ export class Camera {
     //Construktor
     constructor(canvas: HTMLCanvasElement, private respectRatio = 1.0, private fieldOfView = 100) {
 
-        canvas.addEventListener('touchmove',  (ev) => { } );
-
-
         const cameraOption = {
             eye: [2, 2, 4],
             center: [0, 0, 0],
@@ -61,16 +58,3 @@ export class Camera {
     */
    
 }
-
-/*
-    // tick function
-
-const myCamera = new Camera( ... );
-
-render() {
-    myCamera.tick();
-    myCamera.getproj();
-}
-
-myCamera = new Camera( .. );
-*/

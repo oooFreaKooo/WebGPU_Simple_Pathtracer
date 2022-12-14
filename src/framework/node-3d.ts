@@ -1,5 +1,4 @@
-import { mat4 } from "gl-matrix";
-
+import { mat4 } from "gl-matrix"
 import { node } from "webpack";
 
 export class Node3d {
