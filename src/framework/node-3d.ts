@@ -13,7 +13,7 @@ export class Node3d {
      * read only access to children, use atttach / detatch to modify
      */
     public children: Node3d[] = [];
-    constructor(private position: mat4 = mat4.create(),
+    constructor(private position = mat4.create(),
         private scale = mat4.create(),
         private rotation = mat4.create()) {
         this.calcTransformMat();
@@ -30,7 +30,8 @@ export class Node3d {
 
             newChild.parent = this;
             this.children.push(newChild);
-            mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix); // TODO set transform to difference between transform and parent world transform
+            //mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix); 
+            // TODO set transform to difference between transform and parent world transform
         } else {
             for (const node of newChild) {
                 this.attach(node);

@@ -1,4 +1,3 @@
-// vertex shader
 struct TransformUniforms {
     mvpMatrix : array<mat4x4<f32>,35>,
 };
@@ -22,7 +21,6 @@ fn vs_main(@builtin(instance_index) instanceIdx : u32, @location(0) pos: vec4<f3
     return output;
 }
 
-// fragment shader
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
     return materialuniforms.color;

@@ -58,6 +58,9 @@ export class Object3d extends Node3d {
 
         this.device = device;
 
+        //TODO
+        //Weitere Buffer für indices | danach in render-element
+        //Material zuweisen
         const descriptor: GPUBufferDescriptor = {
             size: vertices.byteLength,
             usage: usage,

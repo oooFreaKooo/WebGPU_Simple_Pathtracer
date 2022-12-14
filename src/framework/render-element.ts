@@ -5,7 +5,6 @@
     import {Renderer} from "./renderer";
     import {Object3d} from "./object-3d";
     import {Material} from "../examples/material"
-
     
     export class RenderElement {
         
@@ -28,21 +27,21 @@
         t: number = 0.0;
 
 
-        constructor(device: GPUDevice, format: GPUTextureFormat, object: Object3d){
-            this.device = device;
+        constructor(format: GPUTextureFormat, object: Object3d){
+            this.device = object.device;
             this.format = format;
             this.object3D = object;
-            this.Initialize();
+            this.makePipeline();
         }    
-
-    
-       async Initialize() {    
-            await this.makePipeline();
-        }  
-        
+      
         // create pipeline
-        async makePipeline() {
+        public makePipeline() {
     
+            //TODO
+            //Binding/Gruppe für Material
+            //TransformUniform einbinden
+            //Indices einbauen (wenn in Object3D)
+
             const bindGroupLayout = this.device.createBindGroupLayout({     // Declare what is being used
                 entries: [
                     {
@@ -71,6 +70,7 @@
     
             this.pipeline = this.device.createRenderPipeline({
                 vertex : {
+                    //material.vertex
                     module : this.device.createShaderModule({
                         code : shader.vertex,
                     }),
@@ -79,6 +79,7 @@
                 },
         
                 fragment : {
+                    //material.fragment
                     module : this.device.createShaderModule({
                         code : shader.fragment,
                     }),

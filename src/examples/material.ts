@@ -16,7 +16,7 @@ import {RenderElement} from '../framework/render-element'
             code: shader.vertex
         })
         this.fragmentShader = device.createShaderModule({                    
-            code: shader.vertex
+            code: shader.fragment
         })
         
         // TODO: uniform buffer anlegen
@@ -27,7 +27,9 @@ import {RenderElement} from '../framework/render-element'
       
      }
      
-     public setColor(color: Float32Array ) {
+     //TODO
+     //Color in Uniform Buffer laden
+    public setColor(color: Float32Array ) {
         this._color = color;
     }
 
