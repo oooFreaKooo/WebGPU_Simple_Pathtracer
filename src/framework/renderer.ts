@@ -94,8 +94,7 @@ export class Renderer {
             console.log(checkgpu);
             throw('Your current browser does not support WebGPU!');
         }
-        this.init(canvas);
-    
+        this.init(canvas);    
     }
     
     
@@ -112,10 +111,8 @@ export class Renderer {
         // iterate over all node and children
         // update transform matrices and other props
 
-        if(node instanceof Object3d) {
-            // TODO:
-            // create render element
-            const element = new RenderElement(this.device, this.format);
+        if(node instanceof Object3d) {        
+            const element = new RenderElement(node.device, this.format, node);
             renderElements.push(element);
         }
 

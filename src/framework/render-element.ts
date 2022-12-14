@@ -21,29 +21,24 @@
         public pipeline: GPURenderPipeline;
     
         // Assets
-        cube: Object3d;
+        object3D: Object3d;
     
     
         // t für die Rotation
         t: number = 0.0;
 
 
-        constructor(device: GPUDevice, format: GPUTextureFormat){
+        constructor(device: GPUDevice, format: GPUTextureFormat, object: Object3d){
             this.device = device;
             this.format = format;
-        }
+            this.object3D = object;
+            this.Initialize();
+        }    
 
     
-
-    
-       async Initialize() {
-        
-            await this.createAssets();      // create assets before the pipeline
-    
+       async Initialize() {    
             await this.makePipeline();
-        }
-
-  
+        }  
         
         // create pipeline
         async makePipeline() {
@@ -80,7 +75,7 @@
                         code : shader.vertex,
                     }),
                     entryPoint : "vs_main",
-                    buffers: [this.cube.bufferLayout]     
+                    buffers: [this.object3D.bufferLayout]     
                 },
         
                 fragment : {
@@ -103,9 +98,9 @@
         }
     
         // create assets (load in Cube Mesh)
-        async createAssets() {
-            this.cube = makeCube(this.device);     
-        }
+        //async createAssets() {
+        //    this.cube = makeCube(this.device);     
+        //}
     
     
        /* // render: setup render encoder etc.

@@ -4,6 +4,7 @@ export class Object3d extends Node3d {
 
     buffer: GPUBuffer
     bufferLayout: GPUVertexBufferLayout
+    device: GPUDevice;
 
    /* _vertices: Float32Array = new Float32Array([
         -1, -1,  1,     // vertex a, index 0
@@ -55,13 +56,15 @@ export class Object3d extends Node3d {
         //VERTEX: the buffer can be used as a vertex buffer
         //COPY_DST: data can be copied to the buffer
 
+        this.device = device;
+
         const descriptor: GPUBufferDescriptor = {
             size: vertices.byteLength,
             usage: usage,
             mappedAtCreation: true // similar to HOST_VISIBLE, allows buffer to be written by the CPU
         };
 
-        this.buffer = device.createBuffer(descriptor);
+        this.buffer = this.device.createBuffer(descriptor);
 
         //Buffer has been created, now load in the vertices
         new Float32Array(this.buffer.getMappedRange()).set(vertices);
