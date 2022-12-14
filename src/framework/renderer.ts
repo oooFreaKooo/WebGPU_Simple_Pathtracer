@@ -116,9 +116,7 @@ export class Renderer {
         }
 
         if (node instanceof Object3d) {
-            // TODO:
-            // create render element
-            const element = new RenderElement(this.device, this.format);
+            const element = new RenderElement(node.device, this.format, node);
             renderElements.push(element);
         }
 
