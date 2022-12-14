@@ -1,20 +1,22 @@
-import math, { Matrix } from 'mathjs';
-import { node } from 'webpack';
+import { mat4 } from "gl-matrix";
+
+import { node } from "webpack";
 
 export class Node3d {
 
     private parent: Node3d | null = null;
 
-    private transform: Matrix;
-    private worldTransformMatrix: Matrix;
+    private transform: mat4;
+    private worldTransformMatrix: mat4;
+    private needTransformUpdate: boolean = true;
 
     /**
      * read only access to children, use atttach / detatch to modify
      */
     public children: Node3d[] = [];
-    constructor(private position: Matrix = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
-        private scale = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
-        private rotation = math.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])) {
+    constructor(private position: mat4 = mat4.create(),
+        private scale = mat4.create(),
+        private rotation = mat4.create()) {
         this.calcTransformMat();
     }
 
@@ -29,7 +31,7 @@ export class Node3d {
 
             newChild.parent = this;
             this.children.push(newChild);
-            newChild.transform = math.subtract(newChild.transform, this.worldTransformMatrix);// TODO set transform to difference between transform and parent world transform
+            mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix); // TODO set transform to difference between transform and parent world transform
         } else {
             for (const node of newChild) {
                 this.attach(node);
@@ -42,7 +44,7 @@ export class Node3d {
             if (newChild.parent != null) {
                 const idx = this.children.findIndex(_ => _ == newChild);
                 if (idx < 0) {
-                    throw "Try to detach node that is not attached to this.";
+                    throw "You tried to detach an unattached node! This is not how it is supposed to work!";
                 }
                 this.children.splice(idx, 1);
                 newChild.parent = null;
@@ -57,18 +59,33 @@ export class Node3d {
     }
 
     public calcTransformMat() {
-        this.transform = math.multiply(this.scale, this.position);
-        this.transform = math.multiply(this.rotation, this.transform);
+        mat4.multiply(this.transform, this.transform, this.position);
+        mat4.multiply(this.transform, this.transform, this.rotation);
+        mat4.multiply(this.transform, this.transform, this.scale);
+        this.needTransformUpdate = false;
+        this.calcWorldTransMatrix();
+        for (const child of this.children) {
+            child.needTransformUpdate = true;
+        }
+
+
+
     }
     public calcWorldTransMatrix() {
         if (this.parent) {
-            return this.worldTransformMatrix = math.multiply(this.parent.worldTransformMatrix, this.transform);
+            return mat4.multiply(this.worldTransformMatrix, this.parent.worldTransformMatrix, this.transform);
         }
-        return this.transform;
+        return this.worldTransformMatrix = this.transform;
     }
     // TODO:
     // position
     // rotation
     // scale
     // transform matrix
+    public getUpdateFlag() {
+        return this.needTransformUpdate;
+    }
+    public setUpdateFlag(needUpdate: boolean) {
+        this.needTransformUpdate = needUpdate;
+    }
 }
