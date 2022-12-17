@@ -1,78 +1,45 @@
 import {Node3d} from "./node-3d";
+import {Material} from "../examples/material";
 
 export class Object3d extends Node3d {
 
     buffer: GPUBuffer
+    indexBuffer: GPUBuffer
     bufferLayout: GPUVertexBufferLayout
-    device: GPUDevice;
+    device: GPUDevice
+    material: Material;
 
-   /* _vertices: Float32Array = new Float32Array([
-        -1, -1,  1,     // vertex a, index 0
-         1, -1,  1,     // vertex b, index 1
-         1,  1,  1,     // vertex c, index 2
-        -1,  1,  1,     // vertex d, index 3
-        -1, -1, -1,     // vertex e, index 4
-         1, -1, -1,     // vertex f, index 5
-         1,  1, -1,     // vertex g, index 6
-        -1,  1, -1,     // vertex h, index 7 
-    ]);
-    _indices: Float32Array = new Float32Array([
-          // front
-          0, 1, 2, 2, 3, 0,
-
-          // right
-          1, 5, 6, 6, 2, 1,
-  
-          // back
-          4, 7, 6, 6, 5, 4,
-  
-          // left
-          0, 3, 7, 7, 4, 0,
-  
-          // top
-          3, 2, 6, 6, 7, 3,
-  
-          // bottom
-          0, 4, 5, 5, 1, 0
-      ]);
-
-    _colors: Float32Array = new Float32Array([
-      0, 0, 1,     
-      1, 0, 1,     
-      1, 1, 1,     
-      0, 1, 1,     
-      0, 0, 0,    
-      1, 0, 0,   
-      1, 1, 0,    
-      0, 1, 0,     
- ]);*/
-  
-
-    constructor(device: GPUDevice, vertices:Float32Array, indices:Float32Array, colors:Float32Array) {
+    constructor(device: GPUDevice, vertices:Float32Array, indices:Float32Array, material: Material) {
 
         super();
 
         const usage: GPUBufferUsageFlags = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST;
-        //VERTEX: the buffer can be used as a vertex buffer
-        //COPY_DST: data can be copied to the buffer
-
         this.device = device;
 
-        //TODO
-        //Weitere Buffer für indices | danach in render-element
-        //Material zuweisen
         const descriptor: GPUBufferDescriptor = {
             size: vertices.byteLength,
             usage: usage,
-            mappedAtCreation: true // similar to HOST_VISIBLE, allows buffer to be written by the CPU
+            mappedAtCreation: true 
         };
 
         this.buffer = this.device.createBuffer(descriptor);
 
-        //Buffer has been created, now load in the vertices
+        // Create a new GPU buffer to store the indices
+        const indexBufferDescriptor: GPUBufferDescriptor = {
+            size: indices.byteLength,
+            usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+            mappedAtCreation: true,
+      };
+
+        this.indexBuffer = this.device.createBuffer(indexBufferDescriptor);
+
+        //Buffer has been created, now load in the vertices and indices
         new Float32Array(this.buffer.getMappedRange()).set(vertices);
         this.buffer.unmap();
 
+        new Float32Array(this.indexBuffer.getMappedRange()).set(indices);
+        this.indexBuffer.unmap();
+        
         //now define the buffer layout
         this.bufferLayout = {
             arrayStride: 20,
@@ -89,6 +56,8 @@ export class Object3d extends Node3d {
                 }
             ]
         }
+
+        this.material = material; // assign the material to the object
 
     }
 
