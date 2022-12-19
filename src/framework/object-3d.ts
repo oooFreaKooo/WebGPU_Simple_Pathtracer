@@ -9,9 +9,15 @@ export class Object3d extends Node3d {
     device: GPUDevice
     material: Material;
 
+    public readonly vertexCount;
+    public readonly indexCount;
+
     constructor(device: GPUDevice, vertices:Float32Array, indices:Float32Array, material: Material) {
 
         super();
+
+        this.vertexCount = vertices.byteLength;
+        this.indexCount = indices.byteLength;
 
         const usage: GPUBufferUsageFlags = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST;
         this.device = device;

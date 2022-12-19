@@ -6,6 +6,7 @@ import {RenderElement} from '../framework/render-element'
     public readonly vertexShader;
     public readonly fragmentShader;
     
+    
 
     //TODO: uniform buffer mit farbe
 
@@ -18,6 +19,7 @@ import {RenderElement} from '../framework/render-element'
         this.fragmentShader = device.createShaderModule({                    
             code: shader.fragment
         })
+        
         
         // TODO: uniform buffer anlegen
         const uniformBuffer = device.createBuffer({
