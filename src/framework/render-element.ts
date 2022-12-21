@@ -18,6 +18,10 @@
         public  uniformBuffer : GPUBuffer;
         public bindGroup: GPUBindGroup;
         public pipeline: GPURenderPipeline;
+
+        public readonly vertexCount;
+        public readonly indexCount;
+
     
         // Assets
         object3D: Object3d;
@@ -32,10 +36,14 @@
             this.format = format;
             this.object3D = object;
             this.makePipeline();
+            this.vertexCount = object.vertexCount;
+            this.indexCount = object.indexCount;
         }    
       
         // create pipeline
         public makePipeline() {
+
+            const material = new Material(this.device);
     
             //TODO
             //Binding/Gruppe für Material
@@ -71,18 +79,15 @@
             this.pipeline = this.device.createRenderPipeline({
                 vertex : {
                     //material.vertex
-                    module : this.device.createShaderModule({
-                        code : shader.vertex,
-                    }),
+                    module : material.vertexShader,
+            
                     entryPoint : "vs_main",
                     buffers: [this.object3D.bufferLayout]     
                 },
         
                 fragment : {
                     //material.fragment
-                    module : this.device.createShaderModule({
-                        code : shader.fragment,
-                    }),
+                    module : material.fragmentShader,
                     entryPoint : "fs_main",
                     targets : [{
                         format : this.format
