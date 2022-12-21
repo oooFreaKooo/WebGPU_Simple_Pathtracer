@@ -93,9 +93,7 @@ export class Renderer {
                 loadOp: 'clear',
                 storeOp: 'store'
             }]
-        });
-
-    
+        });    
        
         for (const element of elements) {
             renderPass.setPipeline(element.pipeline);
