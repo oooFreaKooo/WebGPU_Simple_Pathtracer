@@ -19,11 +19,17 @@ module.exports = {
             {
                 test: /\.js$/,
                 exclude: ['/node_modules/']
-            },            
-            { test: /\.tsx?$/, loader: "ts-loader" },        
+            },
+            { test: /\.tsx?$/, loader: "ts-loader" },
             {
                 test: /\.css$/i,
                 use: ["style-loader", "css-loader"]
+            },
+            {
+                test: /\.wgsl$/,
+                use: {
+                    loader: "ts-shader-loader"
+                }
             }
         ]
     }

@@ -11,10 +11,10 @@ export class Material {
     constructor(device: GPUDevice) {
         this.device = device;
         this.vertexShader = this.device.createShaderModule({
-            code: shader.vertex
+            code: shader
         })
         this.fragmentShader = this.device.createShaderModule({
-            code: shader.fragment
+            code: shader
         })
     }
 

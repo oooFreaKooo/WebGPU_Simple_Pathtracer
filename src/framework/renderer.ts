@@ -3,7 +3,8 @@ import { Node3d } from "./node-3d";
 import { Object3d } from "./object-3d";
 import { Camera } from "./camera";
 import { CheckWebGPU } from "../examples/helper";
-import shader from './shader.wgsl';
+import shader from '../examples/shader.wgsl';
+import shadertest from '../examples/testshader.wgsl';
 import $ from 'jquery';
 
 
@@ -36,10 +37,10 @@ export class Renderer {
 
 
 
-        this.commandEncoder = this.device.createCommandEncoder();
+        // this.commandEncoder = this.device.createCommandEncoder();
         this.textureView = this.context.getCurrentTexture().createView();
     }
-  
+
 
 
     constructor(private canvas: HTMLCanvasElement) {
@@ -49,7 +50,7 @@ export class Renderer {
             console.log(checkgpu);
             throw ('Your current browser does not support WebGPU!');
         }
-        this.init(canvas);
+
 
     }
 
@@ -84,23 +85,46 @@ export class Renderer {
      * to be called every frame to draw the image
      */
     public renderElementList(elements: RenderElement[], camera: Camera): void {
+        const commandEncoder = this.device.createCommandEncoder();
 
-        
-        const renderPass = this.commandEncoder.beginRenderPass({
+        const renderPass = commandEncoder.beginRenderPass({
             colorAttachments: [{
-                view: this.textureView,
+                view: this.context.getCurrentTexture().createView(),
                 clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, //background color
                 loadOp: 'clear',
                 storeOp: 'store'
             }]
-        });    
-       
-        for (const element of elements) {
-            renderPass.setPipeline(element.pipeline);
-            renderPass.draw(element.vertexCount, element.indexCount, 0, 0);
-            renderPass.end();
-        }
+        });
 
-        this.device.queue.submit([this.commandEncoder.finish()]);
+        // for (const element of elements) {
+        //     renderPass.setPipeline(element.pipeline);
+        //     renderPass.draw(element.vertexCount, element.indexCount, 0, 0);
+
+        // }
+        const pipeline = this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: {
+                module: this.device.createShaderModule({
+                    code: shadertest
+                }),
+                entryPoint: "vs_main"
+            },
+            fragment: {
+                module: this.device.createShaderModule({
+                    code: shadertest
+                }),
+                entryPoint: "fs_main",
+                targets: [{
+                    format: this.format
+                }]
+            },
+            primitive: {
+                topology: "triangle-list"
+            }
+        });
+        renderPass.setPipeline(pipeline);
+        renderPass.draw(3, 1, 0, 0);
+        renderPass.end();
+        this.device.queue.submit([commandEncoder.finish()]);
     }
 }

@@ -1,10 +1,10 @@
 import $ from 'jquery';
-import {CheckWebGPU} from './helper';
-import {Shaders} from './shaders';
-import {Renderer} from "../framework/renderer";
-import {Node3d} from "../framework/node-3d";
-import {Object3d} from "../framework/object-3d";
-import {Camera} from "../framework/camera";
+import { CheckWebGPU } from './helper';
+import { Shaders } from './shaders';
+import { Renderer } from "../framework/renderer";
+import { Node3d } from "../framework/node-3d";
+import { Object3d } from "../framework/object-3d";
+import { Camera } from "../framework/camera";
 import { makeCube } from './cube';
 
 
@@ -16,28 +16,30 @@ $('#id-btn').on('click', ()=>{
 });
 */
 
+async function mainFunc() {
+    const canvas = document.getElementById('canvas-webgpu') as HTMLCanvasElement;
+    const renderer = new Renderer(canvas);
+    await renderer.init(canvas);
+    const root = new Node3d();
+    //const cube = makeCube(renderer.device);
+    // add mesh and material data
+    //root.attach(cube);
 
-const canvas = document.getElementById('canvas-webgpu') as HTMLCanvasElement;
-const renderer = new Renderer( canvas);
+    const camera = new Camera(canvas);
+    function render() {
+        window.requestAnimationFrame(render);
+        camera.tick()
 
-const root = new Node3d();
-const cube = makeCube(renderer.device);
-// add mesh and material data
-root.attach(cube);
+        renderer.render(root, camera);
+    }
+    render();
+}
 
-const camera = new Camera(canvas);
-
+mainFunc();
 
 //TODO
 //Projektions und View-matrix aus der Kamera laden
 //Uniformbuffer anpassen/füllen
-function render() {
-    window.requestAnimationFrame(render);
-    if (myCamera.tick()){
-        myCamera.computeProjection();
-    }
-    renderer.render(root,camera);
-}
-render();
+
 
 

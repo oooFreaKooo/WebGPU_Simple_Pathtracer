@@ -5,7 +5,7 @@ export class Node3d {
 
     private parent: Node3d | null = null;
 
-    private transform: mat4;
+    private transform: mat4 = mat4.create();
     private worldTransformMatrix: mat4;
     private needTransformUpdate: boolean = true;
 
@@ -59,8 +59,7 @@ export class Node3d {
     }
 
     public calcTransformMat() {
-        mat4.multiply(this.transform, this.transform, this.position);
-        mat4.multiply(this.transform, this.transform, this.rotation);
+        mat4.multiply(this.transform, this.position, this.rotation);
         mat4.multiply(this.transform, this.transform, this.scale);
         this.needTransformUpdate = false;
         this.calcWorldTransMatrix();
