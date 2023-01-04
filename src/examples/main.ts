@@ -1,6 +1,6 @@
 import $ from 'jquery';
 import { CheckWebGPU } from './helper';
-import { Shaders } from './shaders';
+
 import { Renderer } from "../framework/renderer";
 import { Node3d } from "../framework/node-3d";
 import { Object3d } from "../framework/object-3d";
@@ -21,9 +21,9 @@ async function mainFunc() {
     const renderer = new Renderer(canvas);
     await renderer.init(canvas);
     const root = new Node3d();
-    //const cube = makeCube(renderer.device);
+    const cube = makeCube(renderer.device);
     // add mesh and material data
-    //root.attach(cube);
+    root.attach(cube);
 
     const camera = new Camera(canvas);
     function render() {

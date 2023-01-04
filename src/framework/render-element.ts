@@ -15,12 +15,13 @@ export class RenderElement {
     public format: GPUTextureFormat;
 
     // Pipeline objects 
-    public uniformBuffer: GPUBuffer;
+    public transformBuffer: GPUBuffer;
     public bindGroup: GPUBindGroup;
     public pipeline: GPURenderPipeline;
     public bindGroupMaterial: GPUBindGroup;
     public readonly vertexCount;
     public readonly indexCount;
+
 
 
     // Assets
@@ -32,22 +33,29 @@ export class RenderElement {
 
 
 
-    constructor(format: GPUTextureFormat, object: Object3d) {
+    constructor(format: GPUTextureFormat, object: Object3d, private camera: mat4) {
         this.device = object.device;
         this.format = format;
         this.object3D = object;
         this.makePipeline();
         this.vertexCount = object.vertexCount;
         this.indexCount = object.indexCount;
+
     }
 
     // create pipeline
     public makePipeline() {
 
+
         const material = new Material(this.device);
-        const transformUniform = this.object3D.calcWorldTransMatrix();
+        const transformUniform: mat4 = mat4.create();
+        mat4.multiply(transformUniform, this.camera, this.object3D.calcWorldTransMatrix());
         const materialUniform = this.object3D.material;
-        this.device.queue.writeBuffer(this.uniformBuffer, 0, <ArrayBuffer>transformUniform);
+        this.transformBuffer = this.device.createBuffer({
+            size: (<ArrayBuffer>transformUniform).byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(this.transformBuffer, 0, <ArrayBuffer>transformUniform);
         // this.device.queue.writeBuffer(this.uniformBuffer, 0, <ArrayBuffer>model);    // (what we are writing to, offset bytes each matrix 64 starting at 0, select matrix)
         //  this.device.queue.writeBuffer(this.uniformBuffer, 64, <ArrayBuffer>view);
         //  this.device.queue.writeBuffer(this.uniformBuffer, 128, <ArrayBuffer>projection);
@@ -71,7 +79,7 @@ export class RenderElement {
                 {
                     binding: 0,
                     resource: {
-                        buffer: this.uniformBuffer                       // bind uniform buffer to bind 0
+                        buffer: this.transformBuffer                       // bind uniform buffer to bind 0
                     }
                 },
             ]
@@ -79,8 +87,8 @@ export class RenderElement {
         const bindGroupLayoutMaterial = this.device.createBindGroupLayout({
             entries: [
                 {
-                    binding: 0,
-                    visibility: GPUShaderStage.VERTEX,
+                    binding: 1,
+                    visibility: GPUShaderStage.FRAGMENT,
                     buffer: {}
                 },
             ]
@@ -92,7 +100,7 @@ export class RenderElement {
                 {
                     binding: 1,
                     resource: {
-                        buffer: this.uniformBuffer
+                        buffer: this.transformBuffer
                     }
                 },
             ]
@@ -121,7 +129,8 @@ export class RenderElement {
             },
 
             primitive: {
-                topology: "triangle-list"
+                topology: "triangle-list",
+                cullMode: "none"
             },
 
             layout: pipelineLayout

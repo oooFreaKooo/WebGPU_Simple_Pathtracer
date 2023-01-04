@@ -27,7 +27,7 @@ export class Material {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
 
-        this.device.queue.writeBuffer(this.uniformBuffer, 64, color, 0, color.length);
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, color, 0, color.length);
     }
 
 }

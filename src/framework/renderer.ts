@@ -3,9 +3,9 @@ import { Node3d } from "./node-3d";
 import { Object3d } from "./object-3d";
 import { Camera } from "./camera";
 import { CheckWebGPU } from "../examples/helper";
-import shader from '../examples/shader.wgsl';
-import shadertest from '../examples/testshader.wgsl';
+
 import $ from 'jquery';
+import { mat4 } from "gl-matrix";
 
 
 
@@ -58,11 +58,13 @@ export class Renderer {
 
     public render(node: Node3d, camera: Camera) {
         const renderElements: RenderElement[] = [];
-        this.parseSceneGraphRecursive(node, renderElements);
+        const cameraMat: mat4 = mat4.create();
+        mat4.multiply(cameraMat, camera.getproj(), camera.getView());
+        this.parseSceneGraphRecursive(node, renderElements, cameraMat);
         this.renderElementList(renderElements, camera);
     }
 
-    public parseSceneGraphRecursive(node: Node3d, renderElements: RenderElement[]) {
+    public parseSceneGraphRecursive(node: Node3d, renderElements: RenderElement[], camera: mat4) {
 
         // TODO:
         // iterate over all node and children
@@ -72,12 +74,12 @@ export class Renderer {
         }
 
         if (node instanceof Object3d) {
-            const element = new RenderElement(this.format, node);
+            const element = new RenderElement(this.format, node, camera);
             renderElements.push(element);
         }
 
         for (const child of node.children) {
-            this.parseSceneGraphRecursive(child, renderElements);
+            this.parseSceneGraphRecursive(child, renderElements, camera);
         }
     }
 
@@ -96,34 +98,17 @@ export class Renderer {
             }]
         });
 
-        // for (const element of elements) {
-        //     renderPass.setPipeline(element.pipeline);
-        //     renderPass.draw(element.vertexCount, element.indexCount, 0, 0);
+        for (const element of elements) {
+            renderPass.setPipeline(element.pipeline);
+            renderPass.setVertexBuffer(0, element.object3D.VertexBuffer);
+            renderPass.setIndexBuffer(element.object3D.indexBuffer, 'uint32');
+            renderPass.setBindGroup(0, element.bindGroup);
+            renderPass.setBindGroup(1, element.bindGroupMaterial);
+            // renderPass.draw(3, 1, 0, 0);
+            renderPass.drawIndexed(element.indexCount, 1, 0, 0);
 
-        // }
-        const pipeline = this.device.createRenderPipeline({
-            layout: 'auto',
-            vertex: {
-                module: this.device.createShaderModule({
-                    code: shadertest
-                }),
-                entryPoint: "vs_main"
-            },
-            fragment: {
-                module: this.device.createShaderModule({
-                    code: shadertest
-                }),
-                entryPoint: "fs_main",
-                targets: [{
-                    format: this.format
-                }]
-            },
-            primitive: {
-                topology: "triangle-list"
-            }
-        });
-        renderPass.setPipeline(pipeline);
-        renderPass.draw(3, 1, 0, 0);
+        }
+
         renderPass.end();
         this.device.queue.submit([commandEncoder.finish()]);
     }

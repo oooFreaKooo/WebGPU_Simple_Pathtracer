@@ -1,5 +1,5 @@
 struct TransformUniforms {
-    mvpMatrix : array<mat4x4<f32>,35>,
+    mvpMatrix : mat4x4<f32>,
 };
 @binding(0) @group(0) var<uniform> transformuniforms : TransformUniforms;
 
@@ -15,13 +15,14 @@ struct Output {
 };
 
 @vertex
-fn vs_main(@builtin(instance_index) instanceIdx : u32, @location(0) pos: vec4<f32> ) -> Output {
+fn vs_main( @location(0) pos: vec4<f32> ) -> Output {
     var output: Output;
-    output.Position = transformuniforms.mvpMatrix[instanceIdx] * pos;
+    output.Position =  transformuniforms.mvpMatrix * pos;
     return output;
 }
 
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
     return materialuniforms.color;
+    
 }
