@@ -7,6 +7,7 @@ import { Object3d } from "../framework/object-3d";
 import { Camera } from "../framework/camera";
 import { makeCube } from './cube';
 import { makePyramid } from './pyramid';
+//import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 
 
@@ -17,6 +18,8 @@ $('#id-btn').on('click', ()=>{
 });
 */
 
+
+//const loader = new GLTFLoader();//loader.load('../../../scene.gltf', function (gltf) { root.attach(gltf.asset); });
 async function mainFunc() {
     const canvas = document.getElementById('canvas-webgpu') as HTMLCanvasElement;
     const renderer = new Renderer(canvas);
@@ -42,8 +45,9 @@ async function mainFunc() {
     vec3.set(temp, 1, 2, 4);
     cube3.translate(temp);
     cube2.translate(translateVec);
-    cube2.rotate(45, xAxis);
+    cube2.rotate(180, xAxis);
     cube2.scaleIt(scaleVec);
+
     vec3.set(temp, 4, 0, 0);
     pyramid.translate(temp);
     const camera = new Camera(canvas);
