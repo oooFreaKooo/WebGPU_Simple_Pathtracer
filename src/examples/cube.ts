@@ -37,14 +37,8 @@ export function makeCube(device: GPUDevice) {
     ]);
 
     const _material: Material = new Material(device);
-    _material.setColor(new Float32Array([0, 0, 1,
-        1, 0, 1,
-        1, 1, 1,
-        0, 1, 1,
-        0, 0, 0,
-        1, 0, 0,
-        1, 1, 0,
-        0, 1, 0,]));
+    _material.setColor(new Float32Array([0, 0, 1
+    ]));
 
     return new Object3d(device, _vertices, _indices, _material);
 

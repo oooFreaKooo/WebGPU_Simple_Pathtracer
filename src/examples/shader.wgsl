@@ -1,5 +1,5 @@
 struct TransformUniforms {
-    mvpMatrix : mat4x4<f32>,
+    mvpMatrix : mat4x4<f32>
 };
 @binding(0) @group(0) var<uniform> transformuniforms : TransformUniforms;
 
@@ -17,7 +17,7 @@ struct Output {
 @vertex
 fn vs_main( @location(0) pos: vec4<f32> ) -> Output {
     var output: Output;
-    output.Position =  transformuniforms.mvpMatrix * pos;
+    output.Position = transformuniforms.mvpMatrix * pos;
     return output;
 }
 

@@ -1,4 +1,4 @@
-import { mat4 } from "gl-matrix"
+import { mat3, mat4, vec3 } from "gl-matrix"
 import { node } from "webpack";
 
 export class Node3d {
@@ -86,5 +86,17 @@ export class Node3d {
     }
     public setUpdateFlag(needUpdate: boolean) {
         this.needTransformUpdate = needUpdate;
+    }
+    public translate(translateVec: vec3) {
+        mat4.fromTranslation(this.position, translateVec);
+        this.setUpdateFlag(true);
+    }
+    public rotate(deg: number, axis: vec3) {
+        mat4.fromRotation(this.rotation, deg, axis);
+        this.setUpdateFlag(true);
+    }
+    public scaleIt(scaleVec: vec3) {
+        mat4.fromScaling(this.scale, scaleVec);
+        this.setUpdateFlag(true);
     }
 }
