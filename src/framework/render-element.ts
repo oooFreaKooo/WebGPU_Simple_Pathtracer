@@ -1,6 +1,6 @@
 import shader from './shader.wgsl';
 import { makeCube } from "../examples/cube";
-import { mat4 } from "gl-matrix"
+import { mat4, vec3, vec4 } from "gl-matrix"
 import { IgnorePlugin } from "webpack";
 import { Renderer } from "./renderer";
 import { Object3d } from "./object-3d";
@@ -15,10 +15,16 @@ export class RenderElement {
     public format: GPUTextureFormat;
 
     // Pipeline objects 
-    public transformBuffer: GPUBuffer;
+    public transformBuffer: GPUBuffer
+    public ambientBuffer: GPUBuffer
+    public diffuseBuffer: GPUBuffer
+    public specularBuffer : GPUBuffer
+    public lightPosBuffer: GPUBuffer
+    public lightColorBuffer: GPUBuffer
     public bindGroup: GPUBindGroup;
     public pipeline: GPURenderPipeline;
     public bindGroupMaterial: GPUBindGroup;
+    public bindGroupPhong: GPUBindGroup;
     public readonly vertexCount;
     public readonly indexCount;
 
@@ -46,7 +52,6 @@ export class RenderElement {
     // create pipeline
     public makePipeline() {
 
-
         const material = new Material(this.device);
         const transformUniform: mat4 = mat4.create();
         mat4.multiply(transformUniform, this.camera, this.object3D.calcWorldTransMatrix());
@@ -56,12 +61,43 @@ export class RenderElement {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         this.device.queue.writeBuffer(this.transformBuffer, 0, <ArrayBuffer>transformUniform);
-        // this.device.queue.writeBuffer(this.uniformBuffer, 0, <ArrayBuffer>model);    // (what we are writing to, offset bytes each matrix 64 starting at 0, select matrix)
-        //  this.device.queue.writeBuffer(this.uniformBuffer, 64, <ArrayBuffer>view);
-        //  this.device.queue.writeBuffer(this.uniformBuffer, 128, <ArrayBuffer>projection);
-        //TODO
-        //Binding/Gruppe für Material --> ist in Material Klasse 
-        //Indices einbauen (wenn in Object3D)
+        
+        // Uniforms für Phong Beleuchtung
+        const ambient : vec3 = new Float32Array([0.2, 0.2, 0.2]);
+        this.ambientBuffer = this.device.createBuffer({
+            size: ambient.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(this.ambientBuffer, 0, <Float32Array>ambient);
+
+        const diffuse : vec3 = new Float32Array([1.0, 0.8, 0.0]);
+        this.diffuseBuffer = this.device.createBuffer({
+            size: diffuse.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(this.diffuseBuffer, 0, <Float32Array>diffuse);
+
+        const specular : vec3 = new Float32Array([1.0,1.0,1.0]);
+        this.specularBuffer = this.device.createBuffer({
+            size: specular.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(this.specularBuffer, 0, <Float32Array>specular);
+
+        const lightPos : vec3 = new Float32Array([3, 3, 3]);
+        this.lightPosBuffer = this.device.createBuffer({
+            size: lightPos.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(this.lightPosBuffer, 0, <Float32Array>lightPos);
+
+        const lightColor : vec3 = new Float32Array([1, 1, 1]);
+        this.lightColorBuffer = this.device.createBuffer({
+            size: lightColor.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(this.lightColorBuffer, 0, <Float32Array>lightColor);
+
 
         const bindGroupLayoutTransform = this.device.createBindGroupLayout({     // Declare what is being used
             entries: [
@@ -106,8 +142,64 @@ export class RenderElement {
             ]
         });
 
+        const bindGroupLayoutPhong = this.device.createBindGroupLayout({
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: {}
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: {}
+                },
+                {
+                    binding: 2,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: {}
+                },
+                {
+                    binding: 3,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: {}
+                },
+                
+            ]
+        });
+
+        this.bindGroupPhong = this.device.createBindGroup({
+            layout: bindGroupLayoutPhong,
+            entries: [
+                {
+                    binding: 0,
+                    resource: {
+                        buffer: this.ambientBuffer
+                    }                    
+                },
+                {
+                    binding: 1,
+                    resource: {
+                        buffer: this.diffuseBuffer
+                    }
+                },
+                {
+                    binding: 2,
+                    resource: {
+                        buffer: this.lightColorBuffer
+                    }
+                },
+                {
+                    binding: 3,
+                    resource: {
+                        buffer: this.lightPosBuffer
+                    }
+                },
+            ]
+        });
+
         const pipelineLayout = this.device.createPipelineLayout({
-            bindGroupLayouts: [bindGroupLayoutTransform, bindGroupLayoutMaterial]
+            bindGroupLayouts: [bindGroupLayoutTransform, bindGroupLayoutMaterial, bindGroupLayoutPhong]
         });
 
         this.pipeline = this.device.createRenderPipeline({
@@ -135,81 +227,5 @@ export class RenderElement {
 
             layout: pipelineLayout
         });
-
-
-    }
-
-    // create assets (load in Cube Mesh)
-    //async createAssets() {
-    //    this.cube = makeCube(this.device);     
-    //}
-
-
-    /* // render: setup render encoder etc.
-     render = () => {
- 
-         this.t += 0.05;
-         if (this.t > 2.0 * Math.PI) {
-             this.t -= 2.0 * Math.PI;
-         }
- 
-         //make transforms
-         const projection = mat4.create();
-         // load perspective projection into the projection matrix,
-         // Field of view = 45 degrees (pi/4)
-         // Aspect ratio = 800/600
-         // near = 0.1, far = 10 
-         mat4.perspective(projection, Math.PI/4, 800/600, 0.1, 10);
- 
-         const view = mat4.create();
-         //load lookat matrix into the view matrix,
-         //looking from [-2, 0, 2]
-         //looking at [0, 0, 0]
-         //up vector is [0, 0, 1]
-         mat4.lookAt(view, [-2, 0, 2], [0, 0, 0], [0, 0, 1]);
- 
- 
-         const model = mat4.create();
-         //Store, in the model matrix, the model matrix after rotating it by t radians around the z axis.
-         mat4.rotate(model, model, this.t, [0,0,1]);
-         
- 
-         this.device.queue.writeBuffer(this.uniformBuffer, 0, <ArrayBuffer>model);    // (what we are writing to, offset bytes each matrix 64 starting at 0, select matrix)
-         this.device.queue.writeBuffer(this.uniformBuffer, 64, <ArrayBuffer>view);
-         this.device.queue.writeBuffer(this.uniformBuffer, 128, <ArrayBuffer>projection);
- 
-         //command encoder: records draw commands for submission
-         const commandEncoder : GPUCommandEncoder = this.device.createCommandEncoder();
-         //texture view: image view to the color buffer in this case
-         const textureView : GPUTextureView = this.context.getCurrentTexture().createView();
-         //renderpass: holds draw commands, allocated from command encoder
-         const renderpass : GPURenderPassEncoder = commandEncoder.beginRenderPass({
-             colorAttachments: [{
-                 view: textureView,
-                 clearValue: {r: 0.5, g: 0.0, b: 0.25, a: 1.0},
-                 loadOp: "clear",
-                 storeOp: "store"
-             }]
-         });
-         renderpass.setPipeline(this.pipeline);
-         renderpass.setVertexBuffer(0, this.cube.buffer);  
-         renderpass.setBindGroup(0, this.bindGroup);
-         renderpass.draw(3, 1, 0, 0);
-         renderpass.end();
-     
-         this.device.queue.submit([commandEncoder.finish()]);
- 
-         requestAnimationFrame(this.render);
-
-         // tick function that updates CameraPosition after requestAnimationFrame(this.render);
-         const myCamera = new Camera( ... );
-         render() {
-             requestAnimationframe(render);
-             if (myCamera.tick()){
-                 myCamera.computeProjection();
-             }
-         }
-     }
- 
- */
+    }    
 }
