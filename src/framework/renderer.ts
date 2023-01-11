@@ -88,7 +88,12 @@ export class Renderer {
      */
     public renderElementList(elements: RenderElement[], camera: Camera): void {
         const commandEncoder = this.device.createCommandEncoder();
+        for (const element of elements) {
 
+            if (!element.getObject().getUpdateFlag()) {
+                element.getObject().calcTransformMat();
+            }
+        }
         const renderPass = commandEncoder.beginRenderPass({
             colorAttachments: [{
                 view: this.context.getCurrentTexture().createView(),

@@ -90,13 +90,22 @@ export class Node3d {
     public translate(translateVec: vec3) {
         mat4.fromTranslation(this.position, translateVec);
         this.setUpdateFlag(true);
+        for (let child of this.children) {
+            child.setUpdateFlag(true);
+        }
     }
     public rotate(deg: number, axis: vec3) {
         mat4.fromRotation(this.rotation, deg, axis);
         this.setUpdateFlag(true);
+        for (let child of this.children) {
+            child.setUpdateFlag(true);
+        }
     }
     public scaleIt(scaleVec: vec3) {
         mat4.fromScaling(this.scale, scaleVec);
         this.setUpdateFlag(true);
+        for (let child of this.children) {
+            child.setUpdateFlag(true);
+        }
     }
 }

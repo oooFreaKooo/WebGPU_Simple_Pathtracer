@@ -138,7 +138,9 @@ export class RenderElement {
 
 
     }
-
+    public getObject() {
+        return this.object3D;
+    }
     // create assets (load in Cube Mesh)
     //async createAssets() {
     //    this.cube = makeCube(this.device);     
