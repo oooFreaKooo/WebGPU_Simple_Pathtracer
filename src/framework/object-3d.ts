@@ -68,11 +68,11 @@ export class Object3d extends Node3d {
                     format: "float32x3", // float32x3 = x y z (3D), float32x2 = x y (2D)
                     offset: 0
                 },
-                // {
-                //     shaderLocation: 1,
-                //     format: "float32x2", // float32x3 = r g b (color) , float32x2 = u, v (textures)
-                //     offset: 12
-                // }
+                {
+                   shaderLocation: 1,
+                    format: "float32x2", // float32x3 = r g b (color) , float32x2 = u, v (textures)
+                    offset: 0
+                },
                 {
                     shaderLocation: 2,
                     format: "float32x3",

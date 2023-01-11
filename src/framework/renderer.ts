@@ -34,13 +34,9 @@ export class Renderer {
             format: this.format,
             alphaMode: 'opaque'
         });
-
-
-
         // this.commandEncoder = this.device.createCommandEncoder();
         this.textureView = this.context.getCurrentTexture().createView();
     }
-
 
 
     constructor(private canvas: HTMLCanvasElement) {
@@ -50,10 +46,7 @@ export class Renderer {
             console.log(checkgpu);
             throw ('Your current browser does not support WebGPU!');
         }
-
-
     }
-
 
 
     public render(node: Node3d, camera: Camera) {
@@ -66,9 +59,6 @@ export class Renderer {
 
     public parseSceneGraphRecursive(node: Node3d, renderElements: RenderElement[], camera: mat4) {
 
-        // TODO:
-        // iterate over all node and children
-        // update transform matrices and other props
         if (node.getUpdateFlag()) {
             node.calcTransformMat();
         }
@@ -83,9 +73,6 @@ export class Renderer {
         }
     }
 
-    /**
-     * to be called every frame to draw the image
-     */
     public renderElementList(elements: RenderElement[], camera: Camera): void {
         const commandEncoder = this.device.createCommandEncoder();
 
@@ -103,7 +90,6 @@ export class Renderer {
             renderPass.setVertexBuffer(0, element.object3D.VertexBuffer);
             renderPass.setIndexBuffer(element.object3D.indexBuffer, 'uint32');
             renderPass.setBindGroup(0, element.bindGroup);
-            renderPass.setBindGroup(1, element.bindGroupMaterial);
             // renderPass.draw(3, 1, 0, 0);
             renderPass.drawIndexed(element.indexCount, 1, 0, 0);
 
