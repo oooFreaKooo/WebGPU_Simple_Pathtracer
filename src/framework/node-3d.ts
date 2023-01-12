@@ -6,7 +6,7 @@ export class Node3d {
     private parent: Node3d | null = null;
 
     private transform: mat4 = mat4.create();
-    private worldTransformMatrix: mat4;
+    private worldTransformMatrix = mat4.create();
     private needTransformUpdate: boolean = true;
 
     /**
@@ -28,9 +28,11 @@ export class Node3d {
                 newChild.parent.detatch(newChild);
             }
 
+            this.setUpdateFlag(true);
+            newChild.setUpdateFlag(true);
             newChild.parent = this;
             this.children.push(newChild);
-            //mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix); 
+            mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix);
             // TODO set transform to difference between transform and parent world transform
         } else {
             for (const node of newChild) {
@@ -44,6 +46,7 @@ export class Node3d {
             if (newChild.parent != null) {
                 const idx = this.children.findIndex(_ => _ == newChild);
                 if (idx < 0) {
+                    console.error("You tried to detach an unattached node! This is not how it is supposed to work!")
                     throw "You tried to detach an unattached node! This is not how it is supposed to work!";
                 }
                 this.children.splice(idx, 1);
@@ -59,28 +62,30 @@ export class Node3d {
     }
 
     public calcTransformMat() {
+
         mat4.multiply(this.transform, this.position, this.rotation);
         mat4.multiply(this.transform, this.transform, this.scale);
-        this.needTransformUpdate = false;
         this.calcWorldTransMatrix();
+        this.needTransformUpdate = false;
+
         for (const child of this.children) {
-            child.needTransformUpdate = true;
+            child.setUpdateFlag(true);
         }
+
+
+
 
 
 
     }
     public calcWorldTransMatrix() {
         if (this.parent) {
-            return mat4.multiply(this.worldTransformMatrix, this.parent.worldTransformMatrix, this.transform);
+            return mat4.multiply(this.worldTransformMatrix, this.transform, this.parent.worldTransformMatrix);
         }
-        return this.worldTransformMatrix = this.transform;
+
+        return mat4.copy(this.worldTransformMatrix, this.transform);
     }
-    // TODO:
-    // position
-    // rotation
-    // scale
-    // transform matrix
+
     public getUpdateFlag() {
         return this.needTransformUpdate;
     }
@@ -107,5 +112,12 @@ export class Node3d {
         for (let child of this.children) {
             child.setUpdateFlag(true);
         }
+    }
+
+    public getTransform() {
+        return this.transform;
+    }
+    public getWorldTransform() {
+        return this.worldTransformMatrix;
     }
 }

@@ -14,7 +14,7 @@ export class Camera {
     constructor(canvas: HTMLCanvasElement, private respectRatio = 1.0, private fieldOfView = 100) {
 
         const cameraOption = {
-            eye: [2, 2, 4],
+            eye: [4, 4, 8],
             center: [0, 0, 0],
             zoomMax: 100,
             zoomSpeed: 2

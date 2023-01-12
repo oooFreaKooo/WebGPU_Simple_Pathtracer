@@ -62,6 +62,8 @@ export class Renderer {
         mat4.multiply(cameraMat, camera.getproj(), camera.getView());
         this.parseSceneGraphRecursive(node, renderElements, cameraMat);
         this.renderElementList(renderElements, camera);
+        // console.log(camera.getView());
+        // console.log(camera.getproj());
     }
 
     public parseSceneGraphRecursive(node: Node3d, renderElements: RenderElement[], camera: mat4) {
@@ -72,7 +74,6 @@ export class Renderer {
         if (node.getUpdateFlag()) {
             node.calcTransformMat();
         }
-
         if (node instanceof Object3d) {
             const element = new RenderElement(this.format, node, camera);
             renderElements.push(element);
@@ -88,12 +89,6 @@ export class Renderer {
      */
     public renderElementList(elements: RenderElement[], camera: Camera): void {
         const commandEncoder = this.device.createCommandEncoder();
-        for (const element of elements) {
-
-            if (!element.getObject().getUpdateFlag()) {
-                element.getObject().calcTransformMat();
-            }
-        }
         const renderPass = commandEncoder.beginRenderPass({
             colorAttachments: [{
                 view: this.context.getCurrentTexture().createView(),

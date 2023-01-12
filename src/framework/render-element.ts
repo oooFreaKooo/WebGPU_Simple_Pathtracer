@@ -49,7 +49,7 @@ export class RenderElement {
 
         const material = new Material(this.device);
         const transformUniform: mat4 = mat4.create();
-        mat4.multiply(transformUniform, this.camera, this.object3D.calcWorldTransMatrix());
+        mat4.multiply(transformUniform, this.camera, this.object3D.getWorldTransform());
         const materialUniform = this.object3D.material;
         this.transformBuffer = this.device.createBuffer({
             size: (<ArrayBuffer>transformUniform).byteLength,

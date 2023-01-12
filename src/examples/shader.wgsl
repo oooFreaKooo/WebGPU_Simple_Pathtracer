@@ -23,6 +23,6 @@ fn vs_main( @location(0) pos: vec4<f32> ) -> Output {
 
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
-    return vec4(1.0,0,0,1);//materialuniforms.color;
+    return vec4(1,0,0,0);//materialuniforms.color;
     
 }
