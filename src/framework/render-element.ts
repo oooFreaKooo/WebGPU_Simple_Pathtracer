@@ -44,8 +44,7 @@ export class RenderElement {
     }
 
     // create pipeline
-    public makePipeline() {
-
+    public async makePipeline() {
 
         const material = new Material(this.device);
         const transformUniform: mat4 = mat4.create();
@@ -55,7 +54,20 @@ export class RenderElement {
             size: (<ArrayBuffer>transformUniform).byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
+/*         const vertexBuffer = this.device.createBuffer({
+            size: await obj*Float32Array.BYTES_PER_ELEMENT,
+            usage: GPUBufferUsage.VERTEX
+          });
+          const indexBuffer = this.device.createBuffer({
+            size: await obj * Uint16Array.BYTES_PER_ELEMENT,
+            usage: GPUBufferUsage.INDEX
+          }); */
+
+
         this.device.queue.writeBuffer(this.transformBuffer, 0, <ArrayBuffer>transformUniform);
+/*         this.device.queue.writeBuffer(vertexBuffer, 0, new Float32Array(obj.VERTEX));
+        this.device.queue.writeBuffer(indexBuffer, 0, new Uint16Array(obj.index)); */
+
         // this.device.queue.writeBuffer(this.uniformBuffer, 0, <ArrayBuffer>model);    // (what we are writing to, offset bytes each matrix 64 starting at 0, select matrix)
         //  this.device.queue.writeBuffer(this.uniformBuffer, 64, <ArrayBuffer>view);
         //  this.device.queue.writeBuffer(this.uniformBuffer, 128, <ArrayBuffer>projection);
