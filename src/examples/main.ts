@@ -29,7 +29,7 @@ async function mainFunc() {
     //const cube = makeCube(renderer.device);
 
     const filePath = "../src/examples/obj/Spider.obj";
-    //const obj = parseOBJ(renderer.device, filePath);
+    const obj = parseOBJ(renderer.device, filePath);
     const cube = makeCube(renderer.device);
     const cube2 = makeCube(renderer.device);
     const cube3 = makeCube(renderer.device);
@@ -37,6 +37,7 @@ async function mainFunc() {
     //const pyramid2 = makePyramid(renderer.device);
     // add mesh and material data
     root.attach(cube);
+    //root.attach(await obj);
     cube.attach(cube2);
     //cube.attach(cube3);
     //cube2.attach(cube3);
@@ -61,13 +62,17 @@ async function mainFunc() {
     //cube
     vec3.set(scaleVec, 1, 3, 1);
     cube.scaleIt(scaleVec);
+    let color = vec4.create();
+    vec4.set(color, 1, 0, 0, 0);
+    cube.material.setColor(color);
 
     //cube2
     vec3.set(scaleVec, 1, 0.33, 1);
     vec3.set(translateVec, 2, 0, 0);
     cube2.translate(translateVec);
     cube2.scaleIt(scaleVec);
-
+    vec4.set(color, 1, 0, 1, 0);
+    cube2.material.setColor(color);
 
 
     //pyramid

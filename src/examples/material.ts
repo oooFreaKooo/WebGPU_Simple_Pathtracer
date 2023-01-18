@@ -7,7 +7,6 @@ export class Material {
     public readonly fragmentShader;
     public device: GPUDevice;
     public uniformBuffer: GPUBuffer;
-
     constructor(device: GPUDevice) {
         this.device = device;
         this.vertexShader = this.device.createShaderModule({
