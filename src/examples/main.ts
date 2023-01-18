@@ -7,6 +7,7 @@ import { Object3d } from "../framework/object-3d";
 import { Camera } from "../framework/camera";
 import { makeCube } from './cube';
 import { makePyramid } from './pyramid';
+import { parseOBJ } from '../framework/importObj';
 //import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 
@@ -21,10 +22,14 @@ $('#id-btn').on('click', ()=>{
 
 //const loader = new GLTFLoader();//loader.load('../../../scene.gltf', function (gltf) { root.attach(gltf.asset); });
 async function mainFunc() {
-    const canvas = document.getElementById('canvas-webgpu') as HTMLCanvasElement;
+    const canvas = document.getElementById("canvas-webgpu") as HTMLCanvasElement;
     const renderer = new Renderer(canvas);
     await renderer.init(canvas);
     const root = new Node3d();
+    //const cube = makeCube(renderer.device);
+
+    const filePath = "../src/examples/obj/Spider.obj";
+    //const obj = parseOBJ(renderer.device, filePath);
     const cube = makeCube(renderer.device);
     const cube2 = makeCube(renderer.device);
     const cube3 = makeCube(renderer.device);
@@ -75,7 +80,7 @@ async function mainFunc() {
     const camera = new Camera(canvas);
     function render() {
         window.requestAnimationFrame(render);
-        camera.tick()
+        camera.tick();
 
         renderer.render(root, camera);
     }
@@ -87,6 +92,3 @@ mainFunc();
 //TODO
 //Projektions und View-matrix aus der Kamera laden
 //Uniformbuffer anpassen/füllen
-
-
-

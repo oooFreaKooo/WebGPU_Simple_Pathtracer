@@ -4,10 +4,9 @@ import { mat4, vec3 } from "gl-matrix"
 import { IgnorePlugin } from "webpack";
 import { Renderer } from "./renderer";
 import { Object3d } from "./object-3d";
-import { Material } from "../examples/material"
+import { Material } from "../examples/material";
 
 export class RenderElement {
-
     //Device/Context objects
     //adapter: GPUAdapter;
     public device: GPUDevice;
@@ -30,7 +29,6 @@ export class RenderElement {
 
     // Assets
     object3D: Object3d;
-
 
     // t für die Rotation
     t: number = 0.0;
@@ -58,16 +56,18 @@ export class RenderElement {
                 module: material.vertexShader,
 
                 entryPoint: "vs_main",
-                buffers: [this.object3D.bufferLayout]
+                buffers: [this.object3D.bufferLayout],
             },
 
             fragment: {
                 //material.fragment
                 module: material.fragmentShader,
                 entryPoint: "fs_main",
-                targets: [{
-                    format: this.format
-                }]
+                targets: [
+                    {
+                        format: this.format,
+                    },
+                ],
             },
 
             primitive: {

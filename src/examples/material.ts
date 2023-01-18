@@ -3,7 +3,6 @@ import { RenderElement } from '../framework/render-element'
 import { vec4 } from 'gl-matrix';
 
 export class Material {
-
     public readonly vertexShader;
     public readonly fragmentShader;
     public device: GPUDevice;
@@ -12,13 +11,12 @@ export class Material {
     constructor(device: GPUDevice) {
         this.device = device;
         this.vertexShader = this.device.createShaderModule({
-            code: shader
-        })
+            code: shader,
+        });
         this.fragmentShader = this.device.createShaderModule({
-            code: shader
-        })
+            code: shader,
+        });
     }
-
 
     public setColor(color: vec4) {
 
