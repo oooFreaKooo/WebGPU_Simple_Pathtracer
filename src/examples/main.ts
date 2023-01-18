@@ -28,23 +28,27 @@ async function mainFunc() {
     await renderer.init(canvas);
     const root = new Node3d();
     //const cube = makeCube(renderer.device);
-
+    let color = vec4.create();
+    vec4.set(color, 0.5, 1, 1, 1);
     const filePath = "../src/examples/obj/Spider.obj";
-    const obj = parseOBJ(renderer.device, filePath);
+    const obj = await parseOBJ(renderer.device, filePath);
+
+    obj.material.setColor(color);
     const cube = makeCube(renderer.device);
     const cube2 = makeCube(renderer.device);
     const cube3 = makeCube(renderer.device);
     const pyramid = makePyramid(renderer.device);
     const pyramid2 = makePyramid(renderer.device);
     // add mesh and material data
-    root.attach(cube);
-    //root.attach(await obj);
-    cube.attach(cube2);
+    //root.attach(cube);
+    root.attach(obj);
+
+    //cube.attach(cube2);
     //cube.attach(cube3);
     //cube2.attach(cube3);
     //cube.attach(pyramid);
-    cube.attach(pyramid);
-    cube.attach(pyramid2);
+    // cube.attach(pyramid);
+    //cube.attach(pyramid2);
     // pyramid.attach(pyramid2);
 
 
@@ -69,7 +73,7 @@ async function mainFunc() {
     //cube
     vec3.set(scaleVec, 1, 3, 1);
     cube.scaleIt(scaleVec);
-    let color = vec4.create();
+
     vec4.set(color, 1, 0, 0, 0);
     cube.material.setColor(color);
 

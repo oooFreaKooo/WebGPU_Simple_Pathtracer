@@ -14,6 +14,7 @@ export async function parseOBJ(device: GPUDevice, file: string) {
   // setup vertices, indices and material for Object 3d
   const _vertices = new Float32Array(output.models[0].vertices.length * 3);
   const _indices = new Uint32Array(output.models[0].faces.length * 3);
+  const _normals = new Float32Array(output.models[0].vertexNormals.length * 3);
   const _material = new Material(device);
   let offset = 0;
 
@@ -35,13 +36,10 @@ export async function parseOBJ(device: GPUDevice, file: string) {
     );
     offset += 3;
   }
-  const _normals: Float32Array = new Float32Array([
-    0, 0, 1, // front
-    1, 0, 0, // right
-    0, 0, -1, // back
-    -1, 0, 0, // left
-    0, 1, 0, // top
-    0, -1, 0 // bottom
-  ]);
+  offset = 0;
+  for (const norm of output.models[0].vertexNormals) {
+    _normals.set([norm.x, norm.y, norm.z], offset);
+    offset += 3;
+  }
   return new Object3d(device, _vertices, _normals, _indices, _material);
 }
