@@ -4,17 +4,15 @@ import { Material } from "./material";
 export function makeCube(device: GPUDevice) {
 
     const _vertices: Float32Array = new Float32Array([
-        // 0.0, 0.5, 0.0,
-        // -0.5, -0.5, 0.0,
-        // 0.5, -0.5, 0.0,
-        -1, -1, 1,     // vertex a, index 0
-        1, -1, 1,     // vertex b, index 1
-        1, 1, 1,     // vertex c, index 2
-        -1, 1, 1,     // vertex d, index 3
-        -1, -1, -1,     // vertex e, index 4
-        1, -1, -1,     // vertex f, index 5
-        1, 1, -1,     // vertex g, index 6
-        -1, 1, -1,     // vertex h, index 7 
+        // pos        // color
+        -1, -1, 1,    1, 1, 0,    // vertex a, index 0
+        1, -1, 1,     1, 0, 1,   // vertex b, index 1
+        1, 1, 1,      1, 1, 1, // vertex c, index 2
+        -1, 1, 1,     0, 1, 1, // vertex d, index 3
+        -1, -1, -1,   0, 0, 0, // vertex e, index 4
+        1, -1, -1,    1, 0, 0, // vertex f, index 5
+        1, 1, -1,     1, 1, 0, // vertex g, index 6
+        -1, 1, -1,    0, 1, 0, // vertex h, index 7 
     ]);
     const _indices = new Uint32Array([
         // front
@@ -55,6 +53,131 @@ export function makeCube(device: GPUDevice) {
         1, 1, 0,
         0, 1, 0,]));
 
-    return new Object3d(device, _vertices, _normals,_indices, _material);
+
+
+    // Other Set of Vertices, Indices and Color
+
+    const _newVertices = new Float32Array([
+        // front
+        -1, -1,  1,  0, 0, 1,
+         1, -1,  1,  0, 0, 1,
+         1,  1,  1,  0, 0, 1,
+         1,  1,  1,  0, 0, 1,
+        -1,  1,  1,  0, 0, 1,
+        -1, -1,  1,  0, 0, 1,
+
+        // right
+         1, -1,  1,  1, 0, 0,
+         1, -1, -1,  1, 0, 0,
+         1,  1, -1,  1, 0, 0,
+         1,  1, -1,  1, 0, 0,
+         1,  1,  1,  1, 0, 0,
+         1, -1,  1,  1, 0, 0,
+
+        // back
+        -1, -1, -1,  1, 1, 0,
+        -1,  1, -1,  1, 1, 0,
+         1,  1, -1,  1, 1, 0,
+         1,  1, -1,  1, 1, 0,
+         1, -1, -1,  1, 1, 0,
+        -1, -1, -1,  1, 1, 0,
+
+        // left
+        -1, -1,  1,   0, 1, 1,
+        -1,  1,  1,  0, 1, 1,
+        -1,  1, -1,  0, 1, 1,
+        -1,  1, -1,  0, 1, 1,
+        -1, -1, -1,  0, 1, 1,
+        -1, -1,  1,  0, 1, 1,
+
+        // top
+        -1,  1,  1,  0, 1, 0,
+         1,  1,  1,  0, 1, 0,
+         1,  1, -1,  0, 1, 0,
+         1,  1, -1,  0, 1, 0,
+        -1,  1, -1,  0, 1, 0,
+        -1,  1,  1,  0, 1, 0,
+
+        // bottom
+        -1, -1,  1,  1, 0, 1,
+        -1, -1, -1,  1, 0, 1,
+         1, -1, -1,  1, 0, 1,
+         1, -1, -1,  1, 0, 1,
+         1, -1,  1,  1, 0, 1,
+        -1, -1,  1,  1, 0, 1
+    ]);
+    const _newColors = new Float32Array([
+        // front - blue
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+
+        // right - red
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+
+        //back - yellow
+        1, 1, 0,
+        1, 1, 0,
+        1, 1, 0,
+        1, 1, 0,
+        1, 1, 0,
+        1, 1, 0,
+
+        //left - aqua
+        0, 1, 1,
+        0, 1, 1,
+        0, 1, 1,
+        0, 1, 1,
+        0, 1, 1,
+        0, 1, 1,
+
+        // top - green
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+
+        // bottom - fuchsia
+        1, 0, 1,
+        1, 0, 1,
+        1, 0, 1,
+        1, 0, 1,
+        1, 0, 1,
+        1, 0, 1
+    ]);
+
+    const _newNormals = new Float32Array([
+        // front
+        0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+
+        // right
+        1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+
+        // back           
+        0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+
+        // left
+        -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+
+        // top
+        0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+
+        // bottom
+        0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0
+    ]);
+
+    // ToDo: Indices löschen
+
+    return new Object3d(device, _newVertices, _newNormals,_indices, _material);
 
 }

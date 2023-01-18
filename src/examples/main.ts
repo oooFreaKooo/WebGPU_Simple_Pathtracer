@@ -22,6 +22,7 @@ async function mainFunc() {
     await renderer.init(canvas);
     const root = new Node3d();
     const cube = makeCube(renderer.device);
+    cube.material.setColor(new Float32Array([1.0,1.0,0.0,0.0]));
     // add mesh and material data
     root.attach(cube);
 
@@ -29,7 +30,6 @@ async function mainFunc() {
     function render() {
         window.requestAnimationFrame(render);
         camera.tick()
-
         renderer.render(root, camera);
     }
     render();

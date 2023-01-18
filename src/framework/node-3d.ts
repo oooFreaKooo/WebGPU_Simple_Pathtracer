@@ -76,11 +76,6 @@ export class Node3d {
         }
         return this.worldTransformMatrix = this.transform;
     }
-    // TODO:
-    // position
-    // rotation
-    // scale
-    // transform matrix
     public getUpdateFlag() {
         return this.needTransformUpdate;
     }

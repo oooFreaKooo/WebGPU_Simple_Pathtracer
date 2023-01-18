@@ -91,7 +91,8 @@ export class Renderer {
             renderPass.setIndexBuffer(element.object3D.indexBuffer, 'uint32');
             renderPass.setBindGroup(0, element.bindGroup);
             // renderPass.draw(3, 1, 0, 0);
-            renderPass.drawIndexed(element.indexCount, 1, 0, 0);
+            //renderPass.drawIndexed(element.indexCount, 1, 0, 0);
+            renderPass.draw(element.vertexCount/2)  // ToDo das /2 ist noch unschön
 
         }
 

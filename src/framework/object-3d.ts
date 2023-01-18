@@ -54,14 +54,14 @@ export class Object3d extends Node3d {
         this._vertexBuffer.unmap();
 
         new Float32Array(this._normalBuffer.getMappedRange()).set(normals);
-        this._vertexBuffer.unmap();
+        this._normalBuffer.unmap();
 
         new Uint32Array(this._indexBuffer.getMappedRange()).set(indices);
         this._indexBuffer.unmap();
 
         //now define the buffer layout
         this.bufferLayout = {
-            arrayStride: 12,
+            arrayStride: 24,
             attributes: [
                 {
                     shaderLocation: 0,
@@ -69,9 +69,9 @@ export class Object3d extends Node3d {
                     offset: 0
                 },
                 {
-                   shaderLocation: 1,
+                    shaderLocation: 1,
                     format: "float32x2", // float32x3 = r g b (color) , float32x2 = u, v (textures)
-                    offset: 0
+                    offset: 3*4
                 },
                 {
                     shaderLocation: 2,
