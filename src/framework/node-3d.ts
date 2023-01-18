@@ -7,7 +7,7 @@ export class Node3d {
   private transform: mat4 = mat4.create();
   private worldTransformMatrix = mat4.create();
   private needTransformUpdate: boolean = true;
-
+  private pi = 3.14159265359;
   /**
    * read only access to children, use atttach / detatch to modify
    */
@@ -100,7 +100,7 @@ export class Node3d {
     }
   }
   public rotate(deg: number, axis: vec3) {
-    mat4.fromRotation(this.rotation, deg, axis);
+    mat4.fromRotation(this.rotation, deg * this.pi / 180, axis);
     this.setUpdateFlag(true);
     for (let child of this.children) {
       child.setUpdateFlag(true);

@@ -8,6 +8,7 @@ import { Camera } from "../framework/camera";
 import { makeCube } from './cube';
 import { makePyramid } from './pyramid';
 import { parseOBJ } from '../framework/importObj';
+
 //import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 
@@ -33,8 +34,8 @@ async function mainFunc() {
     const cube = makeCube(renderer.device);
     const cube2 = makeCube(renderer.device);
     const cube3 = makeCube(renderer.device);
-    //const pyramid = makePyramid(renderer.device);
-    //const pyramid2 = makePyramid(renderer.device);
+    const pyramid = makePyramid(renderer.device);
+    const pyramid2 = makePyramid(renderer.device);
     // add mesh and material data
     root.attach(cube);
     //root.attach(await obj);
@@ -42,14 +43,20 @@ async function mainFunc() {
     //cube.attach(cube3);
     //cube2.attach(cube3);
     //cube.attach(pyramid);
+    cube.attach(pyramid);
+    cube.attach(pyramid2);
     // pyramid.attach(pyramid2);
+
+
     // Achsen
     let xAxis = vec3.create();
     let yAxis = vec3.create();
     let zAxis = vec3.create();
+    let xz = vec3.create();
     vec3.set(xAxis, 1, 0, 0);
     vec3.set(yAxis, 0, 1, 0);
     vec3.set(zAxis, 0, 0, 1);
+    vec3.add(xz, xAxis, zAxis);
 
     //Vektoren
     let translateVec = vec3.create();
@@ -76,11 +83,16 @@ async function mainFunc() {
 
 
     //pyramid
-    vec3.set(translateVec, 0, 4.5, 0);
+    vec3.set(translateVec, 0, 6, 0);
     vec3.set(scaleVec, 2, 1, 2);
-    //pyramid.translate(translateVec);
+    pyramid.translate(translateVec);
     //pyramid.scaleIt(scaleVec);
 
+    //pyramid2
+    pyramid2.rotate(180, xz);
+    vec3.set(translateVec, 0, -6, 0);
+    pyramid2.translate(translateVec);
+    vec3.set(scaleVec, 2, 1, 2);
 
     const camera = new Camera(canvas);
     function render() {

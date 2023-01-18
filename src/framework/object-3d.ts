@@ -55,7 +55,7 @@ export class Object3d extends Node3d {
     this._vertexBuffer.unmap();
 
     new Float32Array(this._normalBuffer.getMappedRange()).set(normals);
-    this._vertexBuffer.unmap();
+    this._normalBuffer.unmap();
 
     new Uint32Array(this._indexBuffer.getMappedRange()).set(indices);
     this._indexBuffer.unmap();

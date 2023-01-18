@@ -72,7 +72,7 @@ export class RenderElement {
 
             primitive: {
                 topology: "triangle-list",
-                cullMode: "front"
+                cullMode: "none"
             },
         });
 
