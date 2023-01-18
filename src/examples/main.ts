@@ -28,14 +28,14 @@ async function mainFunc() {
     const cube = makeCube(renderer.device);
     const cube2 = makeCube(renderer.device);
     const cube3 = makeCube(renderer.device);
-    const pyramid = makePyramid(renderer.device);
-    const pyramid2 = makePyramid(renderer.device);
+    //const pyramid = makePyramid(renderer.device);
+    //const pyramid2 = makePyramid(renderer.device);
     // add mesh and material data
     root.attach(cube);
     cube.attach(cube2);
     //cube.attach(cube3);
     //cube2.attach(cube3);
-    cube.attach(pyramid);
+    //cube.attach(pyramid);
     // pyramid.attach(pyramid2);
     // Achsen
     let xAxis = vec3.create();
@@ -68,8 +68,8 @@ async function mainFunc() {
     //pyramid
     vec3.set(translateVec, 0, 4.5, 0);
     vec3.set(scaleVec, 2, 1, 2);
-    pyramid.translate(translateVec);
-    pyramid.scaleIt(scaleVec);
+    //pyramid.translate(translateVec);
+    //pyramid.scaleIt(scaleVec);
 
 
     const camera = new Camera(canvas);

@@ -32,7 +32,14 @@ export function makePyramid(device: GPUDevice) {
 
     const _material: Material = new Material(device);
     _material.setColor(new Float32Array([0, 0, 1]));
-
-    return new Object3d(device, _vertices, _indices, _material);
+    const _normals: Float32Array = new Float32Array([
+        0, 0, 1, // front
+        1, 0, 0, // right
+        0, 0, -1, // back
+        -1, 0, 0, // left
+        0, 1, 0, // top
+        0, -1, 0 // bottom
+    ]);
+    return new Object3d(device, _vertices, _normals, _indices, _material);
 
 }
