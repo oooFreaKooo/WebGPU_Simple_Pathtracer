@@ -27,9 +27,9 @@ export async function parseOBJ(device: GPUDevice, file: string) {
   for (const face of output.models[0].faces) {
     _indices.set(
       [
-        face.vertices[0].vertexIndex,
-        face.vertices[1].vertexIndex,
-        face.vertices[2].vertexIndex,
+        face.vertices[0].vertexIndex - 1,
+        face.vertices[1].vertexIndex - 1,
+        face.vertices[2].vertexIndex - 1,
       ],
       offset
     );

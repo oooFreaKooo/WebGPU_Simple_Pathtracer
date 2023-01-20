@@ -4,9 +4,7 @@ import { Material } from "../examples/material";
 
 export class RenderElement {
   //Device/Context objects
-  //adapter: GPUAdapter;
   public device: GPUDevice;
-  //context: GPUCanvasContext;
   public format: GPUTextureFormat;
 
   // Pipeline objects

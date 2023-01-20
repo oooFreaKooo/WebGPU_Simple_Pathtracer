@@ -1,19 +1,7 @@
-import $ from "jquery";
-import { CheckWebGPU } from "./helper";
-
 import { Renderer } from "../framework/renderer";
 import { Node3d } from "../framework/node-3d";
-import { Object3d } from "../framework/object-3d";
 import { Camera } from "../framework/camera";
-import { makeCube } from "./cube";
 import { parseOBJ } from "../framework/importObj";
-
-/*
-$('#id-btn').on('click', ()=>{
-    const color = $('#id-color').val() as string;
-    CreateTriangle(color);
-});
-*/
 
 async function mainFunc() {
   const canvas = document.getElementById("canvas-webgpu") as HTMLCanvasElement;
@@ -22,8 +10,9 @@ async function mainFunc() {
   const root = new Node3d();
   //const cube = makeCube(renderer.device);
 
-  const filePath = "../src/examples/obj/Spider.obj";
-  const obj = parseOBJ(renderer.device, filePath);
+  const filePath1 = "../src/examples/obj/Spider.obj";
+  const filePath2 = "../src/examples/obj/Skeleton.obj";
+  const obj = parseOBJ(renderer.device, filePath2);
 
   // add mesh and material data
   root.attach(await obj);
@@ -39,7 +28,3 @@ async function mainFunc() {
 }
 
 mainFunc();
-
-//TODO
-//Projektions und View-matrix aus der Kamera laden
-//Uniformbuffer anpassen/füllen

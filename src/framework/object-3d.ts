@@ -57,18 +57,13 @@ export class Object3d extends Node3d {
         {
           // position
           shaderLocation: 0,
-          format: "float32x3", // float32x3 = x y z (3D), float32x2 = x y (2D)
+          format: "float32x3",
           offset: 0,
         },
-        // {
-        //     shaderLocation: 1,
-        //     format: "float32x2", // float32x3 = r g b (color) , float32x2 = u, v (textures)
-        //     offset: 12
-        // }
       ],
     };
 
-    this.material = material; // assign the material to the object
+    this.material = material;
   }
 
   get bufferlayout() {
