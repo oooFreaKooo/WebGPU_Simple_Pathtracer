@@ -31,17 +31,21 @@ async function mainFunc() {
     let color = vec4.create();
     vec4.set(color, 0.5, 1, 1, 1);
     const filePath = "../src/examples/obj/Spider.obj";
+    const filePath2 = "../src/examples/obj/cube.obj";
     const obj = await parseOBJ(renderer.device, filePath);
 
-    obj.material.setColor(color);
+    //obj.material.setColor(color);
+    const obj2 = await parseOBJ(renderer.device, filePath2);
+
+    //obj2.material.setColor(color);
     const cube = makeCube(renderer.device);
     const cube2 = makeCube(renderer.device);
     const cube3 = makeCube(renderer.device);
     const pyramid = makePyramid(renderer.device);
     const pyramid2 = makePyramid(renderer.device);
     // add mesh and material data
-    //root.attach(cube);
-    root.attach(obj);
+    root.attach(cube);
+    //root.attach(obj2);
 
     //cube.attach(cube2);
     //cube.attach(cube3);

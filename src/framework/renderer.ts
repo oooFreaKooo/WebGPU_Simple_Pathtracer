@@ -83,6 +83,7 @@ export class Renderer {
     for (const element of elements) {
       renderPass.setPipeline(element.pipeline);
       renderPass.setVertexBuffer(0, element.object3D.VertexBuffer);
+      renderPass.setVertexBuffer(1, element.object3D.normalBuffer);
       renderPass.setIndexBuffer(element.object3D.indexBuffer, 'uint32');
       renderPass.setBindGroup(0, element.bindGroup);
       // renderPass.draw(3, 1, 0, 0);

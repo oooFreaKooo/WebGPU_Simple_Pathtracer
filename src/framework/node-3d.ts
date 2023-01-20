@@ -67,7 +67,7 @@ export class Node3d {
     mat4.multiply(this.transform, this.transform, this.scale);
     this.calcWorldTransMatrix();
     this.needTransformUpdate = false;
-
+    console.log(this.worldTransformMatrix);
     for (const child of this.children) {
       child.setUpdateFlag(true);
     }

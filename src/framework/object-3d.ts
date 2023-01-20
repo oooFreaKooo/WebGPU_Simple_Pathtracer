@@ -6,7 +6,7 @@ export class Object3d extends Node3d {
   _vertexBuffer: GPUBuffer
   _indexBuffer: GPUBuffer
   _normalBuffer: GPUBuffer
-  bufferLayout: GPUVertexBufferLayout
+  bufferLayouts: GPUVertexBufferLayout[]
   device: GPUDevice
   material: Material;
 
@@ -61,7 +61,7 @@ export class Object3d extends Node3d {
     this._indexBuffer.unmap();
 
     //now define the buffer layout
-    this.bufferLayout = {
+    this.bufferLayouts = [{
       arrayStride: 12,
       attributes: [
         {
@@ -69,26 +69,38 @@ export class Object3d extends Node3d {
           format: "float32x3", // float32x3 = x y z (3D), float32x2 = x y (2D)
           offset: 0
         },
+
+        // {
+        //   shaderLocation: 1,
+        //   format: "float32x2", // float32x3 = r g b (color) , float32x2 = u, v (textures)
+        //   offset: 3 * 4
+        // },
+        // {
+        //   shaderLocation: 2,
+        //   format: "float32x3", // normale
+        //   offset: 5 * 4
+        // }
+      ]
+
+    }, {
+      arrayStride: 12,
+      attributes: [
         {
           shaderLocation: 1,
-          format: "float32x2", // float32x3 = r g b (color) , float32x2 = u, v (textures)
-          offset: 0
-        },
-        {
-          shaderLocation: 2,
-          format: "float32x3",
+          format: "float32x3", // float32x3 = x y z (normalen)
           offset: 0
         }
       ]
 
     }
+    ]
 
 
     this.material = material; // assign the material to the object
-  }
 
+  }
   get bufferlayout() {
-    return this.bufferLayout;
+    return this.bufferLayouts;
   }
 
   get VertexBuffer() {

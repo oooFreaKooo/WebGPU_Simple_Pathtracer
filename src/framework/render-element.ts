@@ -1,6 +1,6 @@
 import shader from './shader.wgsl';
 import { makeCube } from "../examples/cube";
-import { mat4, vec3 } from "gl-matrix"
+import { mat4, vec3, vec4 } from "gl-matrix"
 import { IgnorePlugin } from "webpack";
 import { Renderer } from "./renderer";
 import { Object3d } from "./object-3d";
@@ -22,6 +22,10 @@ export class RenderElement {
     public specularBuffer: GPUBuffer
     public lightPosBuffer: GPUBuffer
     public lightColorBuffer: GPUBuffer
+    public spotDirectionBuffer: GPUBuffer
+    public spotExponentBuffer: GPUBuffer
+    public spotCutoffBuffer: GPUBuffer
+    public shininessBuffer: GPUBuffer
     public pipeline: GPURenderPipeline;
     public bindGroupMaterial: GPUBindGroup;
     public readonly vertexCount;
@@ -33,7 +37,6 @@ export class RenderElement {
     // t für die Rotation
     t: number = 0.0;
 
-
     constructor(format: GPUTextureFormat, object: Object3d, private camera: mat4) {
         this.device = object.device;
         this.format = format;
@@ -41,7 +44,6 @@ export class RenderElement {
         this.makePipeline();
         this.vertexCount = object.vertexCount;
         this.indexCount = object.indexCount;
-
     }
 
     // create pipeline
@@ -56,7 +58,7 @@ export class RenderElement {
                 module: material.vertexShader,
 
                 entryPoint: "vs_main",
-                buffers: [this.object3D.bufferLayout],
+                buffers: this.object3D.bufferLayouts,
             },
 
             fragment: {
@@ -103,9 +105,9 @@ export class RenderElement {
         });
         this.device.queue.writeBuffer(this.specularBuffer, 0, <Float32Array>specular);
 
-        const lightPos: vec3 = new Float32Array([3, 3, 3]);
+        const lightPos: vec4 = new Float32Array([3, 3, 3, 0]);
         this.lightPosBuffer = this.device.createBuffer({
-            size: 3 * 4,
+            size: 4 * 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         this.device.queue.writeBuffer(this.lightPosBuffer, 0, <Float32Array>lightPos);
@@ -116,6 +118,34 @@ export class RenderElement {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         this.device.queue.writeBuffer(this.lightColorBuffer, 0, <Float32Array>lightColor);
+
+        const spot_direction: vec4 = new Float32Array([1.0, 1.0, 1.0, 0.0]);
+        this.spotDirectionBuffer = this.device.createBuffer({
+            size: 4 * 4,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(this.spotDirectionBuffer, 0, <Float32Array>spot_direction);
+
+        const spot_exponent: Float32Array = new Float32Array([1.0]);
+        this.spotExponentBuffer = this.device.createBuffer({
+            size: 1 * 4,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(this.spotExponentBuffer, 0, <Float32Array>spot_exponent);
+
+        const spot_cutoff: Float32Array = new Float32Array([1.0]);
+        this.spotCutoffBuffer = this.device.createBuffer({
+            size: 1 * 4,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(this.spotCutoffBuffer, 0, <Float32Array>spot_cutoff);
+
+        const shininiess: Float32Array = new Float32Array([0.5]);
+        this.shininessBuffer = this.device.createBuffer({
+            size: 1 * 4,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.device.queue.writeBuffer(this.shininessBuffer, 0, <Float32Array>shininiess);
 
 
         this.transformBuffer = this.device.createBuffer({
@@ -134,6 +164,11 @@ export class RenderElement {
                 { binding: 4, resource: { buffer: this.specularBuffer } },
                 { binding: 5, resource: { buffer: this.lightPosBuffer } },
                 { binding: 6, resource: { buffer: this.lightColorBuffer } },
+                { binding: 7, resource: { buffer: this.spotDirectionBuffer } },
+                { binding: 8, resource: { buffer: this.spotExponentBuffer } },
+                { binding: 9, resource: { buffer: this.spotCutoffBuffer } },
+                { binding: 10, resource: { buffer: this.shininessBuffer } },
+
             ]
         });
     }
