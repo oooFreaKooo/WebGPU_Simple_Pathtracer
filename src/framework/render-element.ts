@@ -1,4 +1,4 @@
-import { mat4 } from "gl-matrix";
+import { mat4, vec3 } from "gl-matrix";
 import { Object3d } from "./object-3d";
 import { Material } from "../examples/material";
 
@@ -9,9 +9,13 @@ export class RenderElement {
 
   // Pipeline objects
   public transformBuffer: GPUBuffer;
-  public bindGroup: GPUBindGroup;
+  public lightPosBuffer: GPUBuffer;
   public pipeline: GPURenderPipeline;
-  public bindGroupMaterial: GPUBindGroup;
+
+  public transformBindGroup: GPUBindGroup;
+  public lightBindGroup: GPUBindGroup;
+  public lightPosBindGroup: GPUBindGroup;
+
   public readonly vertexCount;
   public readonly indexCount;
 
@@ -20,12 +24,9 @@ export class RenderElement {
 
   // t für die Rotation
   t: number = 0.0;
+  public lightPos: vec3 = new Float32Array([0.0, 3.0, 0.0]);
 
-  constructor(
-    format: GPUTextureFormat,
-    object: Object3d,
-    private camera: mat4
-  ) {
+  constructor(format: GPUTextureFormat, object: Object3d, private camera: mat4) {
     this.device = object.device;
     this.format = format;
     this.object3D = object;
@@ -38,22 +39,21 @@ export class RenderElement {
   public async makePipeline() {
     const material = new Material(this.device);
     const transformUniform: mat4 = mat4.create();
-    mat4.multiply(
-      transformUniform,
-      this.camera,
-      this.object3D.calcWorldTransMatrix()
-    );
+    mat4.multiply(transformUniform, this.camera, this.object3D.calcWorldTransMatrix());
     const materialUniform = this.object3D.material;
+    const lightUniform = this.object3D.material;
+
     this.transformBuffer = this.device.createBuffer({
-      size: (<ArrayBuffer>transformUniform).byteLength,
+      size: 64,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    this.device.queue.writeBuffer(this.transformBuffer, 0, <ArrayBuffer>transformUniform);
 
-    this.device.queue.writeBuffer(
-      this.transformBuffer,
-      0,
-      <ArrayBuffer>transformUniform
-    );
+    this.lightPosBuffer = this.device.createBuffer({
+      size: 64,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(this.lightPosBuffer, 0, <Float32Array>this.lightPos);
 
     this.pipeline = this.device.createRenderPipeline({
       vertex: {
@@ -74,37 +74,29 @@ export class RenderElement {
           },
         ],
       },
-
       primitive: {
         topology: "triangle-list",
         cullMode: "none",
       },
-
       layout: "auto",
     });
-    this.bindGroup = this.device.createBindGroup({
-      // Bind Group: specify the actual resources
+
+    this.transformBindGroup = this.device.createBindGroup({
       layout: this.pipeline.getBindGroupLayout(0),
       entries: [
-        {
-          binding: 0,
-          resource: {
-            buffer: this.transformBuffer, // bind uniform buffer to bind 0
-          },
-        },
+        { binding: 0, resource: { buffer: this.transformBuffer } },
+        { binding: 1, resource: { buffer: materialUniform.uniformBuffer } },
       ],
     });
 
-    this.bindGroupMaterial = this.device.createBindGroup({
+    this.lightBindGroup = this.device.createBindGroup({
       layout: this.pipeline.getBindGroupLayout(1),
-      entries: [
-        {
-          binding: 1,
-          resource: {
-            buffer: this.transformBuffer,
-          },
-        },
-      ],
+      entries: [{ binding: 0, resource: { buffer: lightUniform.lightBuffer } }],
+    });
+
+    this.lightPosBindGroup = this.device.createBindGroup({
+      layout: this.pipeline.getBindGroupLayout(2),
+      entries: [{ binding: 0, resource: { buffer: this.lightPosBuffer } }],
     });
   }
 }

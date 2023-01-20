@@ -12,11 +12,7 @@ export class Node3d {
    * read only access to children, use atttach / detatch to modify
    */
   public children: Node3d[] = [];
-  constructor(
-    private position = mat4.create(),
-    private scale = mat4.create(),
-    private rotation = mat4.create()
-  ) {
+  constructor(private position = mat4.create(), private scale = mat4.create(), private rotation = mat4.create()) {
     this.calcTransformMat();
   }
 
@@ -71,11 +67,7 @@ export class Node3d {
   }
   public calcWorldTransMatrix() {
     if (this.parent) {
-      return mat4.multiply(
-        this.worldTransformMatrix,
-        this.parent.worldTransformMatrix,
-        this.transform
-      );
+      return mat4.multiply(this.worldTransformMatrix, this.parent.worldTransformMatrix, this.transform);
     }
     return (this.worldTransformMatrix = this.transform);
   }

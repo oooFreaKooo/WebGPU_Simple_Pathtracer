@@ -8,11 +8,7 @@ export class Camera {
   private projection: mat4 = mat4.create();
 
   //Construktor
-  constructor(
-    canvas: HTMLCanvasElement,
-    private respectRatio = 1.0,
-    private fieldOfView = 100
-  ) {
+  constructor(canvas: HTMLCanvasElement, private respectRatio = 1.0, private fieldOfView = 100) {
     const cameraOption = {
       eye: [2, 2, 4],
       center: [0, 0, 0],
@@ -53,13 +49,7 @@ export class Camera {
   }
 
   private computeProjection() {
-    this.projection = mat4.perspective(
-      mat4.create(),
-      (2 * Math.PI) / 5,
-      this.respectRatio,
-      0.1,
-      this.fieldOfView
-    );
+    this.projection = mat4.perspective(mat4.create(), (2 * Math.PI) / 5, this.respectRatio, 0.1, this.fieldOfView);
   }
 
   /* 

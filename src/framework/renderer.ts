@@ -50,11 +50,7 @@ export class Renderer {
     this.renderElementList(renderElements, camera);
   }
 
-  public parseSceneGraphRecursive(
-    node: Node3d,
-    renderElements: RenderElement[],
-    camera: mat4
-  ) {
+  public parseSceneGraphRecursive(node: Node3d, renderElements: RenderElement[], camera: mat4) {
     // TODO:
     // iterate over all node and children
     // update transform matrices and other props
@@ -72,9 +68,6 @@ export class Renderer {
     }
   }
 
-  /**
-   * to be called every frame to draw the image
-   */
   public renderElementList(elements: RenderElement[], camera: Camera): void {
     const commandEncoder = this.device.createCommandEncoder();
 
@@ -93,12 +86,12 @@ export class Renderer {
       renderPass.setPipeline(element.pipeline);
       renderPass.setVertexBuffer(0, element.object3D.VertexBuffer);
       renderPass.setIndexBuffer(element.object3D.indexBuffer, "uint32");
-      renderPass.setBindGroup(0, element.bindGroup);
-      renderPass.setBindGroup(1, element.bindGroupMaterial);
+      renderPass.setBindGroup(0, element.transformBindGroup);
+      renderPass.setBindGroup(1, element.lightBindGroup);
+      renderPass.setBindGroup(2, element.lightPosBindGroup);
       // renderPass.draw(3, 1, 0, 0);
       renderPass.drawIndexed(element.indexCount, 1, 0, 0);
     }
-
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
   }
