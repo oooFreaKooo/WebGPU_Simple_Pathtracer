@@ -20,7 +20,7 @@ export class RenderElement {
   // Assets
   object3D: Object3d;
 
-  constructor(format: GPUTextureFormat, object: Object3d, private camera: mat4) {
+  constructor(format: GPUTextureFormat, object: Object3d, public camera: mat4) {
     this.device = object.device;
     this.format = format;
     this.object3D = object;

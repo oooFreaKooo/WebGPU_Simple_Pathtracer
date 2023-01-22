@@ -12,7 +12,7 @@ export class Node3d {
    * read only access to children, use atttach / detatch to modify
    */
   public children: Node3d[] = [];
-  constructor(private position = mat4.create(), private scale = mat4.create(), private rotation = mat4.create()) {
+  constructor(public position = mat4.create(), private scale = mat4.create(), private rotation = mat4.create()) {
     this.calcTransformMat();
   }
 

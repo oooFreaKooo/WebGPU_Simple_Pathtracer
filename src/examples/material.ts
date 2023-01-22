@@ -1,5 +1,5 @@
 import shader from "./shader.wgsl";
-import { getModelViewMatrix, getProjectionMatrix } from "./helper";
+import { getModelViewMatrix } from "./helper";
 
 export class Material {
   public readonly vertexShader;
@@ -14,7 +14,6 @@ export class Material {
   public ambient = new Float32Array([0.1]);
   public directionalLight = new Float32Array(8);
   public pointLight = new Float32Array(8);
-  public now = performance.now();
 
   constructor(device: GPUDevice) {
     this.device = device;
@@ -27,12 +26,7 @@ export class Material {
     this.pointLight[2] = 10; // z
     this.pointLight[4] = 1; // intensitys
     this.pointLight[5] = 50; // radius
-    this.directionalLight = new Float32Array(8);
     this.directionalLight[4] = 3; // intensity
-    // UI
-    document.querySelector("#ambient")?.addEventListener("input", (e: Event) => {
-      this.ambient[0] = +(e.target as HTMLInputElement).value;
-    });
   }
 
   public setObject(NUM: number) {
@@ -78,5 +72,22 @@ export class Material {
     this.device.queue.writeBuffer(this.pointBuffer, 0, this.pointLight);
     this.device.queue.writeBuffer(this.directionalBuffer, 0, this.directionalLight);
     this.device.queue.writeBuffer(this.ambientBuffer, 0, this.ambient);
+    // UI
+    document.querySelector("#ambient")!.addEventListener("input", (e: Event) => {
+      this.ambient[0] = +(e.target as HTMLInputElement).value;
+      this.device.queue.writeBuffer(this.ambientBuffer, 0, this.ambient);
+    });
+    document.querySelector("#light-x")!.addEventListener("input", (e: Event) => {
+      this.pointLight[0] = +(e.target as HTMLInputElement).value;
+      this.device.queue.writeBuffer(this.pointBuffer, 0, this.pointLight);
+    });
+    document.querySelector("#light-y")!.addEventListener("input", (e: Event) => {
+      this.pointLight[1] = +(e.target as HTMLInputElement).value;
+      this.device.queue.writeBuffer(this.pointBuffer, 0, this.pointLight);
+    });
+    document.querySelector("#light-z")!.addEventListener("input", (e: Event) => {
+      this.pointLight[2] = +(e.target as HTMLInputElement).value;
+      this.device.queue.writeBuffer(this.pointBuffer, 0, this.pointLight);
+    });
   }
 }

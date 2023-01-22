@@ -3,10 +3,7 @@ import { Node3d } from "./node-3d";
 import { Object3d } from "./object-3d";
 import { Camera } from "./camera";
 import { CheckWebGPU } from "../examples/helper";
-
-import $ from "jquery";
 import { mat4 } from "gl-matrix";
-import { Material } from "../examples/material";
 
 export class Renderer {
   public adapter: GPUAdapter;
@@ -17,6 +14,9 @@ export class Renderer {
   public textureView: any;
   public renderPass: any;
   public now = performance.now();
+
+  // Assets
+  object3D: Object3d;
 
   // Initialisierung
   public init = async (canvas: HTMLCanvasElement) => {
@@ -104,8 +104,6 @@ export class Renderer {
       renderPass.setVertexBuffer(0, element.object3D.VertexBuffer);
       renderPass.setIndexBuffer(element.object3D.indexBuffer, "uint32");
       renderPass.drawIndexed(element.indexCount, 1, 0, 0);
-
-      // renderPass.draw(3, 1, 0, 0);
     }
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);

@@ -1,5 +1,4 @@
-import { Node3d } from "./node-3d";
-import { vec3, mat4 } from "gl-matrix";
+import { mat4 } from "gl-matrix";
 const createCamera = require("3d-view-controls");
 
 export class Camera {
@@ -51,10 +50,4 @@ export class Camera {
   private computeProjection() {
     this.projection = mat4.perspective(mat4.create(), (2 * Math.PI) / 5, this.respectRatio, 0.1, this.fieldOfView);
   }
-
-  /* 
-    public dispose(){
-        //events löschen
-    }
-    */
 }
