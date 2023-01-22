@@ -6,11 +6,16 @@
 </head>
 
 <body>
-    <div>
-        <h1>Multiple Cubes</h1><br>
-        <h2 id="id-gpu-check"></h2>
-        <br><br>
-        <canvas id="canvas-webgpu" width="640" height="480"></canvas>
+    <canvas></canvas>
+    <div class="inputs">
+        <span>Ambient Intensity</span>
+        <input id="ambient" type="range" min="0" max="1" step="0.01" value="0.1"/>
+        <span>Point Light Intensity</span>
+        <input id="point" type="range" min="0" max="1" step="0.01" value="1"/>
+        <span>Point Light Radius</span>
+        <input id="radius" type="range" min="0" max="100" step="1" value="20"/>
+        <span>Dir Light Intensity</span>
+        <input id="dir" type="range" min="0" max="1" step="0.01" value="0.6"/>
     </div>
     <script src="main.bundle.js"></script>
 </body>
