@@ -8,14 +8,10 @@ export function makeCube(device: GPUDevice) {
   const _normals: Float32Array = new Float32Array([0, 0, 1, 1, 0, 0, 0, 0, -1, -1, 0, 0, 0, 1, 0, 0, -1, 0]);
 
   const _material: Material = new Material(device);
-  _material.setColor(new Float32Array([0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]));
 
-  const ambient = new Float32Array([0.2, 0.2, 0.2]);
-  const diffuse = new Float32Array([1.0, 0.5, 0.5]);
-  const specular = new Float32Array([1.0, 1.0, 1.0]);
-  const lightColor = new Float32Array([0.0, 1.0, 1.0, 0.5]);
+  const numberOfObjects = 1;
 
-  _material.setLight(ambient, diffuse, specular, lightColor);
+  _material.setObject(numberOfObjects);
 
   return new Object3d(device, _vertices, _normals, _indices, _material);
 }

@@ -12,19 +12,12 @@ export class Object3d extends Node3d {
   public readonly vertexCount;
   public readonly indexCount;
 
-  constructor(
-    device: GPUDevice,
-    vertices: Float32Array,
-    normals: Float32Array,
-    indices: Uint32Array,
-    material: Material
-  ) {
+  constructor(device: GPUDevice, vertices: Float32Array, normals: Float32Array, indices: Uint32Array, material: Material) {
     super();
     this.vertexCount = vertices.length / 3;
     this.indexCount = indices.length;
 
-    const usage: GPUBufferUsageFlags =
-      GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST;
+    const usage: GPUBufferUsageFlags = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST;
     this.device = device;
 
     const descriptor: GPUBufferDescriptor = {
@@ -63,22 +56,25 @@ export class Object3d extends Node3d {
 
     //now define the buffer layout
     this.bufferLayout = {
-      arrayStride: 12,
+      arrayStride: 12, // 3 position 2 uv,
       attributes: [
         {
+          // position
           shaderLocation: 0,
-          format: "float32x3", // float32x3 = x y z (3D), float32x2 = x y (2D)
           offset: 0,
-        },
-        {
-          shaderLocation: 1,
-          format: "float32x2", // float32x3 = r g b (color) , float32x2 = u, v (textures)
-          offset: 0,
-        },
-        {
-          shaderLocation: 2,
           format: "float32x3",
+        },
+        {
+          // normal
+          shaderLocation: 1,
           offset: 0,
+          format: "float32x3",
+        },
+        {
+          // uv
+          shaderLocation: 2,
+          offset: 0,
+          format: "float32x2",
         },
       ],
     };

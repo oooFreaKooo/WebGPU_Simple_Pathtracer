@@ -6,6 +6,7 @@ import { CheckWebGPU } from "../examples/helper";
 
 import $ from "jquery";
 import { mat4 } from "gl-matrix";
+import { Material } from "../examples/material";
 
 export class Renderer {
   public adapter: GPUAdapter;
@@ -15,13 +16,14 @@ export class Renderer {
   public commandEncoder: GPUCommandEncoder;
   public textureView: any;
   public renderPass: any;
+  public now = performance.now();
 
   // Initialisierung
   public init = async (canvas: HTMLCanvasElement) => {
     console.log("Init Funktion");
     this.adapter = (await navigator.gpu?.requestAdapter()) as GPUAdapter;
     this.device = (await this.adapter?.requestDevice()) as GPUDevice;
-    this.context = canvas.getContext("webgpu") as unknown as GPUCanvasContext;
+    this.context = canvas.getContext("webgpu") as GPUCanvasContext;
     this.format = "bgra8unorm";
 
     this.context.configure({
@@ -94,16 +96,16 @@ export class Renderer {
         //stencilStoreOp: "store"
       },
     });
-
     for (const element of elements) {
       renderPass.setPipeline(element.pipeline);
+      renderPass.setBindGroup(0, element.vertexBindGroup);
+      renderPass.setBindGroup(1, element.lightBindGroup);
+
       renderPass.setVertexBuffer(0, element.object3D.VertexBuffer);
       renderPass.setIndexBuffer(element.object3D.indexBuffer, "uint32");
-      renderPass.setBindGroup(0, element.transformBindGroup);
-      renderPass.setBindGroup(1, element.lightBindGroup);
-      renderPass.setBindGroup(2, element.lightPosBindGroup);
-      // renderPass.draw(3, 1, 0, 0);
       renderPass.drawIndexed(element.indexCount, 1, 0, 0);
+
+      // renderPass.draw(3, 1, 0, 0);
     }
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);

@@ -1,44 +1,76 @@
 struct TransformUniforms {
     mvpMatrix : mat4x4<f32>
 };
-@group(0) @binding(0) var<uniform> transformuniforms : TransformUniforms;
+@group(0) @binding(0) var<storage> modelViews : array<mat4x4<f32>>;
+@group(0) @binding(1) var<uniform> transformuniforms : TransformUniforms;
+@group(0) @binding(2) var<storage> colors : array<vec4<f32>>;
 
-struct MaterialUniforms {
-    color : vec4<f32>,
-};
-struct LightUniforms {
-    lightColor : vec4<f32>,
-    ambient : vec3<f32>,
-    diffuse : vec3<f32>,
-    specular : vec3<f32>,
-};
-@group(0) @binding(1) var<uniform> materialuniforms : MaterialUniforms;
-@group(1) @binding(0) var<uniform> lightuniforms : LightUniforms;
-@group(2) @binding(0) var<uniform> lightPos : vec3<f32>;
-
-struct Output {
+struct VertexOutput {
     @builtin(position) Position : vec4<f32>,
-    @location(0) normalOut : vec4<f32>,
+    @location(0) fragPosition : vec3<f32>,
+    @location(1) fragNormal : vec3<f32>,
+    @location(2) fragUV: vec2<f32>,
+    @location(3) fragColor: vec4<f32>
 };
 
 @vertex
-fn vs_main(@location(0) pos: vec4<f32>, @location(2) normal: vec4<f32>) -> Output {
-    var output: Output;
-    output.Position =  transformuniforms.mvpMatrix * pos;
-    output.normalOut = normal;
+fn vs_main(
+    @builtin(instance_index) index : u32,
+    @location(0) position : vec3<f32>,
+    @location(1) normal : vec3<f32>,
+    @location(2) uv : vec2<f32>,
+) -> VertexOutput {
+    let modelview = modelViews[index];
+    let pos = vec4<f32>(position, 1.0);
+    
+    var output : VertexOutput;
+    output.Position = transformuniforms.mvpMatrix * pos;
+    output.fragPosition = (modelview * pos).xyz;
+    // it should use transpose(inverse(modelview)) if consider non-uniform scale
+    // hint: inverse() is not available in wgsl, better do in JS or CS
+    output.fragNormal =  (modelview * vec4<f32>(normal, 0.0)).xyz;
+    output.fragUV = uv;
+    output.fragColor = colors[index];
     return output;
 }
 
+@group(1) @binding(0) var<uniform> ambientIntensity : f32;
+@group(1) @binding(1) var<uniform> pointLight : array<vec4<f32>, 2>;
+@group(1) @binding(2) var<uniform> directionLight : array<vec4<f32>, 2>;
+
 @fragment
-fn fs_main(output : Output) -> @location(0) vec4<f32> {
-    var lightVector = normalize(lightPos - output.Position.xyz.xyz) * lightuniforms.diffuse.xyz * lightuniforms.lightColor.xyz;
-    var eye = normalize(output.Position.xyz);
-    var N = normalize(output.normalOut);
-    var reflection = normalize(reflect(vec4(lightVector,1.0), N));
-    var phi  = max(dot(N, vec4(lightVector,1.0)), 0.0);
-    var psi  = pow(max(dot(reflection, vec4(eye,1.0)), 0.0), 5);
-    var tmp  = vec4(lightuniforms.ambient + phi * materialuniforms.color.xyz + psi * lightuniforms.specular, 1.0);
-    return tmp;    
+fn fs_main(
+    @location(0) fragPosition : vec3<f32>,
+    @location(1) fragNormal: vec3<f32>,
+    @location(2) fragUV: vec2<f32>,
+    @location(3) fragColor: vec4<f32>
+) -> @location(0) vec4<f32> {
+    let objectColor = fragColor.rgb;
+    let ambintLightColor = vec3(1.0,1.0,1.0);
+    let pointLightColor = vec3(1.0,1.0,1.0);
+    let dirLightColor = vec3(1.0,1.0,1.0);
+
+    var lightResult = vec3(0.0, 0.0, 0.0);
+    // ambient
+    lightResult += ambintLightColor * ambientIntensity;
+    // Directional Light
+    var directionPosition = directionLight[0].xyz;
+    var directionIntensity: f32 = directionLight[1][0];
+    var diffuse: f32 = max(dot(normalize(directionPosition), fragNormal), 0.0);
+    lightResult += dirLightColor * directionIntensity * diffuse;
+    // Point Light
+    var pointPosition = pointLight[0].xyz;
+    var pointIntensity: f32 = pointLight[1][0];
+    var pointRadius: f32 = pointLight[1][1];
+    var L = pointPosition - fragPosition;
+    var distance = length(L);
+    if(distance < pointRadius){
+        var diffuse: f32 = max(dot(normalize(L), fragNormal), 0.0);
+        var distanceFactor: f32 = pow(1.0 - distance / pointRadius, 2.0);
+        lightResult += pointLightColor * pointIntensity * diffuse * distanceFactor;
+    }
+
+    return vec4<f32>(objectColor * lightResult, 1.0);
 }
 
 

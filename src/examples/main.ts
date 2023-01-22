@@ -8,6 +8,7 @@ async function mainFunc() {
   const renderer = new Renderer(canvas);
   await renderer.init(canvas);
   const root = new Node3d();
+
   //const cube = makeCube(renderer.device);
 
   const filePath1 = "../src/examples/obj/Spider.obj";
