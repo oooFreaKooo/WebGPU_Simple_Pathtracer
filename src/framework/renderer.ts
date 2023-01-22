@@ -71,15 +71,28 @@ export class Renderer {
   public renderElementList(elements: RenderElement[], camera: Camera): void {
     const commandEncoder = this.device.createCommandEncoder();
 
+    const depthTexture = this.device.createTexture({
+      size: [this.canvas.width, this.canvas.height, 1],
+      format: "depth24plus",
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
     const renderPass = commandEncoder.beginRenderPass({
       colorAttachments: [
         {
           view: this.context.getCurrentTexture().createView(),
-          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, //background color
+          clearValue: { r: 0.2, g: 0.247, b: 0.314, a: 1.0 }, //background color
           loadOp: "clear",
           storeOp: "store",
         },
       ],
+      depthStencilAttachment: {
+        view: depthTexture.createView(),
+        depthClearValue: 1.0,
+        depthLoadOp: "clear",
+        depthStoreOp: "store",
+        //stencilLoadValue: 0,
+        //stencilStoreOp: "store"
+      },
     });
 
     for (const element of elements) {

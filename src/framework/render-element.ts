@@ -56,10 +56,10 @@ export class RenderElement {
     this.device.queue.writeBuffer(this.lightPosBuffer, 0, <Float32Array>this.lightPos);
 
     this.pipeline = this.device.createRenderPipeline({
+      layout: "auto",
       vertex: {
         //material.vertex
         module: material.vertexShader,
-
         entryPoint: "vs_main",
         buffers: [this.object3D.bufferLayout],
       },
@@ -70,7 +70,7 @@ export class RenderElement {
         entryPoint: "fs_main",
         targets: [
           {
-            format: this.format,
+            format: this.format as GPUTextureFormat,
           },
         ],
       },
@@ -78,7 +78,11 @@ export class RenderElement {
         topology: "triangle-list",
         cullMode: "none",
       },
-      layout: "auto",
+      depthStencil: {
+        format: "depth24plus",
+        depthWriteEnabled: true,
+        depthCompare: "less",
+      },
     });
 
     this.transformBindGroup = this.device.createBindGroup({
