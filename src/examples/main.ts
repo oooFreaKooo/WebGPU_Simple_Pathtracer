@@ -14,7 +14,7 @@ async function mainFunc() {
 
   const filePath1 = "../src/examples/obj/Spider.obj";
   const filePath2 = "../src/examples/obj/Skeleton.obj";
-  const obj = parseOBJ(renderer.device, filePath2);
+  const obj = parseOBJ(renderer.device, filePath1);
 
   // add mesh and material data
   root.attach(await obj);

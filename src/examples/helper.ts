@@ -68,6 +68,25 @@ function getModelViewMatrix(position = { x: 0, y: 0, z: 0 }, rotation = { x: 0, 
   return modelViewMatrix as Float32Array;
 }
 
+function getLightViewMatrix(lightPosition: { x: number; y: number; z: number }) {
+  const lightViewMatrix = mat4.create();
+  mat4.lookAt(lightViewMatrix, [lightPosition.x, lightPosition.y, lightPosition.z], [0, 0, 0], [0, 1, 0]);
+  return lightViewMatrix;
+}
+
+function getLightProjectionMatrix(near: number, far: number) {
+  const lightProjectionMatrix = mat4.create();
+  mat4.perspective(lightProjectionMatrix, (Math.PI / 180) * 90, 1, near, far);
+  return lightProjectionMatrix;
+}
+
+function getShadowMatrix(lightViewMatrix: mat4, lightProjectionMatrix: mat4, modelViewMatrix: mat4) {
+  const shadowMatrix = mat4.create();
+  mat4.multiply(shadowMatrix, lightProjectionMatrix, lightViewMatrix);
+  mat4.multiply(shadowMatrix, shadowMatrix, modelViewMatrix);
+  return shadowMatrix;
+}
+
 const center = vec3.fromValues(0, 0, 0);
 const up = vec3.fromValues(0, 1, 0);
 
@@ -85,4 +104,4 @@ function getProjectionMatrix(aspect: number, fov: number = (60 / 180) * Math.PI,
   return projectionMatrix as Float32Array;
 }
 
-export { getMvpMatrix, getModelViewMatrix, getProjectionMatrix };
+export { getMvpMatrix, getModelViewMatrix, getProjectionMatrix, getLightViewMatrix, getLightProjectionMatrix, getShadowMatrix };

@@ -1,5 +1,6 @@
 import shader from "./shader.wgsl";
-import { getModelViewMatrix } from "./helper";
+import { getModelViewMatrix, getLightProjectionMatrix, getLightViewMatrix, getShadowMatrix } from "./helper";
+import { mat4 } from "gl-matrix";
 
 export class Material {
   public readonly vertexShader;
@@ -11,7 +12,8 @@ export class Material {
   public ambientBuffer: GPUBuffer;
   public pointBuffer: GPUBuffer;
   public directionalBuffer: GPUBuffer;
-  public ambient = new Float32Array([0.1]);
+  /*   public shadowMatrixBuffer: GPUBuffer; */
+  public ambient = new Float32Array([0.05]);
   public directionalLight = new Float32Array(8);
   public pointLight = new Float32Array(8);
 
@@ -24,7 +26,7 @@ export class Material {
       code: shader,
     });
     this.pointLight[2] = 10; // z
-    this.pointLight[4] = 1; // intensitys
+    this.pointLight[4] = 0.5; // intensitys
     this.pointLight[5] = 50; // radius
     this.directionalLight[4] = 3; // intensity
   }
@@ -43,17 +45,46 @@ export class Material {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     const modelViewMatrix = new Float32Array(NUM * 4 * 4);
+    /*     const shadowMatrix = new Float32Array(NUM * 4 * 4);
+    const lightProjectionMatrix = new Float32Array(NUM * 4 * 4);
+    const lightViewMatrix = new Float32Array(NUM * 4 * 4);
+    const lightPosition = { x: 5, y: 5, z: 5 }; */
+
+    // set the values of the lightViewMatrix and lightProjectionMatrix here
+
     const colorBuffer2 = new Float32Array(NUM * 4);
     for (let i = 0; i < NUM; i++) {
       const position = { x: 1.0, y: 1.0, z: 1.0 };
       const rotation = { x: 1.0, y: 1.0, z: 1.0 };
       const scale = { x: 0.5, y: 0.5, z: 0.5 };
       const modelView = getModelViewMatrix(position, rotation, scale);
+      /*       const lightView = getLightViewMatrix(lightPosition);
+      const lightProjection = getLightProjectionMatrix(1, 100);
+      const shadow = getShadowMatrix(lightViewMatrix, lightProjectionMatrix, modelViewMatrix); */
       modelViewMatrix.set(modelView, i * 4 * 4);
-      colorBuffer2.set([0.0, 1.0, 0.5, 0.5], i * 4);
+      /*       lightProjectionMatrix.set(lightProjection, i * 4 * 4);
+      lightViewMatrix.set(lightView, i * 4 * 4);
+      shadowMatrix.set(shadow, i * 4 * 4);
+      mat4.multiply(shadowMatrix, lightProjectionMatrix, lightViewMatrix); */
+      colorBuffer2.set([0.1, 0.1, 0.1, 0.0], i * 4);
     }
+    /*     this.shadowMatrixBuffer = this.device.createBuffer({
+      size: 64,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(this.shadowMatrixBuffer, 0, shadowMatrix); */
     this.device.queue.writeBuffer(this.colorBuffer1, 0, colorBuffer2);
     this.device.queue.writeBuffer(this.modelViewBuffer, 0, modelViewMatrix);
+
+    document.querySelector("#object-brightness")!.addEventListener("input", (e: Event) => {
+      const colorValue = +(e.target as HTMLInputElement).value;
+      for (let i = 0; i < NUM; i++) {
+        colorBuffer2[i * 4] = colorValue;
+        colorBuffer2[i * 4 + 1] = colorValue;
+        colorBuffer2[i * 4 + 2] = colorValue;
+      }
+      this.device.queue.writeBuffer(this.colorBuffer1, 0, colorBuffer2);
+    });
   }
 
   public setLight() {

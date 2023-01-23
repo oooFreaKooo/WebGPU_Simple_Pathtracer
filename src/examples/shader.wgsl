@@ -10,8 +10,9 @@ struct VertexOutput {
     @location(0) fragPosition : vec3<f32>,
     @location(1) fragNormal : vec3<f32>,
     @location(2) fragUV: vec2<f32>,
-    @location(3) fragColor: vec4<f32>
+    @location(3) fragColor: vec4<f32>,
 };
+
 
 @vertex
 fn vs_main(
@@ -22,12 +23,9 @@ fn vs_main(
 ) -> VertexOutput {
     let modelview = modelViews[index];
     let pos = vec4<f32>(position, 1.0);
-    
     var output : VertexOutput;
     output.Position = transformuniforms.mvpMatrix * pos;
     output.fragPosition = (modelview * pos).xyz;
-    // it should use transpose(inverse(modelview)) if consider non-uniform scale
-    // hint: inverse() is not available in wgsl, better do in JS or CS
     output.fragNormal =  (modelview * vec4<f32>(normal, 0.0)).xyz;
     output.fragUV = uv;
     output.fragColor = colors[index];
@@ -69,6 +67,12 @@ fn fs_main(
         var distanceFactor: f32 = pow(1.0 - distance / pointRadius, 2.0);
         lightResult += pointLightColor * pointIntensity * diffuse * distanceFactor;
     }
+    // Specular Reflection
+    var cameraPosition = vec3(0.0, 0.0, 1.0); // position of the camera
+    var viewDirection = normalize(cameraPosition - fragPosition);
+    var reflectDirection = reflect(-viewDirection, fragNormal);
+    var specular = pow(max(dot(reflectDirection, normalize(directionPosition)), 0.0), 16.0);
+    lightResult += vec3(1.0, 1.0, 1.0) * specular * directionIntensity;
 
     return vec4<f32>(objectColor * lightResult, 1.0);
 }

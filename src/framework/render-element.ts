@@ -61,6 +61,7 @@ export class RenderElement {
           },
         ],
       },
+
       primitive: {
         topology: "triangle-list",
         cullMode: "none",
@@ -73,7 +74,6 @@ export class RenderElement {
     });
 
     this.vertexBindGroup = this.device.createBindGroup({
-      label: "Uniform Group with matrix",
       layout: this.pipeline.getBindGroupLayout(0),
       entries: [
         {
@@ -94,6 +94,12 @@ export class RenderElement {
             buffer: materialUniform.colorBuffer1,
           },
         },
+        /*         {
+          binding: 3,
+          resource: {
+            buffer: materialUniform.shadowMatrixBuffer,
+          },
+        }, */
       ],
     });
     this.lightBindGroup = this.device.createBindGroup({
