@@ -17,6 +17,12 @@ export class Material {
   public directionalLight = new Float32Array(8);
   public pointLight = new Float32Array(8);
 
+  //Textures
+  public texture: GPUTexture;
+  public view: GPUTextureView;
+  public sampler: GPUSampler;
+  public hasTextureBuffer: GPUBuffer;
+
   constructor(device: GPUDevice) {
     this.device = device;
     this.vertexShader = this.device.createShaderModule({
@@ -120,5 +126,52 @@ export class Material {
       this.pointLight[2] = +(e.target as HTMLInputElement).value;
       this.device.queue.writeBuffer(this.pointBuffer, 0, this.pointLight);
     });
+  }
+
+  async setTexture(device: GPUDevice, imageName: string, hasTexture: boolean) {
+    this.hasTextureBuffer = this.device.createBuffer({
+      size: 4,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    hasTexture = true;
+    this.device.queue.writeBuffer(this.hasTextureBuffer, 0, new Float32Array([hasTexture ? 1 : 0]));
+    // get image file
+    const img = document.createElement("img");
+    img.src = "../src/examples/obj/" + imageName;
+    await img.decode();
+    const imageBitmap = await createImageBitmap(img);
+
+    const samplerDescriptor: GPUSamplerDescriptor = {
+      addressModeU: "clamp-to-edge",
+      addressModeV: "repeat",
+      minFilter: "nearest",
+      magFilter: "nearest",
+      mipmapFilter: "nearest",
+      lodMinClamp: 1,
+      maxAnisotropy: 1,
+      lodMaxClamp: 1,
+    };
+    this.sampler = device.createSampler(samplerDescriptor);
+
+    // create texture
+    this.texture = device.createTexture({
+      size: [imageBitmap.width, imageBitmap.height, 1],
+      format: "rgba8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+
+    const viewDescriptor: GPUTextureViewDescriptor = {
+      format: "rgba8unorm",
+      dimension: "2d",
+      aspect: "all", //which part of the image
+      baseMipLevel: 0,
+      mipLevelCount: 1,
+      baseArrayLayer: 0,
+      arrayLayerCount: 1,
+    };
+    this.view = this.texture.createView(viewDescriptor);
+
+    device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.texture }, [imageBitmap.width, imageBitmap.height]);
   }
 }

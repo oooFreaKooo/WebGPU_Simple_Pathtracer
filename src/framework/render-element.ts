@@ -94,6 +94,14 @@ export class RenderElement {
             buffer: materialUniform.colorBuffer1,
           },
         },
+        {
+          binding: 3,
+          resource: materialUniform.view,
+        },
+        {
+          binding: 4,
+          resource: materialUniform.sampler,
+        },
         /*         {
           binding: 3,
           resource: {
@@ -121,6 +129,12 @@ export class RenderElement {
           binding: 2,
           resource: {
             buffer: materialUniform.directionalBuffer,
+          },
+        },
+        {
+          binding: 3,
+          resource: {
+            buffer: materialUniform.hasTextureBuffer,
           },
         },
       ],

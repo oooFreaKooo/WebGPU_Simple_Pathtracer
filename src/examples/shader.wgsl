@@ -4,6 +4,8 @@ struct TransformUniforms {
 @group(0) @binding(0) var<storage> modelViews : array<mat4x4<f32>>;
 @group(0) @binding(1) var<uniform> transformuniforms : TransformUniforms;
 @group(0) @binding(2) var<storage> colors : array<vec4<f32>>;
+@group(0) @binding(3) var _texture : texture_2d<f32>;
+@group(0) @binding(4) var _sampler : sampler;
 
 struct VertexOutput {
     @builtin(position) Position : vec4<f32>,
@@ -35,6 +37,7 @@ fn vs_main(
 @group(1) @binding(0) var<uniform> ambientIntensity : f32;
 @group(1) @binding(1) var<uniform> pointLight : array<vec4<f32>, 2>;
 @group(1) @binding(2) var<uniform> directionLight : array<vec4<f32>, 2>;
+@group(1) @binding(3) var<uniform> hasTexture : f32;
 
 @fragment
 fn fs_main(
@@ -74,7 +77,13 @@ fn fs_main(
     var specular = pow(max(dot(reflectDirection, normalize(directionPosition)), 0.0), 16.0);
     lightResult += vec3(1.0, 1.0, 1.0) * specular * directionIntensity;
 
-    return vec4<f32>(objectColor * lightResult, 1.0);
+    // Sample the texture using the fragUV coordinates and the _texture and _sampler variables
+    if (hasTexture > 0.5) {
+        var texColor = textureSample(_texture, _sampler, fragUV);
+        return vec4<f32>(texColor.rgb * objectColor * lightResult, texColor.a);
+    } else {
+        return vec4<f32>(objectColor * lightResult, 1.0);
+    }
 }
 
 
