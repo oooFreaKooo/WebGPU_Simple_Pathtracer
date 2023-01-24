@@ -99,7 +99,8 @@ export class Renderer {
     for (const element of elements) {
       renderPass.setPipeline(element.pipeline);
       renderPass.setBindGroup(0, element.vertexBindGroup);
-      renderPass.setBindGroup(1, element.lightBindGroup);
+      renderPass.setBindGroup(1, element.textureBindGroup);
+      renderPass.setBindGroup(2, element.lightBindGroup);
 
       renderPass.setVertexBuffer(0, element.object3D.VertexBuffer);
       renderPass.setIndexBuffer(element.object3D.indexBuffer, "uint32");

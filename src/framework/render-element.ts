@@ -1,6 +1,7 @@
 import { mat4, vec3 } from "gl-matrix";
 import { Object3d } from "./object-3d";
 import { Material } from "../examples/material";
+import { CreateStorageBuffer, CreateUniformBuffer, CreatePipeline } from "../examples/helper";
 
 export class RenderElement {
   //Device/Context objects
@@ -10,8 +11,8 @@ export class RenderElement {
   // Pipeline objects
   public pipeline: GPURenderPipeline;
   public lightBindGroup: GPUBindGroup;
-  public lightPosBindGroup: GPUBindGroup;
   public vertexBindGroup: GPUBindGroup;
+  public textureBindGroup: GPUBindGroup;
   public transformBuffer: GPUBuffer;
 
   public readonly vertexCount;
@@ -32,46 +33,23 @@ export class RenderElement {
   // create pipeline
   public async makePipeline() {
     const material = new Material(this.device);
+    const materialUniform = this.object3D.material;
+    const lightUniform = this.object3D.material;
+
+    ///// Transform Buffer
     const transformUniform: mat4 = mat4.create();
     mat4.multiply(transformUniform, this.camera, this.object3D.calcWorldTransMatrix());
-    const materialUniform = this.object3D.material;
-
-    this.transformBuffer = this.device.createBuffer({
-      size: 64,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
+    this.transformBuffer = CreateUniformBuffer(this.device, 64);
     this.device.queue.writeBuffer(this.transformBuffer, 0, <ArrayBuffer>transformUniform);
 
-    this.pipeline = this.device.createRenderPipeline({
-      layout: "auto",
-      vertex: {
-        //material.vertex
-        module: material.vertexShader,
-        entryPoint: "vs_main",
-        buffers: [this.object3D.bufferLayout],
-      },
-
-      fragment: {
-        //material.fragment
-        module: material.fragmentShader,
-        entryPoint: "fs_main",
-        targets: [
-          {
-            format: this.format as GPUTextureFormat,
-          },
-        ],
-      },
-
-      primitive: {
-        topology: "triangle-list",
-        cullMode: "none",
-      },
-      depthStencil: {
-        format: "depth24plus",
-        depthWriteEnabled: true,
-        depthCompare: "less",
-      },
-    });
+    // PIPELINE
+    this.pipeline = CreatePipeline(
+      this.device,
+      material.vertexShader,
+      material.fragmentShader,
+      this.object3D.bufferLayout,
+      this.format
+    );
 
     this.vertexBindGroup = this.device.createBindGroup({
       layout: this.pipeline.getBindGroupLayout(0),
@@ -91,50 +69,51 @@ export class RenderElement {
         {
           binding: 2,
           resource: {
-            buffer: materialUniform.colorBuffer1,
+            buffer: materialUniform.colorBuffer,
           },
         },
-        {
-          binding: 3,
-          resource: materialUniform.view,
-        },
-        {
-          binding: 4,
-          resource: materialUniform.sampler,
-        },
-        /*         {
-          binding: 3,
-          resource: {
-            buffer: materialUniform.shadowMatrixBuffer,
-          },
-        }, */
       ],
     });
-    this.lightBindGroup = this.device.createBindGroup({
+
+    this.textureBindGroup = this.device.createBindGroup({
       layout: this.pipeline.getBindGroupLayout(1),
       entries: [
         {
           binding: 0,
+          resource: materialUniform.view,
+        },
+        {
+          binding: 1,
+          resource: materialUniform.sampler,
+        },
+        {
+          binding: 2,
           resource: {
-            buffer: materialUniform.ambientBuffer,
+            buffer: materialUniform.hasTextureBuffer,
+          },
+        },
+      ],
+    });
+
+    this.lightBindGroup = this.device.createBindGroup({
+      layout: this.pipeline.getBindGroupLayout(2),
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: lightUniform.ambientBuffer,
           },
         },
         {
           binding: 1,
           resource: {
-            buffer: materialUniform.pointBuffer,
+            buffer: lightUniform.pointBuffer,
           },
         },
         {
           binding: 2,
           resource: {
-            buffer: materialUniform.directionalBuffer,
-          },
-        },
-        {
-          binding: 3,
-          resource: {
-            buffer: materialUniform.hasTextureBuffer,
+            buffer: lightUniform.directionalBuffer,
           },
         },
       ],

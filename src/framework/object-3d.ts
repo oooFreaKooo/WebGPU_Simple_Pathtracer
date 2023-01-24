@@ -13,7 +13,14 @@ export class Object3d extends Node3d {
   public readonly vertexCount;
   public readonly indexCount;
 
-  constructor(device: GPUDevice, vertices: Float32Array, normals: Float32Array, indices: Uint32Array, material: Material, texture?: Float32Array) {
+  constructor(
+    device: GPUDevice,
+    vertices: Float32Array,
+    normals: Float32Array,
+    indices: Uint32Array,
+    material: Material,
+    texture?: Float32Array
+  ) {
     super();
     this.vertexCount = vertices.length / 3;
     this.indexCount = indices.length;

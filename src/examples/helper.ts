@@ -52,11 +52,19 @@ function getMvpMatrix(
 }
 
 // return modelView matrix from given position, rotation, scale
-function getModelViewMatrix(position = { x: 0, y: 0, z: 0 }, rotation = { x: 0, y: 0, z: 0 }, scale = { x: 1, y: 1, z: 1 }) {
+function getModelViewMatrix(
+  position = { x: 0, y: 0, z: 0 },
+  rotation = { x: 0, y: 0, z: 0 },
+  scale = { x: 1, y: 1, z: 1 }
+) {
   // get modelView Matrix
   const modelViewMatrix = mat4.create();
   // translate position
-  mat4.translate(modelViewMatrix, modelViewMatrix, vec3.fromValues(position.x, position.y, position.z));
+  mat4.translate(
+    modelViewMatrix,
+    modelViewMatrix,
+    vec3.fromValues(position.x, position.y, position.z)
+  );
   // rotate
   mat4.rotateX(modelViewMatrix, modelViewMatrix, rotation.x);
   mat4.rotateY(modelViewMatrix, modelViewMatrix, rotation.y);
@@ -70,7 +78,12 @@ function getModelViewMatrix(position = { x: 0, y: 0, z: 0 }, rotation = { x: 0, 
 
 function getLightViewMatrix(lightPosition: { x: number; y: number; z: number }) {
   const lightViewMatrix = mat4.create();
-  mat4.lookAt(lightViewMatrix, [lightPosition.x, lightPosition.y, lightPosition.z], [0, 0, 0], [0, 1, 0]);
+  mat4.lookAt(
+    lightViewMatrix,
+    [lightPosition.x, lightPosition.y, lightPosition.z],
+    [0, 0, 0],
+    [0, 1, 0]
+  );
   return lightViewMatrix;
 }
 
@@ -80,7 +93,11 @@ function getLightProjectionMatrix(near: number, far: number) {
   return lightProjectionMatrix;
 }
 
-function getShadowMatrix(lightViewMatrix: mat4, lightProjectionMatrix: mat4, modelViewMatrix: mat4) {
+function getShadowMatrix(
+  lightViewMatrix: mat4,
+  lightProjectionMatrix: mat4,
+  modelViewMatrix: mat4
+) {
   const shadowMatrix = mat4.create();
   mat4.multiply(shadowMatrix, lightProjectionMatrix, lightViewMatrix);
   mat4.multiply(shadowMatrix, shadowMatrix, modelViewMatrix);
@@ -90,7 +107,13 @@ function getShadowMatrix(lightViewMatrix: mat4, lightProjectionMatrix: mat4, mod
 const center = vec3.fromValues(0, 0, 0);
 const up = vec3.fromValues(0, 1, 0);
 
-function getProjectionMatrix(aspect: number, fov: number = (60 / 180) * Math.PI, near: number = 0.1, far: number = 100.0, position = { x: 0, y: 0, z: 0 }) {
+function getProjectionMatrix(
+  aspect: number,
+  fov: number = (60 / 180) * Math.PI,
+  near: number = 0.1,
+  far: number = 100.0,
+  position = { x: 0, y: 0, z: 0 }
+) {
   // create cameraview
   const cameraView = mat4.create();
   const eye = vec3.fromValues(position.x, position.y, position.z);
@@ -104,4 +127,78 @@ function getProjectionMatrix(aspect: number, fov: number = (60 / 180) * Math.PI,
   return projectionMatrix as Float32Array;
 }
 
-export { getMvpMatrix, getModelViewMatrix, getProjectionMatrix, getLightViewMatrix, getLightProjectionMatrix, getShadowMatrix };
+export const CreateGPUBuffer = (
+  device: GPUDevice,
+  data: Float32Array,
+  usageFlag: GPUBufferUsageFlags = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+) => {
+  const buffer = device.createBuffer({
+    size: data.byteLength,
+    usage: usageFlag,
+    mappedAtCreation: true,
+  });
+  new Float32Array(buffer.getMappedRange()).set(data);
+  buffer.unmap();
+  return buffer;
+};
+
+export const CreateUniformBuffer = (device: GPUDevice, size: number) => {
+  const buffer = device.createBuffer({
+    size: size,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  return buffer;
+};
+
+export const CreateStorageBuffer = (device: GPUDevice, size: number) => {
+  const buffer = device.createBuffer({
+    size: size,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  return buffer;
+};
+
+export const CreatePipeline = (
+  device: GPUDevice,
+  vertexShader: GPUShaderModule,
+  fragmentShader: GPUShaderModule,
+  bufferLayout: GPUVertexBufferLayout,
+  format: GPUTextureFormat
+) => {
+  const pipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      module: vertexShader,
+      entryPoint: "vs_main",
+      buffers: [bufferLayout],
+    },
+    fragment: {
+      module: fragmentShader,
+      entryPoint: "fs_main",
+      targets: [
+        {
+          format: format,
+        },
+      ],
+    },
+    primitive: {
+      topology: "triangle-list",
+      cullMode: "none",
+    },
+    depthStencil: {
+      format: "depth24plus",
+      depthWriteEnabled: true,
+      depthCompare: "less",
+    },
+  });
+  return pipeline;
+};
+
+export {
+  getMvpMatrix,
+  getModelViewMatrix,
+  getProjectionMatrix,
+  getLightViewMatrix,
+  getLightProjectionMatrix,
+  getShadowMatrix,
+};

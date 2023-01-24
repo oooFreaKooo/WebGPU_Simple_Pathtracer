@@ -5,6 +5,9 @@ export class Camera {
   //Properties
   private camera: any;
   private projection: mat4 = mat4.create();
+  public keyLabel: HTMLElement;
+  public mouseXLabel: HTMLElement;
+  public mouseYLabel: HTMLElement;
 
   //Construktor
   constructor(canvas: HTMLCanvasElement, private respectRatio = 1.0, private fieldOfView = 100) {
@@ -48,6 +51,12 @@ export class Camera {
   }
 
   private computeProjection() {
-    this.projection = mat4.perspective(mat4.create(), (2 * Math.PI) / 5, this.respectRatio, 0.1, this.fieldOfView);
+    this.projection = mat4.perspective(
+      mat4.create(),
+      (2 * Math.PI) / 5,
+      this.respectRatio,
+      0.1,
+      this.fieldOfView
+    );
   }
 }

@@ -1,11 +1,12 @@
 struct TransformUniforms {
     mvpMatrix : mat4x4<f32>
 };
+
 @group(0) @binding(0) var<storage> modelViews : array<mat4x4<f32>>;
 @group(0) @binding(1) var<uniform> transformuniforms : TransformUniforms;
 @group(0) @binding(2) var<storage> colors : array<vec4<f32>>;
-@group(0) @binding(3) var _texture : texture_2d<f32>;
-@group(0) @binding(4) var _sampler : sampler;
+@group(1) @binding(0) var _texture : texture_2d<f32>;
+@group(1) @binding(1) var _sampler : sampler;
 
 struct VertexOutput {
     @builtin(position) Position : vec4<f32>,
@@ -14,7 +15,6 @@ struct VertexOutput {
     @location(2) fragUV: vec2<f32>,
     @location(3) fragColor: vec4<f32>,
 };
-
 
 @vertex
 fn vs_main(
@@ -34,10 +34,10 @@ fn vs_main(
     return output;
 }
 
-@group(1) @binding(0) var<uniform> ambientIntensity : f32;
-@group(1) @binding(1) var<uniform> pointLight : array<vec4<f32>, 2>;
-@group(1) @binding(2) var<uniform> directionLight : array<vec4<f32>, 2>;
-@group(1) @binding(3) var<uniform> hasTexture : f32;
+@group(2) @binding(0) var<uniform> ambientIntensity : f32;
+@group(2) @binding(1) var<uniform> pointLight : array<vec4<f32>, 2>;
+@group(2) @binding(2) var<uniform> directionLight : array<vec4<f32>, 2>;
+@group(1) @binding(2) var<uniform> hasTexture : f32;
 
 @fragment
 fn fs_main(
@@ -50,7 +50,6 @@ fn fs_main(
     let ambintLightColor = vec3(1.0,1.0,1.0);
     let pointLightColor = vec3(1.0,1.0,1.0);
     let dirLightColor = vec3(1.0,1.0,1.0);
-
     var lightResult = vec3(0.0, 0.0, 0.0);
     // ambient
     lightResult += ambintLightColor * ambientIntensity;
@@ -79,11 +78,12 @@ fn fs_main(
 
     // Sample the texture using the fragUV coordinates and the _texture and _sampler variables
     if (hasTexture > 0.5) {
-        var texColor = textureSample(_texture, _sampler, fragUV);
+        var texColor = textureSample(_texture, _sampler, fragUV) * vec4(fragPosition, 1.0);  // remove " * vec4(fragPosition, 1.0)" to remove rainbow colors
         return vec4<f32>(texColor.rgb * objectColor * lightResult, texColor.a);
     } else {
         return vec4<f32>(objectColor * lightResult, 1.0);
     }
+    
 }
 
 
