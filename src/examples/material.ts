@@ -43,15 +43,13 @@ export class Material {
   public setObject(NUM: number) {
     // NUM = Object number
     const modelViewMatrix = new Float32Array(NUM * 4 * 4);
-    const color = new Float32Array(NUM * 4);
-    // Loop for each object
+    const color = new Float32Array(NUM * 4).fill(0.1);
     for (let i = 0; i < NUM; i++) {
-      const position = { x: 1.0, y: 1.0, z: 1.0 };
-      const rotation = { x: 1.0, y: 1.0, z: 1.0 };
+      // Loop for each object
+      const position = { x: 1, y: 1, z: 1 };
+      const rotation = { x: 1, y: 1, z: 1 };
       const scale = { x: 0.5, y: 0.5, z: 0.5 };
-      const modelView = getModelViewMatrix(position, rotation, scale);
-      modelViewMatrix.set(modelView, i * 4 * 4);
-      color.set([0.1, 0.1, 0.1, 0.0], i * 4);
+      modelViewMatrix.set(getModelViewMatrix(position, rotation, scale), i * 4 * 4);
     }
 
     this.colorBuffer = CreateStorageBuffer(this.device, 4 * 4 * NUM);
@@ -59,14 +57,9 @@ export class Material {
     this.device.queue.writeBuffer(this.colorBuffer, 0, color);
     this.device.queue.writeBuffer(this.modelViewBuffer, 0, modelViewMatrix);
 
-    //////////////////////////////// UI (Regler) /////////////////////////////////////
     document.querySelector("#object-brightness")!.addEventListener("input", (e: Event) => {
       const colorValue = +(e.target as HTMLInputElement).value;
-      for (let i = 0; i < NUM; i++) {
-        color[i * 4] = colorValue;
-        color[i * 4 + 1] = colorValue;
-        color[i * 4 + 2] = colorValue;
-      }
+      color.fill(colorValue);
       this.device.queue.writeBuffer(this.colorBuffer, 0, color);
     });
   }
@@ -104,17 +97,9 @@ export class Material {
   //////////////////////////////// LIGHTING //////////////////////////////////
 
   public setLight() {
-    var ambient = new Float32Array([0.05]);
-    var directionalLight = new Float32Array(8);
-    var pointLight = new Float32Array(8);
-
-    // Point-Light Settings
-    pointLight[2] = 10; // z
-    pointLight[4] = 0.5; // intensitys
-    pointLight[5] = 50; // radius
-
-    // Directional Light Settings
-    directionalLight[4] = 3; // intensity
+    const ambient = new Float32Array([0.05]);
+    const pointLight = new Float32Array([0, 0, 10, 0, 0.5, 50, 0, 0]); // 10 z, 0.5 intesity, 50 radius
+    const directionalLight = new Float32Array([0, 0, 0, 0, 3, 0, 0, 0]); // 3 intensity
 
     this.pointBuffer = CreateUniformBuffer(this.device, 8 * 4);
     this.ambientBuffer = CreateUniformBuffer(this.device, 1 * 4);
@@ -124,7 +109,26 @@ export class Material {
     this.device.queue.writeBuffer(this.directionalBuffer, 0, directionalLight);
     this.device.queue.writeBuffer(this.ambientBuffer, 0, ambient);
 
-    /*Shadows
+    document.querySelector("#ambient")!.addEventListener("input", (e: Event) => {
+      ambient[0] = +(e.target as HTMLInputElement).value;
+      this.device.queue.writeBuffer(this.ambientBuffer, 0, ambient);
+    });
+    document.querySelector("#light-x")!.addEventListener("input", (e: Event) => {
+      pointLight[0] = +(e.target as HTMLInputElement).value;
+      this.device.queue.writeBuffer(this.pointBuffer, 0, pointLight);
+    });
+    document.querySelector("#light-y")!.addEventListener("input", (e: Event) => {
+      pointLight[1] = +(e.target as HTMLInputElement).value;
+      this.device.queue.writeBuffer(this.pointBuffer, 0, pointLight);
+    });
+    document.querySelector("#light-z")!.addEventListener("input", (e: Event) => {
+      pointLight[2] = +(e.target as HTMLInputElement).value;
+      this.device.queue.writeBuffer(this.pointBuffer, 0, pointLight);
+    });
+  }
+}
+
+/*Shadows
      TODO:
       public shadowMatrixBuffer: GPUBuffer;
       const shadowMatrix = getShadowMatrix(device);
@@ -144,24 +148,4 @@ export class Material {
       const lightViewMatrix = new Float32Array(NUM * 4 * 4);
       const lightPosition = { x: 5, y: 5, z: 5 }; 
     */
-    // usw.
-
-    //////////////////////////////// UI (Regler)////////////////////////////////
-    document.querySelector("#ambient")!.addEventListener("input", (e: Event) => {
-      ambient[0] = +(e.target as HTMLInputElement).value;
-      this.device.queue.writeBuffer(this.ambientBuffer, 0, ambient);
-    });
-    document.querySelector("#light-x")!.addEventListener("input", (e: Event) => {
-      pointLight[0] = +(e.target as HTMLInputElement).value;
-      this.device.queue.writeBuffer(this.pointBuffer, 0, pointLight);
-    });
-    document.querySelector("#light-y")!.addEventListener("input", (e: Event) => {
-      pointLight[1] = +(e.target as HTMLInputElement).value;
-      this.device.queue.writeBuffer(this.pointBuffer, 0, pointLight);
-    });
-    document.querySelector("#light-z")!.addEventListener("input", (e: Event) => {
-      pointLight[2] = +(e.target as HTMLInputElement).value;
-      this.device.queue.writeBuffer(this.pointBuffer, 0, pointLight);
-    });
-  }
-}
+// usw.

@@ -21,7 +21,6 @@ export class Camera {
     this.camera = createCamera(canvas, cameraOption);
     this.computeProjection();
   }
-
   //Methods
   public tick() {
     if (this.camera.tick()) {
@@ -42,12 +41,6 @@ export class Camera {
 
     // call computeProjection
     this.computeProjection();
-  }
-
-  // TODO: aspect setter
-  public setAspect(aspect: number) {
-    this.respectRatio = aspect;
-    this.computeProjection;
   }
 
   private computeProjection() {
