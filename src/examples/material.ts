@@ -51,11 +51,36 @@ export class Material {
       const scale = { x: 0.5, y: 0.5, z: 0.5 };
       modelViewMatrix.set(getModelViewMatrix(position, rotation, scale), i * 4 * 4);
     }
-
-    this.colorBuffer = CreateStorageBuffer(this.device, 4 * 4 * NUM);
-    this.modelViewBuffer = CreateStorageBuffer(this.device, 4 * 4 * 4 * NUM);
-    this.device.queue.writeBuffer(this.colorBuffer, 0, color);
-    this.device.queue.writeBuffer(this.modelViewBuffer, 0, modelViewMatrix);
+    // add keydown event listener
+    document.addEventListener("keydown", (e: KeyboardEvent) => {
+        // Check if A, W, S, or D was pressed
+        if (e.key === "A") {
+            position.x -= 0.1;
+        } else if (e.key === "W") {
+            position.y += 0.1;
+        } else if (e.key === "S") {
+            position.y -= 0.1;
+        } else if (e.key === "D") {
+            position.x += 0.1;
+        }
+        // update the model-view matrix
+        for (let i = 0; i < NUM; i++) {
+            modelViewMatrix.set(getModelViewMatrix(position, rotation, scale), i * 16);
+        }
+        // update the buffer
+        const mappedBuffer = this.modelViewBuffer.mapWrite();
+        mappedBuffer.set(modelViewMatrix);
+        this.modelViewBuffer.unmap();
+    });
+    // create buffers
+    this.colorBuffer = this.device.createBuffer({
+        size: 4 * 4 * NUM,
+        usage: GPUBufferUsage.STORAGE
+    });
+    this.modelViewBuffer = this.device.createBuffer({
+        size: 4 * 4 * 4 * NUM,
+        usage: GPUBufferUsage.STORAGE
+    });
 
     document.querySelector("#object-brightness")!.addEventListener("input", (e: Event) => {
       const colorValue = +(e.target as HTMLInputElement).value;
