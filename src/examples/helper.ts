@@ -1,4 +1,6 @@
 import { mat4, vec3 } from "gl-matrix";
+import { SrcAlphaFactor } from "three";
+
 
 export const CheckWebGPU = () => {
   let result = "Great, your current browser supports WebGPU!";
@@ -104,6 +106,17 @@ function getShadowMatrix(
   return shadowMatrix;
 }
 
+const blendDescriptor = {
+  srcFactor: "src-alpha",
+  dstFactor: "one-minus-src-alpha",
+  operation: "add"
+};
+const colorStateDescriptor = {
+  format: "bgra8unorm",
+  alphaBlend: blendDescriptor,
+  colorBlend: blendDescriptor,
+  writeMask: GPUColorWrite.ALL
+};
 const center = vec3.fromValues(0, 0, 0);
 const up = vec3.fromValues(0, 1, 0);
 
@@ -163,7 +176,7 @@ export const CreatePipeline = (
   vertexShader: GPUShaderModule,
   fragmentShader: GPUShaderModule,
   bufferLayout: GPUVertexBufferLayout,
-  format: GPUTextureFormat
+  format: GPUTextureFormat = "bgra8unorm",
 ) => {
   const pipeline = device.createRenderPipeline({
     layout: "auto",
@@ -178,13 +191,30 @@ export const CreatePipeline = (
       targets: [
         {
           format: format,
+          blend: {
+            color: {
+              srcFactor: "src-alpha",
+              dstFactor: "one-minus-src-alpha",
+              operation: "add"
+            },
+
+            alpha: {
+              srcFactor: "src-alpha",
+              dstFactor: "one-minus-src-alpha",
+              operation: "add"
+            },
+          },
+
         },
       ],
     },
+
     primitive: {
       topology: "triangle-list",
-      cullMode: "none",
-    },
+      cullMode: "back",
+      frontFace: "ccw",
+    }
+    ,
     depthStencil: {
       format: "depth24plus",
       depthWriteEnabled: true,

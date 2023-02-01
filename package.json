@@ -5,7 +5,7 @@
   "main": "examples/main.js",
   "scripts": {
     "dev": "webpack --mode development",
-    "prod": "webpack --mode production && npm run build && npm run serve",
+    "prod": "webpack --mode production && npm run build",
     "watch": "webpack --watch --mode production",
     "build": "webpack --config webpack.config.js",
     "serve": "live-server --cors"
@@ -31,6 +31,7 @@
     "fs-extra": "^11.1.0",
     "gl-matrix": "^3.4.3",
     "jquery": "^3.6.1",
+    "live-server": "^1.2.2",
     "mathjs": "^11.4.0",
     "obj-file-parser": "^0.6.1",
     "obj-renderer": "^0.2.1",

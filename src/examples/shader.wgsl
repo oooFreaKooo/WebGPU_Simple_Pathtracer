@@ -78,8 +78,8 @@ fn fs_main(
 
     // Sample the texture using the fragUV coordinates and the _texture and _sampler variables
     if (hasTexture > 0.5) {
-        var texColor = textureSample(_texture, _sampler, fragUV) * vec4(fragPosition, 1.0);  // remove " * vec4(fragPosition, 1.0)" to remove rainbow colors
-        return vec4<f32>(texColor.rgb * objectColor * lightResult, texColor.a);
+        var texColor = textureSample(_texture, _sampler, fragUV) /* vec4(fragPosition, 1.0)*/;  // remove " * vec4(fragPosition, 1.0)" to remove rainbow colors
+        return vec4<f32>(texColor.rgb * objectColor * lightResult, 0.5);
     } else {
         return vec4<f32>(objectColor * lightResult, 1.0);
     }

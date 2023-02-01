@@ -11,15 +11,15 @@ async function mainFunc() {
   const renderer = new Renderer(canvas);
   await renderer.init(canvas);
   const root = new Node3d();
-  //const cube = makeCube(renderer.device);
+  const cube = makeCube(renderer.device);
 
   const filePath1 = "../src/examples/obj/Spider.obj";
   const filePath2 = "../src/examples/obj/Zbot_Animation.fbx";
-  const obj = parseOBJ(renderer.device, filePath1);
+  const obj = await parseOBJ(renderer.device, filePath1);
   const fbx = loadFBX(filePath2, renderer.device);
 
   // add mesh and material data
-  root.attach(await obj);
+  root.attach(obj);
   //root.attach(cube);
 
   const camera = new Camera(canvas);

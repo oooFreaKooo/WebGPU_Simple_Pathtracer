@@ -24,7 +24,7 @@ export class Renderer {
     this.adapter = (await navigator.gpu?.requestAdapter()) as GPUAdapter;
     this.device = (await this.adapter?.requestDevice()) as GPUDevice;
     this.context = canvas.getContext("webgpu") as GPUCanvasContext;
-    this.format = "bgra8unorm";
+    this.format = "rgba8unorm";
 
     this.context.configure({
       device: this.device,
@@ -59,7 +59,9 @@ export class Renderer {
     if (node.getUpdateFlag()) {
       node.calcTransformMat();
     }
-
+    // TODO: check if object or material is transparent
+    // create Array/Vector to sort Object by distance to Observer
+    // therefore create flag for object/material
     if (node instanceof Object3d) {
       const element = new RenderElement(this.format, node, camera);
       renderElements.push(element);

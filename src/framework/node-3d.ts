@@ -26,10 +26,6 @@ export class Node3d {
 
       newChild.parent = this;
       this.children.push(newChild);
-      //mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix);
-      //mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix);
-      //mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix);
-      // TODO set transform to difference between transform and parent world transform
     } else {
       for (const node of newChild) {
         this.attach(node);
