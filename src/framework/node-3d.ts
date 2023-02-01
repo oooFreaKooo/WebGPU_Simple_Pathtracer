@@ -23,6 +23,8 @@ export class Node3d {
         newChild.parent.detatch(newChild)
       }
 
+      this.setUpdateFlag(true);
+      newChild.setUpdateFlag(true);
       newChild.parent = this;
       this.children.push(newChild);
     } else {
@@ -63,6 +65,12 @@ export class Node3d {
     for (const child of this.children) {
       child.needTransformUpdate = true
     }
+
+
+
+
+
+
   }
   public calcWorldTransMatrix() {
     if (this.parent) {

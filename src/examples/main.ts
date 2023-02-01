@@ -4,6 +4,7 @@ import { Camera } from "../framework/camera"
 import { parseOBJ } from "../framework/importObj"
 import { Material } from "./material"
 import { vec3 } from "gl-matrix"
+import { number } from "mathjs"
 
 const objects = [
   { path: "../src/examples/obj/Spider.obj", texture: "../src/examples/obj/despacitospidertx.png" },
@@ -12,7 +13,13 @@ const objects = [
   { path: "../src/examples/obj/burger.obj", texture: "../src/examples/obj/oldapple_oldapple.jpg" },
 ]
 
-let currentObjectIndex = 0
+
+let currentObjectIndex = 0;/*
+$('#id-btn').on('click', ()=>{
+    const color = $('#id-color').val() as string;
+    CreateTriangle(color);
+});
+*/
 
 async function mainFunc() {
   const canvas = document.getElementById("canvas-webgpu") as HTMLCanvasElement

@@ -33,9 +33,8 @@ export class Object3d extends Node3d {
   }
 
   get indexBuffer() {
-    return this._indexBuffer
+    return this._indexBuffer;
   }
-
   get NormalBuffer() {
     return this._normalBuffer
   }
