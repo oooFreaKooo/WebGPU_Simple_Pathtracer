@@ -1,5 +1,4 @@
 import { mat4, vec3 } from "gl-matrix"
-import { node } from "webpack"
 
 export class Node3d {
   private parent: Node3d | null = null
@@ -26,9 +25,6 @@ export class Node3d {
 
       newChild.parent = this
       this.children.push(newChild)
-      //mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix);
-      //mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix);
-      //mat4.subtract(newChild.transform, newChild.transform, this.worldTransformMatrix);
       // TODO set transform to difference between transform and parent world transform
     } else {
       for (const node of newChild) {
@@ -56,6 +52,10 @@ export class Node3d {
     }
   }
 
+  public clearChildren() {
+    this.children = []
+  }
+
   public calcTransformMat() {
     mat4.multiply(this.transform, this.position, this.rotation)
     mat4.multiply(this.transform, this.transform, this.scale)
@@ -73,6 +73,11 @@ export class Node3d {
   }
 
   // TODO:
+
+  public rotate(axis: vec3, angle: number) {
+    mat4.rotate(this.rotation, mat4.create(), angle, axis)
+    this.calcTransformMat()
+  }
   // position
   // rotation
   // scale

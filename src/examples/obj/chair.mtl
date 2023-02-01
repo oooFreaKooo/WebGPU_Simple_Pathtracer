@@ -1,0 +1,35 @@
+# Blender MTL File: 'Soborg 3050.blend'
+# Material Count: 3
+
+newmtl Søborg_Chair_screw_hole
+Ns 225.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.000000 0.000000 0.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 1
+
+newmtl Søborg_Chair_screw_metal
+Ns 506.250000
+Ka 1.000000 1.000000 1.000000
+Kd 0.214041 0.214041 0.214041
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 3
+
+newmtl Søborg_Chair_wood
+Ns 225.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.000000 0.000000 0.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Bump -bm 0.500000 E:\\My Pictures\\Graphics\\CGTrader\\Uploads\\Soborg 3050\\Soborg 3050 BLEND\\kitchen_wood_nor_1k.png
+map_Kd E:\\My Pictures\\Graphics\\CGTrader\\Uploads\\Soborg 3050\\Soborg 3050 BLEND\\kitchen_wood_diff_1k.png
+map_Ns E:\\My Pictures\\Graphics\\CGTrader\\Uploads\\Soborg 3050\\Soborg 3050 BLEND\\kitchen_wood_rough_1k.png

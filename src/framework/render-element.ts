@@ -12,12 +12,12 @@ export class RenderElement {
   // Pipeline objects
   public pipeline: GPURenderPipeline
   public lightBindGroup: GPUBindGroup
+  public lightEffectsBindGroup: GPUBindGroup
   public vertexBindGroup: GPUBindGroup
   public textureBindGroup: GPUBindGroup
-  public shadowBindGroup: GPUBindGroup
-  public transformBuffer: GPUBuffer
+  public mvpBuffer: GPUBuffer
+  public normalBuffer: GPUBuffer
 
-  public readonly vertexCount
   public readonly indexCount
 
   // Assets
@@ -28,7 +28,6 @@ export class RenderElement {
     this.format = format
     this.object3D = object
     this.makePipeline()
-    this.vertexCount = object.vertexCount
     this.indexCount = object.indexCount
   }
   // create pipeline
@@ -37,11 +36,11 @@ export class RenderElement {
     const materialUniform = this.object3D.material
     const lightUniform = this.object3D.material
 
-    ///// Transform Buffer
-    const transformUniform: mat4 = mat4.create()
-    mat4.multiply(transformUniform, this.camera, this.object3D.calcWorldTransMatrix())
-    this.transformBuffer = CreateUniformBuffer(this.device, 64)
-    this.device.queue.writeBuffer(this.transformBuffer, 0, <ArrayBuffer>transformUniform)
+    ///// mvpMatrix Buffer
+    const mvpMatrix: mat4 = mat4.create()
+    mat4.multiply(mvpMatrix, this.camera, this.object3D.calcWorldTransMatrix())
+    this.mvpBuffer = CreateUniformBuffer(this.device, 64)
+    this.device.queue.writeBuffer(this.mvpBuffer, 0, <ArrayBuffer>mvpMatrix)
 
     // PIPELINE
     this.pipeline = CreatePipeline(this.device, material.vertexShader, material.fragmentShader, this.format)
@@ -52,34 +51,50 @@ export class RenderElement {
         {
           binding: 0,
           resource: {
-            buffer: materialUniform.modelViewBuffer,
-          },
-        },
-        {
-          binding: 1,
-          resource: {
-            buffer: this.transformBuffer,
-          },
-        },
-        {
-          binding: 2,
-          resource: {
-            buffer: materialUniform.colorBuffer,
-          },
-        },
-        {
-          binding: 3,
-          resource: {
-            buffer: materialUniform.lightProjectionBuffer,
+            buffer: this.mvpBuffer,
           },
         },
       ],
     })
 
-    // create a bind group with texture, sampler, and UV coordinates
+    this.lightBindGroup = this.device.createBindGroup({
+      layout: this.pipeline.getBindGroupLayout(1),
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: lightUniform.directionalBuffer,
+          },
+        },
+        {
+          binding: 1,
+          resource: {
+            buffer: lightUniform.eyePositionBuffer,
+          },
+        },
+        {
+          binding: 2,
+          resource: {
+            buffer: lightUniform.ambientBuffer,
+          },
+        },
+        {
+          binding: 3,
+          resource: {
+            buffer: lightUniform.diffuseIntensityBuffer,
+          },
+        },
+        {
+          binding: 4,
+          resource: {
+            buffer: lightUniform.specularIntensityBuffer,
+          },
+        },
+      ],
+    })
     this.textureBindGroup = this.device.createBindGroup({
       label: "Texture Group with Texture/Sampler",
-      layout: this.pipeline.getBindGroupLayout(1),
+      layout: this.pipeline.getBindGroupLayout(2),
       entries: [
         {
           binding: 0,
@@ -88,48 +103,6 @@ export class RenderElement {
         {
           binding: 1,
           resource: materialUniform.texture.createView(),
-        },
-      ],
-    })
-
-    this.lightBindGroup = this.device.createBindGroup({
-      layout: this.pipeline.getBindGroupLayout(2),
-      entries: [
-        {
-          binding: 0,
-          resource: {
-            buffer: lightUniform.ambientBuffer,
-          },
-        },
-        {
-          binding: 1,
-          resource: {
-            buffer: lightUniform.pointBuffer,
-          },
-        },
-        {
-          binding: 2,
-          resource: {
-            buffer: lightUniform.directionalBuffer,
-          },
-        },
-      ],
-    })
-
-    // create a bind group with texture, sampler, and UV coordinates
-    this.shadowBindGroup = this.device.createBindGroup({
-      label: "Texture Group with Texture/Sampler",
-      layout: this.pipeline.getBindGroupLayout(3),
-      entries: [
-        {
-          binding: 0,
-          resource: materialUniform.shadowDepthView,
-        },
-        {
-          binding: 1,
-          resource: this.device.createSampler({
-            compare: "less",
-          }),
         },
       ],
     })

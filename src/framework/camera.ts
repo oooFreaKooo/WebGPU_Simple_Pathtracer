@@ -1,9 +1,10 @@
-import { mat4 } from "gl-matrix"
+import { mat4, vec3 } from "gl-matrix"
+import { Material } from "../examples/material"
 const createCamera = require("3d-view-controls")
 
 export class Camera {
   //Properties
-  private camera: any
+  public camera: any
   private projection: mat4 = mat4.create()
   public keyLabel: HTMLElement
   public mouseXLabel: HTMLElement
@@ -12,19 +13,20 @@ export class Camera {
   //Construktor
   constructor(canvas: HTMLCanvasElement, private respectRatio = 1.0, private fieldOfView = 100) {
     const cameraOption = {
-      eye: [10, 10, 10],
+      eye: [30, 30, 30],
       center: [0, 0, 0],
       zoomMax: 100,
       zoomSpeed: 2,
     }
-
     this.camera = createCamera(canvas, cameraOption)
     this.computeProjection()
   }
   //Methods
   public tick() {
-    if (this.camera.tick()) {
-      this.computeProjection()
+    if (this.camera) {
+      if (this.camera.tick()) {
+        this.computeProjection()
+      }
     }
   }
   public getView() {
@@ -38,7 +40,6 @@ export class Camera {
   public setFieldOfView(fov: number) {
     // set variable
     this.fieldOfView = fov
-
     // call computeProjection
     this.computeProjection()
   }

@@ -10,14 +10,11 @@ export class Object3d extends Node3d {
   public device: GPUDevice
   public material: Material
 
-  public readonly vertexCount
   public readonly indexCount
 
   constructor(device: GPUDevice, vertices: Float32Array, normals: Float32Array, indices: Uint32Array, material: Material, uvData: Float32Array) {
     super()
     this.device = device
-    this.material = material
-    this.vertexCount = vertices.length / 3
     this.indexCount = indices.length
     this.material = material
 

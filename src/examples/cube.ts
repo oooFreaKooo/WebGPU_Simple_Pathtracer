@@ -1,4 +1,4 @@
-import { Object3d } from "../framework/object-3d"
+/* import { Object3d } from "../framework/object-3d"
 import { Material } from "./material"
 
 export async function makeCube(device: GPUDevice) {
@@ -18,3 +18,4 @@ export async function makeCube(device: GPUDevice) {
 
   return new Object3d(device, _vertices, _normals, _indices, _material, _textureCoords)
 }
+ */

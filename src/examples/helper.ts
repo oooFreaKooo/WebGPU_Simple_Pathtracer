@@ -174,21 +174,21 @@ export const CreatePipeline = (device: GPUDevice, vertexShader: GPUShaderModule,
           ],
         },
         {
-          arrayStride: 12,
+          arrayStride: 8,
           attributes: [
             {
               shaderLocation: 1,
-              format: "float32x3",
+              format: "float32x2",
               offset: 0,
             },
           ],
         },
         {
-          arrayStride: 8,
+          arrayStride: 12,
           attributes: [
             {
               shaderLocation: 2,
-              format: "float32x2",
+              format: "float32x3",
               offset: 0,
             },
           ],
