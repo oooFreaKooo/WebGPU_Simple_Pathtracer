@@ -1,7 +1,8 @@
 import { vec3, vec2 } from "gl-matrix"
+import { CreateGPUBuffer } from "./helper"
 
 export class ObjMesh {
-  buffer: GPUBuffer
+  vbuffer: GPUBuffer
   bufferLayout: GPUVertexBufferLayout
   v: vec3[]
   vt: vec2[]
@@ -20,25 +21,11 @@ export class ObjMesh {
     await this.readFile(url)
     this.vertexCount = this.vertices.length / 5
 
-    const usage: GPUBufferUsageFlags = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-    //VERTEX: the buffer can be used as a vertex buffer
-    //COPY_DST: data can be copied to the buffer
+    this.vbuffer = CreateGPUBuffer(device, this.vertices, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST)
 
-    const descriptor: GPUBufferDescriptor = {
-      size: this.vertices.byteLength,
-      usage: usage,
-      mappedAtCreation: true, // similar to HOST_VISIBLE, allows buffer to be written by the CPU
-    }
-
-    this.buffer = device.createBuffer(descriptor)
-
-    //Buffer has been created, now load in the vertices
-    new Float32Array(this.buffer.getMappedRange()).set(this.vertices)
-    this.buffer.unmap()
-
-    //now define the buffer layout
+    //now define the vbuffer layout
     this.bufferLayout = {
-      arrayStride: 20,
+      arrayStride: 32,
       attributes: [
         {
           shaderLocation: 0,
@@ -49,6 +36,11 @@ export class ObjMesh {
           shaderLocation: 1,
           format: "float32x2",
           offset: 12,
+        },
+        {
+          shaderLocation: 2,
+          format: "float32x3",
+          offset: 20,
         },
       ],
     }
@@ -126,11 +118,34 @@ export class ObjMesh {
     const v_vt_vn = vertex_description.split("/")
     const v = this.v[Number(v_vt_vn[0]).valueOf() - 1]
     const vt = this.vt[Number(v_vt_vn[1]).valueOf() - 1]
-    //ignoring normals for now
+    const vn = this.vn[Number(v_vt_vn[2]).valueOf() - 1]
     result.push(v[0])
     result.push(v[1])
     result.push(v[2])
     result.push(vt[0])
     result.push(vt[1])
+    result.push(vn[0])
+    result.push(vn[1])
+    result.push(vn[2])
   }
+}
+export const CreateTransformGroupLayout = (device: GPUDevice) => {
+  const transformGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: {},
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: {
+          type: "read-only-storage",
+          hasDynamicOffset: false,
+        },
+      },
+    ],
+  })
+  return transformGroupLayout
 }

@@ -1,8 +1,9 @@
 import { mat4 } from "gl-matrix"
-import { Material } from "./material"
-import { object_types, RenderData } from "./helper"
-import { ObjMesh } from "./obj-loader"
+import { CreateMaterialGroupLayout, Material } from "./material"
+import { CreateDepthStencil, CreatePipeline, CreateStorageBuffer, CreateUniformBuffer, object_types, RenderData } from "./helper"
+import { CreateTransformGroupLayout, ObjMesh } from "./obj-loader"
 import vertex from "./shaders/vertex.wgsl"
+import { CreateLightGroupLayout, Light } from "./light"
 
 export class Renderer {
   canvas: HTMLCanvasElement
@@ -18,24 +19,23 @@ export class Renderer {
   fragmentShader: GPUShaderModule
   uniformBuffer: GPUBuffer
   pipeline: GPURenderPipeline
-  frameGroupLayout: GPUBindGroupLayout
-  materialGroupLayout: GPUBindGroupLayout
-  frameBindGroup: GPUBindGroup
 
-  // Depth Stencil stuff
-  depthStencilState: GPUDepthStencilState
-  depthStencilBuffer: GPUTexture
-  depthStencilView: GPUTextureView
+  transformGroupLayout: GPUBindGroupLayout
+  materialGroupLayout: GPUBindGroupLayout
+  lightingGroupLayout: GPUBindGroupLayout
+
+  transformBindGroup: GPUBindGroup
+
   depthStencilAttachment: GPURenderPassDepthStencilAttachment
 
   // Assets
-  //quadMesh: QuadMesh
   objMesh: ObjMesh
   groundMesh: ObjMesh
 
   objMaterial: Material
   groundMaterial: Material
 
+  lighting: Light
   objectBuffer: GPUBuffer
 
   constructor(canvas: HTMLCanvasElement) {
@@ -44,15 +44,10 @@ export class Renderer {
 
   async Initialize() {
     await this.setupDevice()
-
     await this.makeBindGroupLayouts()
-
     await this.createAssets()
-
     await this.makeDepthBufferResources()
-
     await this.makePipeline()
-
     await this.makeBindGroup()
   }
 
@@ -74,126 +69,21 @@ export class Renderer {
   }
 
   async makeDepthBufferResources() {
-    this.depthStencilState = {
-      format: "depth24plus-stencil8",
-      depthWriteEnabled: true,
-      depthCompare: "less-equal",
-    }
-
-    const size: GPUExtent3D = {
-      width: this.canvas.width,
-      height: this.canvas.height,
-      depthOrArrayLayers: 1,
-    }
-    const depthBufferDescriptor: GPUTextureDescriptor = {
-      size: size,
-      format: "depth24plus-stencil8",
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    }
-    this.depthStencilBuffer = this.device.createTexture(depthBufferDescriptor)
-
-    const viewDescriptor: GPUTextureViewDescriptor = {
-      format: "depth24plus-stencil8",
-      dimension: "2d",
-      aspect: "all",
-    }
-    this.depthStencilView = this.depthStencilBuffer.createView(viewDescriptor)
-
-    this.depthStencilAttachment = {
-      view: this.depthStencilView,
-      depthClearValue: 1.0,
-      depthLoadOp: "clear",
-      depthStoreOp: "store",
-
-      stencilLoadOp: "clear",
-      stencilStoreOp: "discard",
-    }
+    this.depthStencilAttachment = CreateDepthStencil(this.device, this.canvas)
   }
 
   async makeBindGroupLayouts() {
-    this.frameGroupLayout = this.device.createBindGroupLayout({
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.VERTEX,
-          buffer: {},
-        },
-        {
-          binding: 1,
-          visibility: GPUShaderStage.VERTEX,
-          buffer: {
-            type: "read-only-storage",
-            hasDynamicOffset: false,
-          },
-        },
-      ],
-    })
-
-    this.materialGroupLayout = this.device.createBindGroupLayout({
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.FRAGMENT,
-          texture: {},
-        },
-        {
-          binding: 1,
-          visibility: GPUShaderStage.FRAGMENT,
-          sampler: {},
-        },
-      ],
-    })
+    this.transformGroupLayout = CreateTransformGroupLayout(this.device)
+    this.materialGroupLayout = CreateMaterialGroupLayout(this.device)
+    this.lightingGroupLayout = CreateLightGroupLayout(this.device)
   }
 
   async makePipeline() {
     const pipelineLayout = this.device.createPipelineLayout({
-      bindGroupLayouts: [this.frameGroupLayout, this.materialGroupLayout],
+      bindGroupLayouts: [this.transformGroupLayout, this.materialGroupLayout, this.lightingGroupLayout],
     })
 
-    this.pipeline = this.device.createRenderPipeline({
-      vertex: {
-        module: this.device.createShaderModule({
-          code: vertex,
-        }),
-        entryPoint: "vs_main",
-        buffers: [
-          {
-            arrayStride: 20,
-            attributes: [
-              {
-                shaderLocation: 0,
-                format: "float32x3",
-                offset: 0,
-              },
-              {
-                shaderLocation: 1,
-                format: "float32x2",
-                offset: 12,
-              },
-            ],
-          },
-        ],
-      },
-
-      fragment: {
-        module: this.device.createShaderModule({
-          code: vertex,
-        }),
-        entryPoint: "fs_main",
-        targets: [
-          {
-            format: this.format,
-          },
-        ],
-      },
-
-      primitive: {
-        topology: "triangle-list",
-      },
-
-      layout: pipelineLayout,
-      depthStencil: this.depthStencilState,
-    })
+    this.pipeline = CreatePipeline(this.device, vertex, vertex, this.format, pipelineLayout)
   }
 
   async createAssets() {
@@ -204,27 +94,22 @@ export class Renderer {
     this.groundMesh = new ObjMesh()
     this.groundMaterial = new Material()
 
+    this.lighting = new Light()
+    await this.lighting.initialize(this.device, this.lightingGroupLayout)
+
     await this.objMesh.initialize(this.device, "models/Spider.obj")
     await this.groundMesh.initialize(this.device, "models/ground.obj")
 
-    this.uniformBuffer = this.device.createBuffer({
-      size: 64 * 2,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    })
-
-    const modelBufferDescriptor: GPUBufferDescriptor = {
-      size: 64 * 1024,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.objectBuffer = this.device.createBuffer(modelBufferDescriptor)
+    this.uniformBuffer = CreateUniformBuffer(this.device, 64 * 2)
+    this.objectBuffer = CreateStorageBuffer(this.device, 64 * 1024)
 
     await this.objMaterial.initialize(this.device, "img/despacitospidertx.png", this.materialGroupLayout)
     await this.groundMaterial.initialize(this.device, "img/dirt.png", this.materialGroupLayout)
   }
 
   async makeBindGroup() {
-    this.frameBindGroup = this.device.createBindGroup({
-      layout: this.frameGroupLayout,
+    this.transformBindGroup = this.device.createBindGroup({
+      layout: this.transformGroupLayout,
       entries: [
         {
           binding: 0,
@@ -243,14 +128,9 @@ export class Renderer {
   }
 
   async render(renderables: RenderData) {
-    //Early exit tests
-    if (!this.device || !this.pipeline) {
-      return
-    }
-
     //make transforms
     const projection = mat4.create()
-    mat4.perspective(projection, Math.PI / 4, 800 / 600, 0.1, 10)
+    mat4.perspective(projection, Math.PI / 4, 1200 / 900, 0.1, 1000) // Projektion, FOV, Größe Bildschirm, near, far
 
     const view = renderables.view_transform
 
@@ -274,20 +154,20 @@ export class Renderer {
       ],
       depthStencilAttachment: this.depthStencilAttachment,
     })
-
-    renderpass.setPipeline(this.pipeline)
-    renderpass.setBindGroup(0, this.frameBindGroup)
-
     var objects_drawn: number = 0
 
+    renderpass.setPipeline(this.pipeline)
+    renderpass.setBindGroup(0, this.transformBindGroup)
+    renderpass.setBindGroup(2, this.lighting.bindGroup)
+
     //Ground
-    renderpass.setVertexBuffer(0, this.groundMesh.buffer)
+    renderpass.setVertexBuffer(0, this.groundMesh.vbuffer)
     renderpass.setBindGroup(1, this.groundMaterial.bindGroup)
     renderpass.draw(this.groundMesh.vertexCount, renderables.object_counts[object_types.QUAD], 0, objects_drawn)
     objects_drawn += renderables.object_counts[object_types.QUAD]
 
     //Object
-    renderpass.setVertexBuffer(0, this.objMesh.buffer)
+    renderpass.setVertexBuffer(0, this.objMesh.vbuffer)
     renderpass.setBindGroup(1, this.objMaterial.bindGroup)
     renderpass.draw(this.objMesh.vertexCount, 1, 0, objects_drawn)
     objects_drawn += 1

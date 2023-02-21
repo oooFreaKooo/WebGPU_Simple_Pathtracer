@@ -51,3 +51,21 @@ export class Material {
     device.queue.copyExternalImageToTexture({ source: imageData }, { texture: this.texture }, textureDescriptor.size)
   }
 }
+
+export const CreateMaterialGroupLayout = (device: GPUDevice) => {
+  const materialGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: {},
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.FRAGMENT,
+        sampler: {},
+      },
+    ],
+  })
+  return materialGroupLayout
+}

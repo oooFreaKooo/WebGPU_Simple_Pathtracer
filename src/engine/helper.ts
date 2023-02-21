@@ -1,5 +1,5 @@
-import vertex from "./shaders/vertex.wgsl"
 import { mat4 } from "gl-matrix"
+import { LightSetup } from "../framework/settings_light"
 
 export enum object_types {
   QUAD,
@@ -11,84 +11,93 @@ export interface RenderData {
   object_counts: { [obj in object_types]: number }
 }
 
-export const CreatePipeline = (device: GPUDevice, format: GPUTextureFormat) => {
+export const CreatePipeline = (
+  device: GPUDevice,
+  vShader: string,
+  fShader: string,
+  format: GPUTextureFormat,
+  pipelineLayout: GPUPipelineLayout,
+) => {
   const pipeline = device.createRenderPipeline({
-    layout: "auto",
     vertex: {
       module: device.createShaderModule({
-        code: vertex,
+        code: vShader,
       }),
       entryPoint: "vs_main",
       buffers: [
         {
-          arrayStride: 12,
+          arrayStride: 32,
           attributes: [
             {
               shaderLocation: 0,
               format: "float32x3",
               offset: 0,
             },
-          ],
-        },
-        {
-          arrayStride: 8,
-          attributes: [
             {
               shaderLocation: 1,
               format: "float32x2",
-              offset: 0,
+              offset: 12,
             },
-          ],
-        },
-        {
-          arrayStride: 12,
-          attributes: [
             {
               shaderLocation: 2,
               format: "float32x3",
-              offset: 0,
+              offset: 20,
             },
           ],
         },
       ],
     },
+
     fragment: {
       module: device.createShaderModule({
-        code: vertex,
+        code: fShader,
       }),
       entryPoint: "fs_main",
       targets: [
         {
           format: format,
-          blend: {
-            color: {
-              srcFactor: "src-alpha",
-              dstFactor: "one-minus-src-alpha",
-              operation: "add",
-            },
-
-            alpha: {
-              srcFactor: "src-alpha",
-              dstFactor: "one-minus-src-alpha",
-              operation: "add",
-            },
-          },
         },
       ],
     },
 
     primitive: {
       topology: "triangle-list",
-      cullMode: "back",
-      frontFace: "ccw",
     },
+
+    layout: pipelineLayout,
     depthStencil: {
-      format: "depth24plus",
+      format: "depth24plus-stencil8",
       depthWriteEnabled: true,
-      depthCompare: "less",
+      depthCompare: "less-equal",
     },
   })
   return pipeline
+}
+export const CreateDepthStencil = (device: GPUDevice, canvas: HTMLCanvasElement): GPURenderPassDepthStencilAttachment => {
+  const depthStencilAttachment = {
+    view: device
+      .createTexture({
+        size: {
+          width: canvas.width,
+          height: canvas.height,
+          depthOrArrayLayers: 1,
+        },
+        format: "depth24plus-stencil8",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      })
+      .createView({
+        format: "depth24plus-stencil8",
+        dimension: "2d",
+        aspect: "all",
+      }),
+    depthClearValue: 1.0,
+    depthLoadOp: "clear",
+    depthStoreOp: "store",
+
+    stencilLoadOp: "clear",
+    stencilStoreOp: "discard",
+  }
+  return depthStencilAttachment as GPURenderPassDepthStencilAttachment
 }
 
 export const CreateUniformBuffer = (device: GPUDevice, size: number) => {
@@ -104,6 +113,21 @@ export const CreateStorageBuffer = (device: GPUDevice, size: number) => {
     size: size,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   })
+  return buffer
+}
+
+export const CreateGPUBuffer = (
+  device: GPUDevice,
+  data: Float32Array,
+  usageFlag: GPUBufferUsageFlags = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+) => {
+  const buffer = device.createBuffer({
+    size: data.byteLength * 2,
+    usage: usageFlag,
+    mappedAtCreation: true,
+  })
+  new Float32Array(buffer.getMappedRange()).set(data)
+  buffer.unmap()
   return buffer
 }
 
@@ -223,20 +247,7 @@ function getProjectionMatrix(
   return projectionMatrix as Float32Array
 }
 
-export const CreateGPUBuffer = (
-  device: GPUDevice,
-  data: Float32Array,
-  usageFlag: GPUBufferUsageFlags = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-) => {
-  const buffer = device.createBuffer({
-    size: data.byteLength,
-    usage: usageFlag,
-    mappedAtCreation: true,
-  })
-  new Float32Array(buffer.getMappedRange()).set(data)
-  buffer.unmap()
-  return buffer
-}
+
 
 export const CreateGPUBufferUint = (
   device: GPUDevice,
@@ -253,21 +264,7 @@ export const CreateGPUBufferUint = (
   return buffer
 }
 
-export const CreateUniformBuffer = (device: GPUDevice, size: number) => {
-  const buffer = device.createBuffer({
-    size: size,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  })
-  return buffer
-}
 
-export const CreateStorageBuffer = (device: GPUDevice, size: number) => {
-  const buffer = device.createBuffer({
-    size: size,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-  })
-  return buffer
-}
 
 export const CreatePipeline = (device: GPUDevice, vertexShader: GPUShaderModule, fragmentShader: GPUShaderModule, format: GPUTextureFormat) => {
   const pipeline = device.createRenderPipeline({

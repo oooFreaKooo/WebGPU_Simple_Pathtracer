@@ -32,7 +32,7 @@ export class Camera {
     vec3.add(target, this.position, this.forwards)
 
     this.view = mat4.create()
-    mat4.lookAt(this.view, this.position, target, this.up)
+    mat4.lookAt(this.view, this.position, target, this.up) // eye = position
   }
 
   get_view(): mat4 {

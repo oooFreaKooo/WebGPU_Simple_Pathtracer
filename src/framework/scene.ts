@@ -5,23 +5,23 @@ import { object_types, RenderData } from "../engine/helper"
 import { ObjModel } from "./settings_obj"
 
 export class Scene {
-  quad: Ground
+  ground: Ground
   object: ObjModel
   player: Camera
   object_data: Float32Array
   quad_count: number
 
   constructor() {
-    this.quad = new Ground([0, 0, 0])
+    this.ground = new Ground([0, 0, 0]) // Position Boden
     this.object_data = new Float32Array(32)
-    this.object = new ObjModel([0, 0, 0], [0, 0, 0])
-    this.player = new Camera([-2, 0, 0.5], 0, 0)
+    this.object = new ObjModel([0, 0, 0], [0, 0, 0]) // Position Objekt
+    this.player = new Camera([-3, 0, 1], 0, 0) // Position Kamera + winkel
     this.quad_count = 1
   }
 
   update() {
-    this.quad.update()
-    var model = this.quad.get_model()
+    this.ground.update()
+    var model = this.ground.get_model()
     for (var j: number = 0; j < 16; j++) {
       this.object_data[j] = <number>model.at(j)
     }
@@ -56,9 +56,9 @@ export class Scene {
     this.player.eulers[1] = Math.min(89, Math.max(-89, this.player.eulers[1] - dY))
   }
 
-  move_player(forwards_amount: number, right_amount: number) {
+  move_player(forwards_amount: number, right_amount: number, up_amount: number) {
     vec3.scaleAndAdd(this.player.position, this.player.position, this.player.forwards, forwards_amount)
-
     vec3.scaleAndAdd(this.player.position, this.player.position, this.player.right, right_amount)
+    vec3.scaleAndAdd(this.player.position, this.player.position, this.player.up, up_amount)
   }
 }

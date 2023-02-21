@@ -14,6 +14,8 @@ export class App {
 
   forwards_amount: number
   right_amount: number
+  up_amount: number
+  shiftKeyHeld: boolean
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -28,6 +30,9 @@ export class App {
 
     this.forwards_amount = 0
     this.right_amount = 0
+    this.up_amount = 0
+    this.shiftKeyHeld = false
+
     $(document).on("keydown", (event) => {
       this.handle_keypress(event)
     })
@@ -48,9 +53,10 @@ export class App {
 
   run = () => {
     var running: boolean = true
+    const speed = this.shiftKeyHeld ? 1.5 : 1.0 // Beim Shift gedrückt halten, bewegt man sich schneller
 
     this.scene.update()
-    this.scene.move_player(this.forwards_amount, this.right_amount)
+    this.scene.move_player(this.forwards_amount * speed, this.right_amount * speed, this.up_amount)
 
     this.renderer.render(this.scene.get_renderables())
 
@@ -63,16 +69,25 @@ export class App {
     this.keyLabel.innerText = event.code
 
     if (event.code == "KeyW") {
-      this.forwards_amount = 0.02
+      this.forwards_amount = 0.05
     }
     if (event.code == "KeyS") {
-      this.forwards_amount = -0.02
+      this.forwards_amount = -0.05
     }
     if (event.code == "KeyA") {
-      this.right_amount = -0.02
+      this.right_amount = -0.05
     }
     if (event.code == "KeyD") {
-      this.right_amount = 0.02
+      this.right_amount = 0.05
+    }
+    if (event.code == "Space") {
+      this.up_amount = 0.05
+    }
+    if (event.code == "ControlLeft") {
+      this.up_amount = -0.05
+    }
+    if (event.code == "ShiftLeft") {
+      this.shiftKeyHeld = true
     }
   }
 
@@ -90,6 +105,15 @@ export class App {
     }
     if (event.code == "KeyD") {
       this.right_amount = 0
+    }
+    if (event.code == "Space") {
+      this.up_amount = 0
+    }
+    if (event.code == "ControlLeft") {
+      this.up_amount = 0
+    }
+    if (event.code == "ShiftLeft") {
+      this.shiftKeyHeld = false
     }
   }
 

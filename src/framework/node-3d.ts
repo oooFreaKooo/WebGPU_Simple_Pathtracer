@@ -4,7 +4,7 @@ export class Node3d {
   private parent: Node3d | null = null
 
   private transform = mat4.create()
-  private worldTransformMatrix = mat4.create();
+  private worldTransformMatrix = mat4.create()
   private needTransformUpdate: boolean = true
 
   /**
@@ -23,10 +23,10 @@ export class Node3d {
         newChild.parent.detatch(newChild)
       }
 
-      this.setUpdateFlag(true);
-      newChild.setUpdateFlag(true);
-      newChild.parent = this;
-      this.children.push(newChild);
+      this.setUpdateFlag(true)
+      newChild.setUpdateFlag(true)
+      newChild.parent = this
+      this.children.push(newChild)
     } else {
       for (const node of newChild) {
         this.attach(node)
@@ -65,21 +65,14 @@ export class Node3d {
     for (const child of this.children) {
       child.needTransformUpdate = true
     }
-
-
-
-
-
-
   }
   public calcWorldTransMatrix() {
     if (this.parent) {
-      return mat4.multiply(this.worldTransformMatrix, this.transform, this.parent.worldTransformMatrix);
+      return mat4.multiply(this.worldTransformMatrix, this.transform, this.parent.worldTransformMatrix)
     }
 
-    return mat4.copy(this.worldTransformMatrix, this.transform);
+    return mat4.copy(this.worldTransformMatrix, this.transform)
   }
-
 
   // TODO:
 
@@ -99,10 +92,9 @@ export class Node3d {
     this.needTransformUpdate = needUpdate
   }
   public getTransform() {
-    return this.transform;
+    return this.transform
   }
   public getWorldTransform() {
-    return this.worldTransformMatrix;
+    return this.worldTransformMatrix
   }
-
 }

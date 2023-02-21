@@ -11,7 +11,7 @@ export class Light {
   async initialize(device: GPUDevice, bindGroupLayout: GPUBindGroupLayout) {
     const ambient = new Float32Array([0.05])
     const directionalLight = new Float32Array([0.5, 0.5, 0.5, 0])
-    const eyePosition = new Float32Array([0, 0, 10])
+    const eyePosition = new Float32Array([0.5, 0.5, 0.5])
     const diffuseIntensity = new Float32Array([0.5])
     const specularIntensity = new Float32Array([0.5])
 
@@ -88,4 +88,37 @@ export class Light {
       device.queue.writeBuffer(this.specularIntensityBuffer, 0, specularIntensity)
     })
   }
+}
+
+export const CreateLightGroupLayout = (device: GPUDevice) => {
+  const lightGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: {},
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: {},
+      },
+      {
+        binding: 2,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: {},
+      },
+      {
+        binding: 3,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: {},
+      },
+      {
+        binding: 4,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: {},
+      },
+    ],
+  })
+  return lightGroupLayout
 }
