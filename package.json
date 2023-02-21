@@ -2,11 +2,10 @@
   "name": "code",
   "version": "1.0.0",
   "description": "",
-  "main": "examples/main.js",
+  "main": "main/main.js",
   "scripts": {
-    "dev": "webpack --mode development",
-    "prod": "webpack --mode production && npm run build",
-    "watch": "webpack --watch --mode production",
+    "start": "npm run install-missing-dependencies && npm run build && npm run serve",
+    "install-missing-dependencies": "npm i",
     "build": "webpack --config webpack.config.js",
     "serve": "live-server --cors"
   },
