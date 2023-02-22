@@ -97,14 +97,6 @@ export class ObjMesh {
   read_face_data(line: string, result: number[]) {
     line = line.replace("\n", "")
     const vertex_descriptions = line.split(" ")
-    // ["f", "v1", "v2", ...]
-    /*
-            triangle fan setup, eg.
-            v1 v2 v3 v4 => (v1, v2, v3), (v1, v3, v4)
-
-            no. of triangles = no. of vertices - 2
-        */
-
     const triangle_count = vertex_descriptions.length - 3 // accounting also for "f"
     for (var i = 0; i < triangle_count; i++) {
       //corner a

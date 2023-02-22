@@ -19,8 +19,8 @@ export class ObjModel {
     this.model = mat4.create()
     mat4.scale(this.model, this.model, scale)
     mat4.rotateX(this.model, this.model, Deg2Rad(90))
-    //mat4.translate(this.model, this.model, this.position)
-    //mat4.rotateY(this.model, this.model, Deg2Rad(this.eulers[1]))
+    mat4.translate(this.model, this.model, this.position)
+    mat4.rotateY(this.model, this.model, Deg2Rad(this.eulers[2]))
     //mat4.rotateZ(this.model, this.model, Deg2Rad(this.eulers[2]))
   }
 

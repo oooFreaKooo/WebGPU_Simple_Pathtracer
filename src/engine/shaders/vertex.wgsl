@@ -45,7 +45,7 @@ fn fs_main(
     @location(0) TexCoord : vec2<f32>,
     @location(1) Normals: vec3<f32>) -> @location(0) vec4<f32> {
 
-    let N:vec3<f32> = normalize(Normals.xyz);                
+    let N:vec3<f32> = normalize(Normals.xyz);         
     let L:vec3<f32> = normalize(directionLight.xyz);     
     let V:vec3<f32> = normalize(eyePosition.xyz);          
     let H:vec3<f32> = normalize(L + V);

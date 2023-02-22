@@ -1,33 +1,40 @@
+import { Scene } from "../framework/scene"
 import { CreateUniformBuffer } from "./helper"
 
 export class Light {
-  ambientBuffer: GPUBuffer
-  directionalBuffer: GPUBuffer
-  eyePositionBuffer: GPUBuffer
-  diffuseIntensityBuffer: GPUBuffer
-  specularIntensityBuffer: GPUBuffer
+  private readonly device: GPUDevice
+  private readonly ambientBuffer: GPUBuffer
+  private readonly directionalBuffer: GPUBuffer
+  private readonly eyePositionBuffer: GPUBuffer
+  private readonly diffuseIntensityBuffer: GPUBuffer
+  private readonly specularIntensityBuffer: GPUBuffer
+  private readonly directionalLight = new Float32Array([1.0, 1.0, 1.0])
+
   bindGroup: GPUBindGroup
 
-  async initialize(device: GPUDevice, bindGroupLayout: GPUBindGroupLayout) {
+  constructor(device: GPUDevice) {
+    this.device = device
+
+    this.ambientBuffer = CreateUniformBuffer(this.device, 4)
+    this.directionalBuffer = CreateUniformBuffer(this.device, 16)
+    this.eyePositionBuffer = CreateUniformBuffer(this.device, 12)
+    this.diffuseIntensityBuffer = CreateUniformBuffer(this.device, 4)
+    this.specularIntensityBuffer = CreateUniformBuffer(this.device, 4)
+  }
+
+  async initialize(bindGroupLayout: GPUBindGroupLayout) {
     const ambient = new Float32Array([0.05])
-    const directionalLight = new Float32Array([0.5, 0.5, 0.5, 0])
     const eyePosition = new Float32Array([0.5, 0.5, 0.5])
     const diffuseIntensity = new Float32Array([0.5])
     const specularIntensity = new Float32Array([0.5])
 
-    this.ambientBuffer = CreateUniformBuffer(device, 4)
-    this.directionalBuffer = CreateUniformBuffer(device, 16)
-    this.eyePositionBuffer = CreateUniformBuffer(device, 12)
-    this.diffuseIntensityBuffer = CreateUniformBuffer(device, 4)
-    this.specularIntensityBuffer = CreateUniformBuffer(device, 4)
+    this.device.queue.writeBuffer(this.ambientBuffer, 0, ambient)
+    this.device.queue.writeBuffer(this.directionalBuffer, 0, this.directionalLight)
+    this.device.queue.writeBuffer(this.eyePositionBuffer, 0, eyePosition)
+    this.device.queue.writeBuffer(this.diffuseIntensityBuffer, 0, diffuseIntensity)
+    this.device.queue.writeBuffer(this.specularIntensityBuffer, 0, specularIntensity)
 
-    device.queue.writeBuffer(this.ambientBuffer, 0, ambient)
-    device.queue.writeBuffer(this.directionalBuffer, 0, directionalLight)
-    device.queue.writeBuffer(this.eyePositionBuffer, 0, eyePosition)
-    device.queue.writeBuffer(this.diffuseIntensityBuffer, 0, diffuseIntensity)
-    device.queue.writeBuffer(this.specularIntensityBuffer, 0, specularIntensity)
-
-    this.bindGroup = device.createBindGroup({
+    this.bindGroup = this.device.createBindGroup({
       layout: bindGroupLayout,
       entries: [
         {
@@ -65,27 +72,27 @@ export class Light {
 
     document.querySelector("#ambient")!.addEventListener("input", (e: Event) => {
       ambient[0] = +(e.target as HTMLInputElement).value
-      device.queue.writeBuffer(this.ambientBuffer, 0, ambient)
+      this.device.queue.writeBuffer(this.ambientBuffer, 0, ambient)
     })
     document.querySelector("#light-x")!.addEventListener("input", (e: Event) => {
-      directionalLight[0] = +(e.target as HTMLInputElement).value
-      device.queue.writeBuffer(this.directionalBuffer, 0, directionalLight)
+      this.directionalLight[0] = +(e.target as HTMLInputElement).value
+      this.device.queue.writeBuffer(this.directionalBuffer, 0, this.directionalLight)
     })
     document.querySelector("#light-y")!.addEventListener("input", (e: Event) => {
-      directionalLight[1] = +(e.target as HTMLInputElement).value
-      device.queue.writeBuffer(this.directionalBuffer, 0, directionalLight)
+      this.directionalLight[1] = +(e.target as HTMLInputElement).value
+      this.device.queue.writeBuffer(this.directionalBuffer, 0, this.directionalLight)
     })
     document.querySelector("#light-z")!.addEventListener("input", (e: Event) => {
-      directionalLight[2] = +(e.target as HTMLInputElement).value
-      device.queue.writeBuffer(this.directionalBuffer, 0, directionalLight)
+      this.directionalLight[2] = +(e.target as HTMLInputElement).value
+      this.device.queue.writeBuffer(this.directionalBuffer, 0, this.directionalLight)
     })
     document.querySelector("#diffuse")!.addEventListener("input", (e: Event) => {
       diffuseIntensity[0] = +(e.target as HTMLInputElement).value
-      device.queue.writeBuffer(this.diffuseIntensityBuffer, 0, diffuseIntensity)
+      this.device.queue.writeBuffer(this.diffuseIntensityBuffer, 0, diffuseIntensity)
     })
     document.querySelector("#specular")!.addEventListener("input", (e: Event) => {
       specularIntensity[0] = +(e.target as HTMLInputElement).value
-      device.queue.writeBuffer(this.specularIntensityBuffer, 0, specularIntensity)
+      this.device.queue.writeBuffer(this.specularIntensityBuffer, 0, specularIntensity)
     })
   }
 }

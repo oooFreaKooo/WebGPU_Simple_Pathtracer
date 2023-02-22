@@ -4,6 +4,7 @@ import { CreateDepthStencil, CreatePipeline, CreateStorageBuffer, CreateUniformB
 import { CreateTransformGroupLayout, ObjMesh } from "./obj-loader"
 import vertex from "./shaders/vertex.wgsl"
 import { CreateLightGroupLayout, Light } from "./light"
+import { Scene } from "../framework/scene"
 
 export class Renderer {
   canvas: HTMLCanvasElement
@@ -36,7 +37,9 @@ export class Renderer {
   groundMaterial: Material
 
   lighting: Light
+  scene: Scene
   objectBuffer: GPUBuffer
+  directionalLight: Float32Array
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -52,15 +55,15 @@ export class Renderer {
   }
 
   async setupDevice() {
-    //adapter: wrapper around (physical) GPU.
-    //Describes features and limits
+    // The adapter is a wrapper around the physical GPU and describes its features and limits.
     this.adapter = <GPUAdapter>await navigator.gpu?.requestAdapter()
-    //device: wrapper around GPU functionality
-    //Function calls are made through the device
+
+    // The device is a wrapper around the GPU functionality and is used to make function calls.
     this.device = <GPUDevice>await this.adapter?.requestDevice()
-    //context: similar to vulkan instance (or OpenGL context)
     this.context = <GPUCanvasContext>this.canvas.getContext("webgpu")
     this.format = "bgra8unorm"
+
+    // Configures the context for rendering.
     this.context.configure({
       device: this.device,
       format: this.format,
@@ -69,111 +72,121 @@ export class Renderer {
   }
 
   async makeDepthBufferResources() {
+    // Creates a depth/stencil attachment for the render pass.
     this.depthStencilAttachment = CreateDepthStencil(this.device, this.canvas)
   }
 
   async makeBindGroupLayouts() {
+    // Creates the bind group layouts for the pipeline.
     this.transformGroupLayout = CreateTransformGroupLayout(this.device)
     this.materialGroupLayout = CreateMaterialGroupLayout(this.device)
     this.lightingGroupLayout = CreateLightGroupLayout(this.device)
   }
 
   async makePipeline() {
+    // Creates the pipeline layout with the bind group layouts.
     const pipelineLayout = this.device.createPipelineLayout({
       bindGroupLayouts: [this.transformGroupLayout, this.materialGroupLayout, this.lightingGroupLayout],
     })
 
+    // Creates the pipeline with the pipeline layout.
     this.pipeline = CreatePipeline(this.device, vertex, vertex, this.format, pipelineLayout)
   }
 
   async createAssets() {
     // Obj Model
     this.objMesh = new ObjMesh()
+    await this.objMesh.initialize(this.device, "models/Spider.obj")
+
     this.objMaterial = new Material()
+    await this.objMaterial.initialize(this.device, "img/despacitospidertx.png", this.materialGroupLayout)
+
     // Ground/Quad Model
     this.groundMesh = new ObjMesh()
-    this.groundMaterial = new Material()
-
-    this.lighting = new Light()
-    await this.lighting.initialize(this.device, this.lightingGroupLayout)
-
-    await this.objMesh.initialize(this.device, "models/Spider.obj")
     await this.groundMesh.initialize(this.device, "models/ground.obj")
 
+    this.groundMaterial = new Material()
+    await this.groundMaterial.initialize(this.device, "img/dirt.png", this.materialGroupLayout)
+
+    // Lighting
+    this.lighting = new Light(this.device)
+    await this.lighting.initialize(this.lightingGroupLayout)
+
+    // Buffers
     this.uniformBuffer = CreateUniformBuffer(this.device, 64 * 2)
     this.objectBuffer = CreateStorageBuffer(this.device, 64 * 1024)
-
-    await this.objMaterial.initialize(this.device, "img/despacitospidertx.png", this.materialGroupLayout)
-    await this.groundMaterial.initialize(this.device, "img/dirt.png", this.materialGroupLayout)
   }
 
   async makeBindGroup() {
+    const entries = [
+      {
+        binding: 0,
+        resource: {
+          buffer: this.uniformBuffer,
+        },
+      },
+      {
+        binding: 1,
+        resource: {
+          buffer: this.objectBuffer,
+        },
+      },
+    ]
     this.transformBindGroup = this.device.createBindGroup({
       layout: this.transformGroupLayout,
-      entries: [
-        {
-          binding: 0,
-          resource: {
-            buffer: this.uniformBuffer,
-          },
-        },
-        {
-          binding: 1,
-          resource: {
-            buffer: this.objectBuffer,
-          },
-        },
-      ],
+      entries,
     })
   }
 
   async render(renderables: RenderData) {
-    //make transforms
+    if (!this.device || !this.pipeline) {
+      return
+    }
+
     const projection = mat4.create()
-    mat4.perspective(projection, Math.PI / 4, 1200 / 900, 0.1, 1000) // Projektion, FOV, Größe Bildschirm, near, far
+    mat4.perspective(projection, Math.PI / 4, 1200 / 900, 0.1, 1000)
 
     const view = renderables.view_transform
 
+    // Update buffers with new data
     this.device.queue.writeBuffer(this.objectBuffer, 0, renderables.model_transforms, 0, renderables.model_transforms.length)
     this.device.queue.writeBuffer(this.uniformBuffer, 0, <ArrayBuffer>view)
     this.device.queue.writeBuffer(this.uniformBuffer, 64, <ArrayBuffer>projection)
 
-    //command encoder: records draw commands for submission
-    const commandEncoder: GPUCommandEncoder = this.device.createCommandEncoder()
-    //texture view: image view to the color buffer in this case
-    const textureView: GPUTextureView = this.context.getCurrentTexture().createView()
-    //renderpass: holds draw commands, allocated from command encoder
-    const renderpass: GPURenderPassEncoder = commandEncoder.beginRenderPass({
+    // Create command encoder and texture view
+    const commandEncoder = this.device.createCommandEncoder()
+    const textureView = this.context.getCurrentTexture().createView()
+
+    // Begin render pass
+    const renderpass = commandEncoder.beginRenderPass({
       colorAttachments: [
         {
           view: textureView,
-          clearValue: { r: 0.2, g: 0.247, b: 0.314, a: 1.0 }, //background color
+          clearValue: { r: 0.2, g: 0.247, b: 0.314, a: 1.0 },
           loadOp: "clear",
           storeOp: "store",
         },
       ],
       depthStencilAttachment: this.depthStencilAttachment,
     })
-    var objects_drawn: number = 0
 
+    // Set pipeline and bind groups
     renderpass.setPipeline(this.pipeline)
     renderpass.setBindGroup(0, this.transformBindGroup)
     renderpass.setBindGroup(2, this.lighting.bindGroup)
 
-    //Ground
+    // Draw ground
     renderpass.setVertexBuffer(0, this.groundMesh.vbuffer)
     renderpass.setBindGroup(1, this.groundMaterial.bindGroup)
-    renderpass.draw(this.groundMesh.vertexCount, renderables.object_counts[object_types.QUAD], 0, objects_drawn)
-    objects_drawn += renderables.object_counts[object_types.QUAD]
+    renderpass.draw(this.groundMesh.vertexCount, renderables.object_counts[object_types.QUAD], 0, 0)
 
-    //Object
+    // Draw object
     renderpass.setVertexBuffer(0, this.objMesh.vbuffer)
     renderpass.setBindGroup(1, this.objMaterial.bindGroup)
-    renderpass.draw(this.objMesh.vertexCount, 1, 0, objects_drawn)
-    objects_drawn += 1
+    renderpass.draw(this.objMesh.vertexCount, 1, 0, renderables.object_counts[object_types.QUAD])
 
+    // End render pass and submit command encoder
     renderpass.end()
-
     this.device.queue.submit([commandEncoder.finish()])
   }
 }
