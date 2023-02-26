@@ -8,8 +8,8 @@ export class App {
   spaceSource: HTMLAudioElement
   gainNode: GainNode
   audioContext: AudioContext
-  renderer: Renderer
-  scene: Scene
+  private renderer: Renderer
+  private scene: Scene
   lighting: Light
 
   //Labels for displaying state
@@ -26,11 +26,6 @@ export class App {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
-
-    this.renderer = new Renderer(canvas)
-
-    this.scene = new Scene()
-
     this.keyLabel = document.getElementById("key-label") as HTMLElement
     this.mouseXLabel = document.getElementById("mouse-x-label") as HTMLElement
     this.mouseYLabel = document.getElementById("mouse-y-label") as HTMLElement
@@ -63,16 +58,23 @@ export class App {
       const sourceNode = this.audioContext.createMediaElementSource(this.spaceSource)
       sourceNode.connect(this.gainNode)
     })
+
+    // Initialize the renderer and scene
+    this.InitializeRenderer()
   }
 
   async InitializeRenderer() {
+    this.renderer = new Renderer(this.canvas)
     await this.renderer.Initialize()
+
+    // Create the scene and pass the device to it
+    this.scene = new Scene(this.renderer.device)
   }
 
   run = () => {
     const running = true
     const speed = this.shiftKeyHeld ? 2.0 : 1.0 // Beim Shift gedrückt halten, bewegt man sich schneller
-    this.scene.update()
+    this.scene.update(this.renderer.device)
     this.scene.move_player(this.forwards_amount * speed, this.right_amount * speed, this.up_amount)
     this.renderer.render(this.scene.get_renderables())
 

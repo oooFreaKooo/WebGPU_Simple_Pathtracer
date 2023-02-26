@@ -7,6 +7,7 @@ import { ObjModel } from "./settings_obj"
 
 // Define the Scene class
 export class Scene {
+  device: GPUDevice
   // Declare class variables
   ground: Ground
   object: ObjModel
@@ -17,7 +18,8 @@ export class Scene {
   objectBuffer: GPUBuffer
 
   // Constructor function to initialize class variables
-  constructor() {
+  constructor(device: GPUDevice) {
+    this.device = device
     this.ground = new Ground([0, 0, 0]) // Initialize ground position
     this.object_data = new Float32Array(32)
     this.object = new ObjModel([0, 0, 0], [0, 0, 0]) // Initialize object position and rotation
@@ -26,7 +28,7 @@ export class Scene {
   }
 
   // Update function to update the position and rotation of ground, object, and player
-  async update() {
+  async update(device: GPUDevice) {
     this.ground.update() // Update ground position and rotation
     var model = this.ground.get_model()
     for (var j: number = 0; j < 16; j++) {
