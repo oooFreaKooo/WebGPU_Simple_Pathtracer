@@ -4,7 +4,6 @@ import { CreateDepthStencil, CreatePipeline, CreateStorageBuffer, CreateUniformB
 import { CreateTransformGroupLayout, ObjMesh } from "./obj-loader"
 import vertex from "./shaders/vertex.wgsl"
 import { CreateLightGroupLayout, Light } from "./light"
-import { Scene } from "../framework/scene"
 
 export class Renderer {
   canvas: HTMLCanvasElement
@@ -37,7 +36,6 @@ export class Renderer {
   groundMaterial: Material
 
   lighting: Light
-  scene: Scene
   objectBuffer: GPUBuffer
   directionalLight: Float32Array
 

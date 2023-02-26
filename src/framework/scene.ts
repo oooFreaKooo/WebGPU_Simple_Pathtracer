@@ -14,7 +14,6 @@ export class Scene {
   player: Camera
   object_data: Float32Array
   quad_count: number
-  canJump: boolean = true
   objectBuffer: GPUBuffer
 
   // Constructor function to initialize class variables
@@ -57,52 +56,6 @@ export class Scene {
       object_counts: {
         [object_types.QUAD]: this.quad_count,
       },
-    }
-  }
-
-  // Function to update camera rotation based on mouse movement
-  spin_player(dX: number, dY: number) {
-    this.player.eulers[2] -= dX // Update yaw
-    this.player.eulers[2] %= 360 // Keep yaw in the range [0, 360)
-
-    this.player.eulers[1] = Math.min(89, Math.max(-89, this.player.eulers[1] - dY)) // Update pitch and keep it in the range [-89, 89]
-  }
-
-  move_player(forwards_amount: number, right_amount: number, up_amount: number) {
-    const GROUND_HEIGHT = 1.0 // The height of the ground
-    const GRAVITY = -0.02 // The strength of the gravitational force
-    const MAX_JUMP_HEIGHT = 10.0 // The maximum height of the jump
-    const JUMP_SPEED = 0.5 // The speed of the jump
-
-    // Apply gravity to the player's movement if they are in the air
-    if (this.player.position[2] > GROUND_HEIGHT) {
-      up_amount += GRAVITY
-    }
-
-    // Update the player's position based on their movement
-    vec3.scaleAndAdd(this.player.position, this.player.position, this.player.forwards, forwards_amount)
-    vec3.scaleAndAdd(this.player.position, this.player.position, this.player.right, right_amount)
-    vec3.scaleAndAdd(this.player.position, this.player.position, this.player.up, up_amount)
-
-    // Limit the player's jump height
-    if (this.player.position[2] - GROUND_HEIGHT > MAX_JUMP_HEIGHT) {
-      this.player.position[2] = GROUND_HEIGHT + MAX_JUMP_HEIGHT
-    }
-
-    // Set the y-coordinate to the ground height if the player is on the ground
-    if (this.player.position[2] <= GROUND_HEIGHT) {
-      this.player.position[2] = GROUND_HEIGHT
-      this.canJump = true // Reset the ability to jump if the player is on the ground
-    }
-
-    // Check if the player can jump
-    if (up_amount > 0 && this.canJump) {
-      // Apply the jump speed to the player's upward movement
-      up_amount = JUMP_SPEED
-      this.canJump = false // Set the ability to jump to false
-    } else if (up_amount < 0 && !this.canJump) {
-      // Apply gravity to the player's downward movement when they're falling
-      up_amount += GRAVITY
     }
   }
 }
