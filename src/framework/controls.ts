@@ -1,4 +1,69 @@
-import { Scene } from "../framework/scene"
+import { Camera } from "../engine/camera"
+
+export class CameraControls {
+  private mouseDown = false
+  private lastMouseX = -1
+  private lastMouseY = -1
+
+  constructor(private camera: Camera, private canvas: HTMLCanvasElement) {
+    // ZOOM
+    canvas.addEventListener("wheel", (event: WheelEvent) => {
+      const delta = event.deltaY / 100
+      // no negative camera.z
+      if (camera.z > -delta) {
+        camera.z += event.deltaY / 100
+      }
+    })
+
+    // MOUSE DRAG
+    canvas.addEventListener("mousedown", (event: MouseEvent) => {
+      this.mouseDown = true
+
+      this.lastMouseX = event.pageX
+      this.lastMouseY = event.pageY
+    })
+    canvas.addEventListener("mouseup", (event: MouseEvent) => {
+      this.mouseDown = false
+    })
+    canvas.addEventListener("mousemove", (event: MouseEvent) => {
+      if (!this.mouseDown) {
+        return
+      }
+
+      var mousex = event.pageX
+      var mousey = event.pageY
+
+      if (this.lastMouseX > 0 && this.lastMouseY > 0) {
+        const roty = mousex - this.lastMouseX
+        const rotx = mousey - this.lastMouseY
+
+        camera.rotY += roty / 100
+        camera.rotX += rotx / 100
+      }
+
+      this.lastMouseX = mousex
+      this.lastMouseY = mousey
+    })
+  }
+}
+// Camera always move with mouse movement:
+/* canvas.addEventListener("mousemove", (event: MouseEvent) => {
+  const mousex = event.pageX
+  const mousey = event.pageY
+
+  if (this.lastMouseX > 0 && this.lastMouseY > 0) {
+    const roty = mousex - this.lastMouseX
+    const rotx = mousey - this.lastMouseY
+
+    camera.rotY += roty / 100
+    camera.rotX += rotx / 100
+  }
+
+  this.lastMouseX = mousex
+  this.lastMouseY = mousey
+}) */
+
+/* import { Scene } from "../framework/scene"
 import $ from "jquery"
 import { vec3 } from "gl-matrix"
 
@@ -216,3 +281,4 @@ export class Controls {
     }
   }
 }
+ */

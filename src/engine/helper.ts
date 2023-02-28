@@ -1,70 +1,77 @@
 import { mat4 } from "gl-matrix"
-import { LightSetup } from "../framework/settings_light"
 
-export enum object_types {
-  QUAD,
+export interface ObjParameter {
+  x?: number
+  y?: number
+  z?: number
+
+  rotX?: number
+  rotY?: number
+  rotZ?: number
+
+  scaleX?: number
+  scaleY?: number
+  scaleZ?: number
 }
 
-export interface RenderData {
-  view_transform: mat4
-  model_transforms: Float32Array
-  object_counts: { [obj in object_types]: number }
+export interface Color {
+  r: number
+  g: number
+  b: number
 }
 
-export const CreatePipeline = (
-  device: GPUDevice,
-  vShader: string,
-  fShader: string,
-  format: GPUTextureFormat,
-  pipelineLayout: GPUPipelineLayout,
-) => {
-  const pipeline = device.createRenderPipeline({
+export function CreatePipeline(device: GPUDevice, vertexShader: string, fragmentShader: string, stride: number): GPURenderPipeline {
+  let pipeline = device.createRenderPipeline({
     vertex: {
       module: device.createShaderModule({
-        code: vShader,
+        code: vertexShader,
       }),
       entryPoint: "vs_main",
       buffers: [
         {
-          arrayStride: 32,
+          arrayStride: stride, // ( 3 (pos) + 3 (norm) + 2 (uv) ) * 4 bytes
           attributes: [
             {
+              // position
               shaderLocation: 0,
-              format: "float32x3",
               offset: 0,
-            },
-            {
-              shaderLocation: 1,
-              format: "float32x2",
-              offset: 12,
-            },
-            {
-              shaderLocation: 2,
               format: "float32x3",
-              offset: 20,
+            },
+            {
+              // uv
+              shaderLocation: 1,
+              offset: 3 * 4,
+              format: "float32x2",
+            },
+            {
+              // norm
+              shaderLocation: 2,
+              offset: (3 + 2) * 4,
+              format: "float32x3",
             },
           ],
-        },
+        } as GPUVertexBufferLayout,
       ],
     },
 
     fragment: {
       module: device.createShaderModule({
-        code: fShader,
+        code: fragmentShader,
       }),
       entryPoint: "fs_main",
       targets: [
         {
-          format: format,
+          format: "bgra8unorm" as GPUTextureFormat,
         },
       ],
     },
 
     primitive: {
       topology: "triangle-list",
+      cullMode: "none",
     },
 
-    layout: pipelineLayout,
+    layout: "auto",
     depthStencil: {
       format: "depth24plus-stencil8",
       depthWriteEnabled: true,
@@ -100,6 +107,14 @@ export const CreateDepthStencil = (device: GPUDevice, canvas: HTMLCanvasElement)
   return depthStencilAttachment as GPURenderPassDepthStencilAttachment
 }
 
+export async function setTexture(textureUrl: string) {
+  const res = await fetch(textureUrl)
+  const img = await res.blob()
+  const options: ImageBitmapOptions = { imageOrientation: "flipY" }
+  const imageBitmap = await createImageBitmap(img, options)
+  return imageBitmap
+}
+
 export const CreateUniformBuffer = (device: GPUDevice, size: number) => {
   const buffer = device.createBuffer({
     size: size,
@@ -112,6 +127,7 @@ export const CreateStorageBuffer = (device: GPUDevice, size: number) => {
   const buffer = device.createBuffer({
     size: size,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    mappedAtCreation: true,
   })
   return buffer
 }

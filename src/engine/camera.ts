@@ -1,41 +1,52 @@
-import { vec3, mat4 } from "gl-matrix"
-import { Deg2Rad } from "./helper"
+import { mat4, vec3 } from "gl-matrix"
 
 export class Camera {
-  position: vec3
-  eulers: vec3
-  view: mat4
-  forwards: vec3
-  right: vec3
-  up: vec3
+  public x: number = 0
+  public y: number = 0
+  public z: number = 0
 
-  constructor(position: vec3, theta: number, phi: number) {
-    this.position = position
-    this.eulers = [0, phi, theta]
-    this.forwards = vec3.create()
-    this.right = vec3.create()
-    this.up = vec3.create()
+  public rotX: number = 0
+  public rotY: number = 0
+  public rotZ: number = 0
+
+  public fovy: number = (2 * Math.PI) / 5
+  public aspect: number = 16 / 9
+
+  public near: number = 0.1
+  public far: number = 1000
+
+  public lookAt: vec3 = vec3.fromValues(0, 0, 0)
+
+  constructor(aspect: number) {
+    this.aspect = aspect
   }
 
-  update() {
-    this.forwards = [
-      Math.cos(Deg2Rad(this.eulers[2])) * Math.cos(Deg2Rad(this.eulers[1])),
-      Math.sin(Deg2Rad(this.eulers[2])) * Math.cos(Deg2Rad(this.eulers[1])),
-      Math.sin(Deg2Rad(this.eulers[1])),
-    ]
+  public getViewMatrix(): mat4 {
+    let viewMatrix = mat4.create()
 
-    vec3.cross(this.right, this.forwards, [0, 0, 1])
+    mat4.lookAt(viewMatrix, vec3.fromValues(this.x, this.y, this.z), this.lookAt, vec3.fromValues(0, 1, 0))
 
-    vec3.cross(this.up, this.right, this.forwards)
-
-    var target: vec3 = vec3.create()
-    vec3.add(target, this.position, this.forwards)
-
-    this.view = mat4.create()
-    mat4.lookAt(this.view, this.position, target, this.up) // eye = position
+    mat4.rotateX(viewMatrix, viewMatrix, this.rotX)
+    mat4.rotateY(viewMatrix, viewMatrix, this.rotY)
+    mat4.rotateZ(viewMatrix, viewMatrix, this.rotZ)
+    return viewMatrix
   }
 
-  get_view(): mat4 {
-    return this.view
+  public getProjectionMatrix(): mat4 {
+    let projectionMatrix = mat4.create()
+    mat4.perspective(projectionMatrix, this.fovy, this.aspect, this.near, this.far)
+    return projectionMatrix
+  }
+
+  public getCameraViewProjMatrix(): mat4 {
+    const viewProjMatrix = mat4.create()
+    const view = this.getViewMatrix()
+    const proj = this.getProjectionMatrix()
+    mat4.multiply(viewProjMatrix, proj, view)
+    return viewProjMatrix
+  }
+
+  public getCameraPosition(): vec3 {
+    return vec3.fromValues(this.x, this.y, this.z)
   }
 }

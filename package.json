@@ -2,9 +2,9 @@
   "name": "code",
   "version": "1.0.0",
   "description": "",
-  "main": "main/main.js",
+  "main": "framework/main.js",
   "scripts": {
-    "start": "npm run install-missing-dependencies && npm run build && npm run serve",
+    "start": "npm run build && npm run serve",
     "install-missing-dependencies": "npm i",
     "build": "webpack --config webpack.config.js",
     "serve": "live-server --cors"

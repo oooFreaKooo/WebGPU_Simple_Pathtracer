@@ -1,9 +1,7 @@
 import { vec3, vec2 } from "gl-matrix"
-import { CreateGPUBuffer } from "./helper"
+import { CreateGPUBuffer, setTexture } from "./helper"
 
-export class ObjMesh {
-  vbuffer: GPUBuffer
-  bufferLayout: GPUVertexBufferLayout
+export class ObjLoader {
   v: vec3[]
   vt: vec2[]
   vn: vec3[]
@@ -16,89 +14,59 @@ export class ObjMesh {
     this.vn = []
   }
 
-  async initialize(device: GPUDevice, url: string) {
-    // x y z u v nx ny nz
-    await this.readFile(url)
-    this.vertexCount = this.vertices.length / 5
+  async initialize(obj_path: string) {
+    await this.readFile(obj_path)
+    this.vertexCount = this.vertices.length / 8
 
-    this.vbuffer = CreateGPUBuffer(device, this.vertices, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST)
-
-    //now define the vbuffer layout
-    this.bufferLayout = {
-      arrayStride: 32,
-      attributes: [
-        {
-          shaderLocation: 0,
-          format: "float32x3",
-          offset: 0,
-        },
-        {
-          shaderLocation: 1,
-          format: "float32x2",
-          offset: 12,
-        },
-        {
-          shaderLocation: 2,
-          format: "float32x3",
-          offset: 20,
-        },
-      ],
-    }
+    return this.vertices
   }
 
   async readFile(url: string) {
     var result: number[] = []
 
-    const response: Response = await fetch(url)
-    const blob: Blob = await response.blob()
-    const file_contents = await blob.text()
-    const lines = file_contents.split("\n")
+    try {
+      const response: Response = await fetch(url)
+      const file_contents = await response.text()
+      const lines = file_contents.split("\n")
 
-    lines.forEach((line) => {
-      //console.log(line);
-      if (line[0] == "v" && line[1] == " ") {
-        this.read_vertex_data(line)
-      } else if (line[0] == "v" && line[1] == "t") {
-        this.read_texcoord_data(line)
-      } else if (line[0] == "v" && line[1] == "n") {
-        this.read_normal_data(line)
-      } else if (line[0] == "f") {
-        this.read_face_data(line, result)
-      }
-    })
+      lines.forEach((line) => {
+        if (line.startsWith("v ")) {
+          this.read_vertex_data(line)
+        } else if (line.startsWith("vt")) {
+          this.read_texcoord_data(line)
+        } else if (line.startsWith("vn")) {
+          this.read_normal_data(line)
+        } else if (line.startsWith("f")) {
+          this.read_face_data(line, result)
+        }
+      })
 
-    this.vertices = new Float32Array(result)
+      this.vertices = new Float32Array(result)
+    } catch (error) {
+      console.error("Error while reading file:", error)
+    }
   }
 
   read_vertex_data(line: string) {
-    const components = line.split(" ")
-    // ["v", "x", "y", "z"]
-    const new_vertex: vec3 = [Number(components[1]).valueOf(), Number(components[2]).valueOf(), Number(components[3]).valueOf()]
-
-    this.v.push(new_vertex)
+    const [, x, y, z] = line.split(" ").map(parseFloat)
+    this.v.push([x, y, z])
   }
 
   read_texcoord_data(line: string) {
-    const components = line.split(" ")
-    // ["vt", "u", "v"]
-    const new_texcoord: vec2 = [Number(components[1]).valueOf(), Number(components[2]).valueOf()]
-
-    this.vt.push(new_texcoord)
+    const [, u, v] = line.split(" ").map(parseFloat)
+    this.vt.push([u, v])
   }
 
   read_normal_data(line: string) {
-    const components = line.split(" ")
-    // ["vn", "nx", "ny", "nz"]
-    const new_normal: vec3 = [Number(components[1]).valueOf(), Number(components[2]).valueOf(), Number(components[3]).valueOf()]
-
-    this.vn.push(new_normal)
+    const [, nx, ny, nz] = line.split(" ").map(parseFloat)
+    this.vn.push([nx, ny, nz])
   }
 
   read_face_data(line: string, result: number[]) {
     line = line.replace("\n", "")
     const vertex_descriptions = line.split(" ")
     const triangle_count = vertex_descriptions.length - 3 // accounting also for "f"
-    for (var i = 0; i < triangle_count; i++) {
+    for (let i = 0; i < triangle_count; i++) {
       //corner a
       this.read_corner(vertex_descriptions[1], result)
       this.read_corner(vertex_descriptions[2 + i], result)
@@ -107,37 +75,20 @@ export class ObjMesh {
   }
 
   read_corner(vertex_description: string, result: number[]) {
-    const v_vt_vn = vertex_description.split("/")
-    const v = this.v[Number(v_vt_vn[0]).valueOf() - 1]
-    const vt = this.vt[Number(v_vt_vn[1]).valueOf() - 1]
-    const vn = this.vn[Number(v_vt_vn[2]).valueOf() - 1]
-    result.push(v[0])
-    result.push(v[1])
-    result.push(v[2])
-    result.push(vt[0])
-    result.push(vt[1])
-    result.push(vn[0])
-    result.push(vn[1])
-    result.push(vn[2])
+    const [vIndex, vtIndex, vnIndex] = vertex_description.split("/").map(parseFloat)
+    const v = this.v[vIndex - 1]
+    const vt = this.vt[vtIndex - 1]
+    const vn = this.vn[vnIndex - 1]
+    result.push(...v)
+    result.push(...vt)
+    result.push(...vn)
   }
-}
-export const CreateTransformGroupLayout = (device: GPUDevice) => {
-  const transformGroupLayout = device.createBindGroupLayout({
-    entries: [
-      {
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: {},
-      },
-      {
-        binding: 1,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: {
-          type: "read-only-storage",
-          hasDynamicOffset: false,
-        },
-      },
-    ],
-  })
-  return transformGroupLayout
+
+  clear() {
+    this.v = []
+    this.vt = []
+    this.vn = []
+    this.vertices = new Float32Array()
+    this.vertexCount = 0
+  }
 }

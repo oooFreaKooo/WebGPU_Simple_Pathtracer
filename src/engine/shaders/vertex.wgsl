@@ -1,67 +1,50 @@
-struct TransformData {
-    view: mat4x4<f32>,
-    projection: mat4x4<f32>,
+struct Uniforms {     // 4x4 transform matrices
+    transform : mat4x4<f32>,     // translate AND rotate
+    rotate : mat4x4<f32>,       // rotate only
 };
 
-struct ObjectData {
-    model: array<mat4x4<f32>>,
+struct Camera {     // 4x4 transform matrix
+    matrix : mat4x4<f32>,
 };
 
-@binding(0) @group(0) var<uniform> transformUBO: TransformData;
-@binding(1) @group(0) var<storage, read> objects: ObjectData;
+struct Color {        // RGB color
+    color: vec3<f32>,
+};
+            
+// bind model/camera/color buffers
+@group(0) @binding(0) var<uniform> modelTransform    : Uniforms;
+@group(0) @binding(1) var<storage,read> color        : Color;
+@group(0) @binding(2) var<uniform> cameraTransform   : Camera;
 
+            
+// output struct of this vertex shader
 struct VertexOutput {
     @builtin(position) Position : vec4<f32>,
-    @location(0) TexCoord : vec2<f32>,
-    @location(1) Normals : vec3<f32>,
+
+    @location(0) fragColor : vec3<f32>,
+    @location(1) uv : vec2<f32>,
+    @location(2) fragNorm : vec3<f32>,
+    @location(3) fragPos : vec3<f32>,
 };
 
-@vertex
-fn vs_main(
-    @builtin(instance_index) ID: u32,
-    @location(0) vertexPostion: vec3<f32>, 
-    @location(1) vertexTexCoord: vec2<f32>,
-    @location(2) vertexNormals: vec3<f32>) -> VertexOutput {
+// input struct according to vertex buffer stride
+struct VertexInput {
+    @location(0) position : vec3<f32>,
+    @location(1) uv : vec2<f32>,
+    @location(2) norm : vec3<f32>,
 
-    var output : VertexOutput;
-    output.Position = transformUBO.projection * transformUBO.view * objects.model[ID] * vec4<f32>(vertexPostion, 1.0);
-    output.TexCoord = vertexTexCoord;
-    output.Normals = vertexNormals;
+};
+            
+@vertex
+fn vs_main(input: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    var transformedPosition: vec4<f32> = modelTransform.transform * vec4<f32>(input.position, 1.0);
+
+    output.Position = cameraTransform.matrix * transformedPosition;             // transformed with model & camera projection
+    output.fragColor = color.color;                                             // fragment color from buffer
+    output.fragNorm = (modelTransform.rotate * vec4<f32>(input.norm, 1.0)).xyz; // transformed normal vector with model
+    output.uv = input.uv;                                                       // transformed uv
+    output.fragPos = transformedPosition.xyz;                                   // transformed fragment position with model
 
     return output;
-}
-
-@binding(0) @group(1) var myTexture: texture_2d<f32>;
-@binding(1) @group(1) var mySampler: sampler;
-
-@group(2) @binding(0) var<uniform> directionLight : vec3<f32>;
-@group(2) @binding(1) var<uniform> eyePosition : vec3<f32>;
-@group(2) @binding(2) var<uniform> ambientIntensity : f32;
-@group(2) @binding(3) var<uniform> diffuseIntensity : f32;
-@group(2) @binding(4) var<uniform> specularIntensity : f32;
-
-@fragment
-fn fs_main(
-    @location(0) TexCoord : vec2<f32>,
-    @location(1) Normals: vec3<f32>) -> @location(0) vec4<f32> {
-
-    let N:vec3<f32> = normalize(Normals.xyz);         
-    let L:vec3<f32> = normalize(directionLight.xyz);     
-    let V:vec3<f32> = normalize(eyePosition.xyz);          
-    let H:vec3<f32> = normalize(L + V);
-    // Options
-    let shininess:f32 = 25.0;
-    let specularColor = vec3(1.0, 1.0, 1.0);
-    // Diffuse light
-    var diffuse:f32 = diffuseIntensity * max(dot(N, L), 0.0);
-    // Specular light
-    var specular:f32 = specularIntensity * pow(max(dot(N, H),0.0), shininess);
-    // Ambient light
-    let ambient:f32 = ambientIntensity;
-    // Texture 
-    var textureColor:vec3<f32> = (textureSample(myTexture, mySampler, TexCoord)).rgb;
-    // Final Color
-    var finalColor:vec3<f32> = textureColor * (ambient + diffuse) + specularColor * specular; 
-
-    return vec4<f32>(finalColor, 0.5);
 }
