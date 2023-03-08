@@ -44,8 +44,9 @@ export class ObjMesh {
   constructor(vertices: Float32Array, parameter?: ObjParameter, color?: Color, imageBitmap?: ImageBitmap) {
     this.vertices = vertices
     this.setTransformation(parameter)
-
+    // PIPELINE
     this.renderPipeline = CreatePipeline(device, vertex, fragmentShader(imageBitmap != null), this.stride)
+
     this.verticesBuffer = device.createBuffer({
       size: vertices.length * this.stride,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,

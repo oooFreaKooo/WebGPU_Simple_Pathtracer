@@ -22,7 +22,8 @@ export class ObjLoader {
   }
 
   async readFile(url: string) {
-    var result: number[] = []
+    var results: number[][] = []
+    var currentObj: number[] = []
 
     try {
       const response: Response = await fetch(url)
@@ -30,18 +31,30 @@ export class ObjLoader {
       const lines = file_contents.split("\n")
 
       lines.forEach((line) => {
-        if (line.startsWith("v ")) {
+        if (line.startsWith("o ")) {
+          // Start of a new object, add the current one to results and create a new buffer
+          if (currentObj.length > 0) {
+            results.push(currentObj)
+            currentObj = []
+          }
+        } else if (line.startsWith("v ")) {
           this.read_vertex_data(line)
         } else if (line.startsWith("vt")) {
           this.read_texcoord_data(line)
         } else if (line.startsWith("vn")) {
           this.read_normal_data(line)
         } else if (line.startsWith("f")) {
-          this.read_face_data(line, result)
+          this.read_face_data(line, currentObj)
         }
       })
 
-      this.vertices = new Float32Array(result)
+      // Add the last object to the results
+      if (currentObj.length > 0) {
+        results.push(currentObj)
+      }
+
+      // Combine all the object parts into a single buffer
+      this.vertices = new Float32Array(results.flat())
     } catch (error) {
       console.error("Error while reading file:", error)
     }
