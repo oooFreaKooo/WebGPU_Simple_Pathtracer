@@ -1,11 +1,15 @@
 import { Scene } from "../framework/scene"
 import { Camera } from "./camera"
 import { lightDataSize } from "../framework/scene"
-import { CreateDepthStencil } from "./helper"
+import { CreateDepthStencil, CreateUniformBuffer } from "./helper"
+import { Node3d } from "./newnode"
+import { ObjMesh } from "./obj-mesh"
+import { materialDataSize } from "./material"
 
 export var device: GPUDevice
 export var cameraUniformBuffer: GPUBuffer
 export var lightDataBuffer: GPUBuffer
+export var materialDataBuffer: GPUBuffer
 
 export class Renderer {
   readonly swapChainFormat = "bgra8unorm"
@@ -56,15 +60,9 @@ export class Renderer {
       depthStencilAttachment: depthstencil,
     }
 
-    cameraUniformBuffer = device.createBuffer({
-      size: this.matrixSize,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    })
-
-    lightDataBuffer = device.createBuffer({
-      size: lightDataSize,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    })
+    cameraUniformBuffer = CreateUniformBuffer(device, this.matrixSize)
+    lightDataBuffer = CreateUniformBuffer(device, lightDataSize)
+    materialDataBuffer = CreateUniformBuffer(device, materialDataSize)
 
     return (this.initSuccess = true)
   }
@@ -77,7 +75,16 @@ export class Renderer {
     this.updateRenderPassDescriptor()
   }
 
-  public frame(camera: Camera, scene: Scene) {
+  public makeNodes(node: Node3d, nodes: Node3d[]) {
+    if (node instanceof ObjMesh) {
+      nodes.push(node)
+    }
+    for (const child of node.children) {
+      this.makeNodes(child, nodes)
+    }
+  }
+
+  public frame(camera: Camera, scene: Scene, node: Node3d) {
     if (!this.initSuccess) {
       return
     }
@@ -94,14 +101,25 @@ export class Renderer {
 
     // LIGHT BUFFER
     const lightPosition = scene.getPointLightPosition()
+    //const lightColor = scene.getPointLightColor()
+    const eyePosition = camera.getCameraEye()
+
     device.queue.writeBuffer(lightDataBuffer, 0, lightPosition.buffer, lightPosition.byteOffset, lightPosition.byteLength)
+    //device.queue.writeBuffer(lightDataBuffer, 16, lightColor.buffer, lightColor.byteOffset, lightColor.byteLength)
+    device.queue.writeBuffer(lightDataBuffer, 16, eyePosition.buffer, eyePosition.byteOffset, eyePosition.byteLength)
     ;(this.renderPassDescriptor.colorAttachments as [GPURenderPassColorAttachment])[0].view = this.context.getCurrentTexture().createView()
 
     const commandEncoder = device.createCommandEncoder()
     const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor)
+    const nodes: Node3d[] = []
+    this.makeNodes(node, nodes)
 
-    for (let object of scene.getObjects()) {
+    /*     for (let object of scene.getObjects()) {
       object.draw(passEncoder, device)
+    } */
+
+    for (let child of nodes) {
+      if (child instanceof ObjMesh) child.draw(passEncoder, device)
     }
 
     passEncoder.end()

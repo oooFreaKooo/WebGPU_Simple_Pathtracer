@@ -1,51 +1,58 @@
+import { vec3 } from "gl-matrix"
 import { Camera } from "../engine/camera"
 
-export class CameraControls {
-  private mouseDown = false
-  private lastMouseX = -1
-  private lastMouseY = -1
+export class Controls {
+  private camera: Camera
+  private keyboardMap: { [key: string]: boolean }
 
-  constructor(private camera: Camera, private canvas: HTMLCanvasElement) {
-    // ZOOM
-    canvas.addEventListener("wheel", (event: WheelEvent) => {
-      const delta = event.deltaY / 100
-      // no negative camera.z
-      if (camera.z > -delta) {
-        camera.z += event.deltaY / 100
-      }
-    })
+  constructor(camera: Camera) {
+    this.camera = camera
+    this.keyboardMap = {}
 
-    // MOUSE DRAG
-    canvas.addEventListener("mousedown", (event: MouseEvent) => {
-      this.mouseDown = true
+    window.addEventListener("keydown", this.onKeyDown.bind(this))
+    window.addEventListener("keyup", this.onKeyUp.bind(this))
+    window.addEventListener("wheel", this.onMouseWheel.bind(this))
+  }
 
-      this.lastMouseX = event.pageX
-      this.lastMouseY = event.pageY
-    })
-    canvas.addEventListener("mouseup", (event: MouseEvent) => {
-      this.mouseDown = false
-    })
-    canvas.addEventListener("mousemove", (event: MouseEvent) => {
-      if (!this.mouseDown) {
-        return
-      }
+  private onKeyDown(event: KeyboardEvent) {
+    this.keyboardMap[event.key] = true
+  }
 
-      var mousex = event.pageX
-      var mousey = event.pageY
+  private onKeyUp(event: KeyboardEvent) {
+    this.keyboardMap[event.key] = false
+  }
 
-      if (this.lastMouseX > 0 && this.lastMouseY > 0) {
-        const roty = mousex - this.lastMouseX
-        const rotx = mousey - this.lastMouseY
+  private onMouseWheel(event: WheelEvent) {
+    const zoomAmount = event.deltaY > 0 ? 1 : -1 // determine the zoom direction
+    this.camera.y += zoomAmount // adjust the camera's y position based on the zoom direction
+  }
 
-        camera.rotY += roty / 100
-        camera.rotX += rotx / 100
-      }
+  public update() {
+    if (this.keyboardMap["a"]) {
+      this.camera.x -= 1
+    }
 
-      this.lastMouseX = mousex
-      this.lastMouseY = mousey
-    })
+    if (this.keyboardMap["d"]) {
+      this.camera.x += 1
+    }
+
+    if (this.keyboardMap["w"]) {
+      this.camera.z -= 1
+    }
+
+    if (this.keyboardMap["s"]) {
+      this.camera.z += 1
+    }
+    if (this.keyboardMap["q"]) {
+      this.camera.yaw += 0.1 // rotate camera left
+    }
+
+    if (this.keyboardMap["e"]) {
+      this.camera.yaw -= 0.1 // rotate camera right
+    }
   }
 }
+
 // Camera always move with mouse movement:
 /* canvas.addEventListener("mousemove", (event: MouseEvent) => {
   const mousex = event.pageX

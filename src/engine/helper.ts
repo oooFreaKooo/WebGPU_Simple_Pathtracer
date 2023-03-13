@@ -18,6 +18,7 @@ export interface Color {
   r: number
   g: number
   b: number
+  a: number
 }
 
 export function CreatePipeline(device: GPUDevice, vertexShader: string, fragmentShader: string, stride: number): GPURenderPipeline {
@@ -62,6 +63,19 @@ export function CreatePipeline(device: GPUDevice, vertexShader: string, fragment
       targets: [
         {
           format: "bgra8unorm" as GPUTextureFormat,
+          blend: {
+            color: {
+              srcFactor: "src-alpha",
+              dstFactor: "one-minus-src-alpha",
+              operation: "add",
+            },
+
+            alpha: {
+              srcFactor: "src-alpha",
+              dstFactor: "one-minus-src-alpha",
+              operation: "add",
+            },
+          },
         },
       ],
     },

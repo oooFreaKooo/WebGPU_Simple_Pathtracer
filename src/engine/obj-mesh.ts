@@ -1,12 +1,13 @@
 import { vec3, vec2, mat4 } from "gl-matrix"
 import { Color, CreateGPUBuffer, CreatePipeline, CreateStorageBuffer, CreateUniformBuffer, ObjParameter } from "./helper"
-import { device, cameraUniformBuffer, lightDataBuffer } from "./renderer"
+import { device, cameraUniformBuffer, lightDataBuffer, materialDataBuffer } from "./renderer"
 import { lightDataSize } from "../framework/scene"
 import vertex from "./shaders/vertex.wgsl"
-import { fragmentShader } from "./shaders/fragment"
-import { ObjLoader } from "./obj-loader"
+import fragment from "./shaders/fragment.wgsl"
+import { Node3d } from "./newnode"
+import { Material, materialDataSize } from "./material"
 
-export class ObjMesh {
+export class ObjMesh extends Node3d {
   public x: number = 0
   public y: number = 0
   public z: number = 0
@@ -20,10 +21,13 @@ export class ObjMesh {
   public scaleZ: number = 1
 
   private defaultColor: Color = {
-    r: 0.9,
-    g: 0.6,
-    b: 0.1,
+    r: 0.5,
+    g: 0.5,
+    b: 0.5,
+    a: 1.0,
   }
+
+  private defaultMaterial = new Material()
 
   private matrixSize = 4 * 16 // 4x4 matrix
   private offset = 256 // transformationBindGroup offset must be 256-byte aligned
@@ -41,11 +45,16 @@ export class ObjMesh {
   private perVertex = 3 + 3 + 2 // 3 for position, 3 for normal, 2 for uv, 3 for color
   private stride = this.perVertex * 4 // stride = byte length of vertex data array
 
-  constructor(vertices: Float32Array, parameter?: ObjParameter, color?: Color, imageBitmap?: ImageBitmap) {
+  constructor(vertices: Float32Array, material?: Material, parameter?: ObjParameter, color?: Color) {
+    super(parameter)
+    super.rotate(this.rotX, this.rotY, this.rotZ)
+    super.translate(this.x, this.y, this.z)
+    super.scale(this.scaleX, this.scaleY, this.scaleZ)
+
     this.vertices = vertices
     this.setTransformation(parameter)
     // PIPELINE
-    this.renderPipeline = CreatePipeline(device, vertex, fragmentShader(imageBitmap != null), this.stride)
+    this.renderPipeline = CreatePipeline(device, vertex, fragment, this.stride)
 
     this.verticesBuffer = device.createBuffer({
       size: vertices.length * this.stride,
@@ -73,8 +82,33 @@ export class ObjMesh {
     this.colorBuffer = CreateStorageBuffer(device, Float32Array.BYTES_PER_ELEMENT * 4)
 
     const colorMapping = new Float32Array(this.colorBuffer.getMappedRange())
-    colorMapping.set(color ? [color.r, color.g, color.b] : [this.defaultColor.r, this.defaultColor.g, this.defaultColor.b], 0)
+    colorMapping.set(
+      color ? [color.r, color.g, color.b, color.a] : [this.defaultColor.r, this.defaultColor.g, this.defaultColor.b, this.defaultColor.a],
+      0,
+    )
     this.colorBuffer.unmap()
+
+    // MATERIAL BUFFER
+    const shininess = material ? material.getShininess() : this.defaultMaterial.getShininess()
+    device.queue.writeBuffer(materialDataBuffer, 0, shininess.buffer, shininess.byteOffset, shininess.byteLength)
+
+    //const ambient = material ? material.getAmbient() : this.defaultMaterial.getAmbient()
+    //const diffuse = material ? material.getDiffuse() : this.defaultMaterial.getDiffuse()
+    //const specular = material ? material.getSpecular() : this.defaultMaterial.getSpecular()
+
+    //device.queue.writeBuffer(materialDataBuffer, 0, ambient.buffer, ambient.byteOffset, ambient.byteLength)
+    //device.queue.writeBuffer(materialDataBuffer, 16, diffuse.buffer, diffuse.byteOffset, diffuse.byteLength)
+    //device.queue.writeBuffer(materialDataBuffer, 32, specular.buffer, specular.byteOffset, specular.byteLength)
+
+    const diffuseBitmap = material ? material.getDiffuseTexture() : this.defaultMaterial.getDiffuseTexture()
+    let diffuseTexture = device.createTexture({
+      size: [diffuseBitmap.width, diffuseBitmap.height],
+      format: "rgba8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    })
+    const diffuseSampler = device.createSampler()
+    device.queue.copyExternalImageToTexture({ source: diffuseBitmap }, { texture: diffuseTexture }, [diffuseBitmap.width, diffuseBitmap.height])
+
     const entries = [
       {
         binding: 0,
@@ -108,27 +142,23 @@ export class ObjMesh {
           size: lightDataSize,
         },
       },
-    ]
-
-    // Texture
-    if (imageBitmap) {
-      let texture = device.createTexture({
-        size: [imageBitmap.width, imageBitmap.height],
-        format: "rgba8unorm",
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-      })
-      const sampler = device.createSampler()
-      device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: texture }, [imageBitmap.width, imageBitmap.height])
-
-      entries.push({
+      {
         binding: 4,
-        resource: sampler,
-      } as any)
-      entries.push({
+        resource: {
+          buffer: materialDataBuffer,
+          offset: 0,
+          size: materialDataSize,
+        },
+      },
+      {
         binding: 5,
-        resource: texture.createView(),
-      } as any)
-    }
+        resource: diffuseSampler,
+      },
+      {
+        binding: 6,
+        resource: diffuseTexture.createView(),
+      },
+    ]
 
     this.transformationBindGroup = device.createBindGroup({
       layout: this.renderPipeline.getBindGroupLayout(0),
