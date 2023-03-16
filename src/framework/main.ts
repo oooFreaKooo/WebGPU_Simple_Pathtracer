@@ -1,6 +1,6 @@
 import { ObjMesh } from "../engine/obj-mesh"
 import { ObjLoader } from "../engine/obj-loader"
-import { Scene } from "./scene"
+import { Light } from "./lighting"
 import { Camera } from "../engine/camera"
 import { Renderer } from "../engine/renderer"
 import { setTexture } from "../engine/helper"
@@ -23,7 +23,6 @@ async function mainFunc() {
   camera.y = 10
 
   // ASSETS
-  const scene = new Scene()
   const renderer = new Renderer()
   const obj = new ObjLoader()
   const root = new Node3d()
@@ -45,7 +44,7 @@ async function mainFunc() {
   const textureSpider = await setTexture("./img/despacitospidertx.png")
   const textureHat = await setTexture("./img/cowboy_hat.png")
   const textureGround = await setTexture("./img/moon/1_Base_Color.jpg")
-  const textureSky = await setTexture("./img/background.jpg")
+  const textureSky = await setTexture("./img/milkyway.jpg")
   const textureLightbulb = await setTexture("./img/lightbulb.png")
 
   //SET MATERIAL
@@ -56,6 +55,8 @@ async function mainFunc() {
   const hatMaterial = new Material(textureHat, 40.0)
   const lightbulbMaterial = new Material(textureLightbulb)
 
+  const lights = new Light(3)
+
   // INITIALIZE RENDERER
   renderer.init(canvas).then((success) => {
     if (!success) return
@@ -63,20 +64,24 @@ async function mainFunc() {
 
     const spider = new ObjMesh(spiderData, spiderMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
 
-    const lightbulb = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
+    let lightbulb1 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
+    const lightbulb2 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
+    const lightbulb3 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
+    const lightbulb4 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
     const ground = new ObjMesh(groundData, groundMaterial, { scaleX: 110.0, scaleY: 110.0, scaleZ: 110.0 })
-    const skybox = new ObjMesh(skyboxData, skyboxMaterial, { scaleX: 20.0, scaleY: 20.0, scaleZ: 20.0 })
+    const skybox = new ObjMesh(skyboxData, skyboxMaterial, { scaleX: 200.0, scaleY: 200.0, scaleZ: 200.0 })
+
+    root.attach(ground)
+    root.attach(lightbulb1)
+    root.attach(lightbulb2)
+    root.attach(lightbulb3)
+    ground.attach(skybox)
+    ground.attach(spider)
+
+    spider.translate(0.0, 8.0, 0.0)
 
     const spiderRadius = 5.0 // radius of circle
     const spiderCount = 12 // number of spiders to create
-
-    root.attach(skybox)
-    root.attach(ground)
-
-    ground.attach(spider)
-    spider.attach(lightbulb)
-
-    spider.translate(0.0, 8.0, 0.0)
 
     for (let i = 0; i < spiderCount; i++) {
       const smallSpider = new ObjMesh(spiderData, spiderMaterial, {
@@ -114,22 +119,65 @@ async function mainFunc() {
       //spider.translate(Math.sin(now), 0, Math.sin(now))
 
       // MOVE LIGHT AND LIGHT BULB
-      scene.pointLightPosition[0] = Math.cos(now) * 10
-      scene.pointLightPosition[1] = 8
-      scene.pointLightPosition[2] = Math.sin(now) * 10
-      lightbulb.x = scene.pointLightPosition[0]
-      lightbulb.y = scene.pointLightPosition[1] - 0.5
-      lightbulb.z = scene.pointLightPosition[2]
+
+      lights.setPointLightPosition(0, [Math.cos(now) * 15, 4, Math.sin(now) * 15])
+      lights.setPointLightPosition(1, [Math.cos(now) * 30, 4, Math.cos(now) * 30])
+      lights.setPointLightPosition(2, [Math.sin(now) * 45, 4, Math.sin(now) * 45])
+
+      lightbulb1.x = lights.getPointLightPosition(0).x
+      lightbulb1.y = lights.getPointLightPosition(0).y
+      lightbulb1.z = lights.getPointLightPosition(0).z
+
+      lightbulb2.x = lights.getPointLightPosition(1).x
+      lightbulb2.y = lights.getPointLightPosition(1).y
+      lightbulb2.z = lights.getPointLightPosition(1).z
+
+      lightbulb3.x = lights.getPointLightPosition(2).x
+      lightbulb3.y = lights.getPointLightPosition(2).y
+      lightbulb3.z = lights.getPointLightPosition(2).z
+
+      const cameracoords = camera.getCameraEye()
+      skybox.x = cameracoords[0]
+      skybox.y = cameracoords[1]
+      skybox.z = cameracoords[2]
 
       //for (let c of objectGroup_1) {
       //  c.rotate(0, Math.cos(now) / 100, 0)
       //}
 
       // RENDER
-      renderer.frame(camera, scene, root)
+      renderer.frame(camera, lights, root)
       requestAnimationFrame(doFrame)
     }
     requestAnimationFrame(doFrame)
   })
 }
 mainFunc()
+
+/*     let mouseDown = false
+    let lastMouseX: number
+    let lastMouseY: number
+
+    canvas.addEventListener("mousedown", (event) => {
+      mouseDown = true
+      lastMouseX = event.clientX
+      lastMouseY = event.clientY
+    })
+
+    canvas.addEventListener("mouseup", () => {
+      mouseDown = false
+    })
+
+    canvas.addEventListener("mousemove", (event) => {
+      if (!mouseDown) {
+        return
+      }
+
+      const deltaX = event.clientX - lastMouseX
+      const deltaY = event.clientY - lastMouseY
+
+      spider.translate(deltaX / 10, -deltaY / 10, 0)
+
+      lastMouseX = event.clientX
+      lastMouseY = event.clientY
+    }) */

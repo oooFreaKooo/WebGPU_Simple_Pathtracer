@@ -13,6 +13,11 @@ export interface ObjParameter {
   scaleY?: number
   scaleZ?: number
 }
+export interface LightParameter {
+  x: number
+  y: number
+  z: number
+}
 
 export interface Color {
   r: number

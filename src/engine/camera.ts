@@ -15,7 +15,7 @@ export class Camera {
   public aspect: number = 16 / 9
 
   public near: number = 0.1
-  public far: number = 1000
+  public far: number = 1000000
 
   public lookAt: vec3 = vec3.create()
 

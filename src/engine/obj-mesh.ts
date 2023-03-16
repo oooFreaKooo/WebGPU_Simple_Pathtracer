@@ -1,7 +1,7 @@
 import { vec3, vec2, mat4 } from "gl-matrix"
 import { Color, CreateGPUBuffer, CreatePipeline, CreateStorageBuffer, CreateUniformBuffer, ObjParameter } from "./helper"
-import { device, cameraUniformBuffer, lightDataBuffer, materialDataBuffer } from "./renderer"
-import { lightDataSize } from "../framework/scene"
+import { device, cameraUniformBuffer, lightDataBuffer, materialDataBuffer, cameraPosBuffer } from "./renderer"
+import { lightDataSize } from "../framework/lighting"
 import vertex from "./shaders/vertex.wgsl"
 import fragment from "./shaders/fragment.wgsl"
 import { Node3d } from "./newnode"
@@ -145,17 +145,25 @@ export class ObjMesh extends Node3d {
       {
         binding: 4,
         resource: {
+          buffer: cameraPosBuffer,
+          offset: 0,
+          size: 16,
+        },
+      },
+      {
+        binding: 5,
+        resource: {
           buffer: materialDataBuffer,
           offset: 0,
           size: materialDataSize,
         },
       },
       {
-        binding: 5,
+        binding: 6,
         resource: diffuseSampler,
       },
       {
-        binding: 6,
+        binding: 7,
         resource: diffuseTexture.createView(),
       },
     ]

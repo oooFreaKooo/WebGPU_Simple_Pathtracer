@@ -1,9 +1,11 @@
 import { mat4 } from "gl-matrix"
+import { Light } from "../framework/lighting"
 import { ObjParameter } from "./helper"
 import { ObjMesh } from "./obj-mesh"
 
 export class Node3d {
   public children: ObjMesh[] = []
+  public lights: Light[] = []
   public parent: Node3d | undefined = undefined
   public x: number = 0
   public y: number = 0
@@ -43,6 +45,10 @@ export class Node3d {
       this.children.splice(index, 1)
       child.parent = undefined
     }
+  }
+
+  public attachLight(light: Light): void {
+    this.lights.push(light)
   }
 
   public rotate(x: number, y: number, z: number): void {
