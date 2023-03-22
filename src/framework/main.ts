@@ -17,7 +17,7 @@ async function mainFunc() {
   document.body.appendChild(canvas)
 
   // CAMERA + CONTROLS
-  const camera = new Camera([5, 3, 0], 0, 0)
+  const camera = new Camera([10, 3, 10], 20, 20)
   const cameraControls = new Controls(canvas, camera)
 
   // ASSETS
@@ -31,8 +31,6 @@ async function mainFunc() {
   obj.clear()
   const lightbulbData = await obj.initialize("./models/lightbulb.obj")
   obj.clear()
-  const hatData = await obj.initialize("./models/cowboy_hat.obj")
-  obj.clear()
   const groundData = await obj.initialize("./models/building.obj")
   obj.clear()
   const skyboxData = await obj.initialize("./models/background.obj")
@@ -40,21 +38,41 @@ async function mainFunc() {
   // SET TEXTURES
 
   const textureSpider = await setTexture("./img/despacitospidertx.png")
-  const textureHat = await setTexture("./img/cowboy_hat.png")
   const textureGround = await setTexture("./img/building.jpg")
   const textureSky = await setTexture("./img/milkyway.jpg")
   const textureLightbulb = await setTexture("./img/lightbulb.png")
 
   //SET MATERIAL
 
-  const spiderMaterial = new Material(textureSpider, 0.3, 0.1, 0.1, 100)
-  const skyboxMaterial = new Material(textureSky)
-  const groundMaterial = new Material(textureGround)
-  const hatMaterial = new Material(textureHat, 40.0)
+  const spiderMaterial = new Material(textureSpider, {
+    diffuse: 0.9,
+    specular: 0.9,
+    ambient: 0.9,
+    shininess: 100.0,
+  })
+  const skyboxMaterial = new Material(textureSky, {
+    diffuse: 0.01,
+    specular: 0.01,
+    ambient: 0.01,
+    shininess: 0.01,
+  })
+  const groundMaterial = new Material(textureGround, {
+    diffuse: 100.1,
+    specular: 11.2,
+    ambient: 0.2,
+  })
   const lightbulbMaterial = new Material(textureLightbulb)
 
   const numLights = 3
-  const lights = new Light(numLights)
+  const lights = new Light(numLights, [0.1, 0.1, 0.1])
+
+  lights.setAmbientColor([0.1, 0.1, 0.1])
+  lights.setDiffuseColor(0, [0.9, 0.9, 0.9])
+  lights.setDiffuseColor(1, [0.9, 0.0, 0.0])
+  lights.setDiffuseColor(2, [0.5, 1, 1])
+  lights.setSpecularColor(0, [0.9, 0.9, 0.9])
+  lights.setSpecularColor(1, [0.9, 0.0, 0.0])
+  lights.setSpecularColor(2, [0.5, 1, 1])
 
   // INITIALIZE RENDERER
   renderer.init(canvas, numLights).then((success) => {
@@ -83,21 +101,10 @@ async function mainFunc() {
         scaleX: 0.1,
         scaleY: 0.1,
         scaleZ: 0.1,
-        x: Math.cos((Math.PI * i) / spiderCount) * spiderRadius,
+        x: Math.cos(Math.PI / spiderCount) * spiderRadius,
         y: 1.0,
-        z: Math.sin((Math.PI * i) / spiderCount) * spiderRadius,
+        z: Math.sin(Math.PI / spiderCount) * spiderRadius,
       })
-      for (let j = 0; j < spiderCount / 2; j++) {
-        const tinySpider = new ObjMesh(spiderData, spiderMaterial, {
-          scaleX: 0.025,
-          scaleY: 0.025,
-          scaleZ: 0.025,
-          x: (Math.cos((Math.PI * i) / spiderCount) * spiderRadius) / 2,
-          y: 5.0,
-          z: (Math.sin((Math.PI * i) / spiderCount) * spiderRadius) / 2,
-        })
-        smallSpider.attach(tinySpider)
-      }
       spider.attach(smallSpider)
     }
     spider.translate(0, 5, 0)
@@ -117,7 +124,7 @@ async function mainFunc() {
         let radius = 20 * Math.cos(now) // set the radius of the orbit
         let speed = i + Math.sin(now) // set the speed of the orbit
         child.x = radius * Math.sin(speed + now)
-        child.y = (radius / 2) * Math.cos(speed + Math.PI + now)
+        child.y = spider.y
         child.z = radius * Math.cos(speed + now)
       }
 
@@ -127,8 +134,8 @@ async function mainFunc() {
       // MOVE LIGHT AND LIGHT BULB
 
       lights.setPointLightPosition(0, [Math.cos(now) * 10, 4, -Math.sin(now) * 10])
-      lights.setPointLightPosition(1, [Math.cos(now) * 20, 4, Math.sin(now) * 20])
-      lights.setPointLightPosition(2, [Math.cos(now) * 30, 8, Math.sin(now) * 30])
+      lights.setPointLightPosition(1, [Math.cos(now) * 10, 4, Math.sin(now) * 10])
+      lights.setPointLightPosition(2, [Math.cos(now) * 25, 8, Math.sin(now) * 25])
 
       lightbulb1.x = lights.getPointLightPosition(0)[0]
       lightbulb1.y = lights.getPointLightPosition(0)[1]

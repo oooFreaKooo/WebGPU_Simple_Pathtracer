@@ -81,11 +81,11 @@ export class Controls {
         break
       case KeyCodes.A:
         this.playerStoppedMoving = false
-        this.right_amount = -0.05
+        this.right_amount = -0.07
         break
       case KeyCodes.D:
         this.playerStoppedMoving = false
-        this.right_amount = 0.05
+        this.right_amount = 0.07
 
         break
       case KeyCodes.SPACE:

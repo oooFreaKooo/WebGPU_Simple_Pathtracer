@@ -1,10 +1,21 @@
 import { vec3, vec2, mat4 } from "gl-matrix"
 import { Color, CreateGPUBuffer, CreatePipeline, CreateStorageBuffer, CreateUniformBuffer, ObjParameter } from "./helper"
-import { device, cameraUniformBuffer, lightDataBuffer, materialDataBuffer, cameraPosBuffer } from "./renderer"
+import {
+  device,
+  cameraUniformBuffer,
+  cameraPosBuffer,
+  ambientLightBuffer,
+  diffuseLightBuffer,
+  specularLightBuffer,
+  positionLightBuffer,
+  materialDataBuffer,
+} from "./renderer"
 import vertex from "./shaders/vertex.wgsl"
 import fragment from "./shaders/fragment.wgsl"
 import { Node3d } from "./newnode"
-import { Material, materialDataSize } from "./material"
+import { Material } from "./material"
+
+export var objectCount = -1
 
 export class ObjMesh extends Node3d {
   public x: number = 0
@@ -41,10 +52,11 @@ export class ObjMesh extends Node3d {
   private verticesBuffer: GPUBuffer
   private colorBuffer: GPUBuffer
   private vertices: Float32Array
-  private perVertex = 3 + 3 + 2 // 3 for position, 3 for normal, 2 for uv, 3 for color
+  private perVertex = 3 + 3 + 2 // 3 for position, 3 for normal, 2 for uv
   private stride = this.perVertex * 4 // stride = byte length of vertex data array
 
   constructor(vertices: Float32Array, material?: Material, parameter?: ObjParameter, color?: Color) {
+    objectCount++
     super(parameter)
     super.rotate(this.rotX, this.rotY, this.rotZ)
     super.translate(this.x, this.y, this.z)
@@ -88,14 +100,15 @@ export class ObjMesh extends Node3d {
     this.colorBuffer.unmap()
 
     // MATERIAL BUFFER
+
     const diffuse = material ? material.getDiffuse() : this.defaultMaterial.getDiffuse()
     const specular = material ? material.getSpecular() : this.defaultMaterial.getSpecular()
     const ambient = material ? material.getAmbient() : this.defaultMaterial.getAmbient()
     const shininess = material ? material.getShininess() : this.defaultMaterial.getShininess()
-    device.queue.writeBuffer(materialDataBuffer, 0, diffuse.buffer, diffuse.byteOffset, diffuse.byteLength)
-    device.queue.writeBuffer(materialDataBuffer, 4, specular.buffer, specular.byteOffset, specular.byteLength)
-    device.queue.writeBuffer(materialDataBuffer, 8, ambient.buffer, ambient.byteOffset, ambient.byteLength)
-    device.queue.writeBuffer(materialDataBuffer, 12, shininess.buffer, shininess.byteOffset, shininess.byteLength)
+    device.queue.writeBuffer(materialDataBuffer, 0 + objectCount * 16, diffuse.buffer)
+    device.queue.writeBuffer(materialDataBuffer, 4 + objectCount * 16, specular.buffer)
+    device.queue.writeBuffer(materialDataBuffer, 8 + objectCount * 16, ambient.buffer)
+    device.queue.writeBuffer(materialDataBuffer, 12 + objectCount * 16, shininess.buffer)
 
     const diffuseBitmap = material ? material.getDiffuseTexture() : this.defaultMaterial.getDiffuseTexture()
     let diffuseTexture = device.createTexture({
@@ -134,32 +147,49 @@ export class ObjMesh extends Node3d {
       {
         binding: 3,
         resource: {
-          buffer: lightDataBuffer,
-        },
-      },
-      {
-        binding: 4,
-        resource: {
           buffer: cameraPosBuffer,
           offset: 0,
           size: 16,
         },
       },
       {
-        binding: 5,
+        binding: 4,
         resource: {
           buffer: materialDataBuffer,
           offset: 0,
-          size: materialDataSize,
         },
       },
       {
-        binding: 6,
+        binding: 5,
         resource: diffuseSampler,
       },
       {
-        binding: 7,
+        binding: 6,
         resource: diffuseTexture.createView(),
+      },
+      {
+        binding: 7,
+        resource: {
+          buffer: ambientLightBuffer,
+        },
+      },
+      {
+        binding: 8,
+        resource: {
+          buffer: diffuseLightBuffer,
+        },
+      },
+      {
+        binding: 9,
+        resource: {
+          buffer: specularLightBuffer,
+        },
+      },
+      {
+        binding: 10,
+        resource: {
+          buffer: positionLightBuffer,
+        },
       },
     ]
 

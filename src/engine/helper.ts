@@ -1,4 +1,4 @@
-import { mat4 } from "gl-matrix"
+import { mat4, vec3 } from "gl-matrix"
 
 export interface ObjParameter {
   x?: number
@@ -13,10 +13,11 @@ export interface ObjParameter {
   scaleY?: number
   scaleZ?: number
 }
-export interface LightParameter {
-  x: number
-  y: number
-  z: number
+export interface MaterialParameter {
+  ambient?: number
+  diffuse?: number
+  specular?: number
+  shininess?: number
 }
 
 export interface Color {

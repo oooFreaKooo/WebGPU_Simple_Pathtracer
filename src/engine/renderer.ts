@@ -3,11 +3,15 @@ import { Camera } from "./camera"
 import { CreateDepthStencil, CreateUniformBuffer } from "./helper"
 import { Node3d } from "./newnode"
 import { ObjMesh } from "./obj-mesh"
-import { materialDataSize } from "./material"
+import { Material } from "./material"
 
 export var device: GPUDevice
 export var cameraUniformBuffer: GPUBuffer
-export var lightDataBuffer: GPUBuffer
+
+export var ambientLightBuffer: GPUBuffer
+export var diffuseLightBuffer: GPUBuffer
+export var specularLightBuffer: GPUBuffer
+export var positionLightBuffer: GPUBuffer
 export var cameraPosBuffer: GPUBuffer
 export var materialDataBuffer: GPUBuffer
 export var lightDataSize: number
@@ -63,10 +67,13 @@ export class Renderer {
 
     cameraUniformBuffer = CreateUniformBuffer(device, this.matrixSize)
     cameraPosBuffer = CreateUniformBuffer(device, 16)
-    materialDataBuffer = CreateUniformBuffer(device, materialDataSize)
+    materialDataBuffer = CreateUniformBuffer(device, 400)
 
-    lightDataSize = numLights * 12 * 3
-    lightDataBuffer = CreateUniformBuffer(device, lightDataSize)
+    lightDataSize = numLights * 16
+    ambientLightBuffer = CreateUniformBuffer(device, 16)
+    diffuseLightBuffer = CreateUniformBuffer(device, lightDataSize)
+    specularLightBuffer = CreateUniformBuffer(device, lightDataSize)
+    positionLightBuffer = CreateUniformBuffer(device, lightDataSize)
 
     return (this.initSuccess = true)
   }
@@ -108,12 +115,23 @@ export class Renderer {
     device.queue.writeBuffer(cameraPosBuffer, 0, eyePosition.buffer, eyePosition.byteOffset, eyePosition.byteLength)
 
     // LIGHT BUFFER
+    const ambient = light.getAmbientColor()
+    const ambData = new Float32Array([ambient[0], ambient[1], ambient[2]])
+    device.queue.writeBuffer(ambientLightBuffer, 0, ambData.buffer)
+
     for (let i = 0; i < light.getNumLights(); i++) {
+      const diffuse = light.getDiffuseColor(i)
+      const specular = light.getSpecularColor(i)
       const position = light.getPointLightPosition(i)
-      const lightDataArray = [position[0], position[1], position[2]]
-      const lightData = new Float32Array(lightDataArray)
-      device.queue.writeBuffer(lightDataBuffer, i * 16, lightData.buffer)
+      const difData = new Float32Array([diffuse[0], diffuse[1], diffuse[2]])
+      const specData = new Float32Array([specular[0], specular[1], specular[2]])
+      const posData = new Float32Array([position[0], position[1], position[2]])
+
+      device.queue.writeBuffer(diffuseLightBuffer, i * 16, difData)
+      device.queue.writeBuffer(specularLightBuffer, i * 16, specData)
+      device.queue.writeBuffer(positionLightBuffer, i * 16, posData)
     }
+
     ;(this.renderPassDescriptor.colorAttachments as [GPURenderPassColorAttachment])[0].view = this.context.getCurrentTexture().createView()
 
     const commandEncoder = device.createCommandEncoder()
