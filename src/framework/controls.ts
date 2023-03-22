@@ -1,76 +1,4 @@
-import { vec3 } from "gl-matrix"
 import { Camera } from "../engine/camera"
-
-export class Controls {
-  private camera: Camera
-  private keyboardMap: { [key: string]: boolean }
-
-  constructor(camera: Camera) {
-    this.camera = camera
-    this.keyboardMap = {}
-
-    window.addEventListener("keydown", this.onKeyDown.bind(this))
-    window.addEventListener("keyup", this.onKeyUp.bind(this))
-    window.addEventListener("wheel", this.onMouseWheel.bind(this))
-  }
-
-  private onKeyDown(event: KeyboardEvent) {
-    this.keyboardMap[event.key] = true
-  }
-
-  private onKeyUp(event: KeyboardEvent) {
-    this.keyboardMap[event.key] = false
-  }
-
-  private onMouseWheel(event: WheelEvent) {
-    const zoomAmount = event.deltaY > 0 ? 1 : -1 // determine the zoom direction
-    this.camera.y += zoomAmount // adjust the camera's y position based on the zoom direction
-  }
-
-  public update() {
-    if (this.keyboardMap["a"]) {
-      this.camera.x -= 1
-    }
-
-    if (this.keyboardMap["d"]) {
-      this.camera.x += 1
-    }
-
-    if (this.keyboardMap["w"]) {
-      this.camera.z -= 1
-    }
-
-    if (this.keyboardMap["s"]) {
-      this.camera.z += 1
-    }
-    if (this.keyboardMap["q"]) {
-      this.camera.yaw += 0.1 // rotate camera left
-    }
-
-    if (this.keyboardMap["e"]) {
-      this.camera.yaw -= 0.1 // rotate camera right
-    }
-  }
-}
-
-// Camera always move with mouse movement:
-/* canvas.addEventListener("mousemove", (event: MouseEvent) => {
-  const mousex = event.pageX
-  const mousey = event.pageY
-
-  if (this.lastMouseX > 0 && this.lastMouseY > 0) {
-    const roty = mousex - this.lastMouseX
-    const rotx = mousey - this.lastMouseY
-
-    camera.rotY += roty / 100
-    camera.rotX += rotx / 100
-  }
-
-  this.lastMouseX = mousex
-  this.lastMouseY = mousey
-}) */
-
-/* import { Scene } from "../framework/scene"
 import $ from "jquery"
 import { vec3 } from "gl-matrix"
 
@@ -86,10 +14,7 @@ enum KeyCodes {
 
 export class Controls {
   canvas: HTMLCanvasElement
-  spaceSource: HTMLAudioElement
-  gainNode: GainNode
-  audioContext: AudioContext
-  private scene: Scene
+  private camera: Camera
 
   //Labels for displaying state
   private readonly keyLabel: HTMLElement
@@ -101,12 +26,12 @@ export class Controls {
   up_amount: number
   shiftKeyHeld: boolean
   canJump: boolean
-  jetpackVolume = 0
-  private readonly step = 0.05
+  playerStoppedMoving: boolean
+  isMouseActive = false
 
-  constructor(canvas: HTMLCanvasElement, scene: Scene) {
+  constructor(canvas: HTMLCanvasElement, camera: Camera) {
     this.canvas = canvas
-    this.scene = scene
+    this.camera = camera
     this.keyLabel = document.getElementById("key-label") as HTMLElement
     this.mouseXLabel = document.getElementById("mouse-x-label") as HTMLElement
     this.mouseYLabel = document.getElementById("mouse-y-label") as HTMLElement
@@ -125,34 +50,17 @@ export class Controls {
     })
     this.canvas.onclick = () => {
       this.canvas.requestPointerLock()
+      this.canvas.requestFullscreen()
+      this.isMouseActive = true
+    }
+    this.canvas.onpointerleave = () => {
+      this.isMouseActive = false
     }
     this.canvas.addEventListener("mousemove", (event: MouseEvent) => {
-      this.handle_mouse_move(event)
+      if (this.isMouseActive) {
+        this.handle_mouse_move(event)
+      }
     })
-
-    // Wait for a click or touch event before creating and starting the AudioContext
-    $(document).one("click touchstart", () => {
-      this.audioContext = new AudioContext()
-      this.gainNode = this.audioContext.createGain()
-      this.gainNode.connect(this.audioContext.destination)
-      this.spaceSource = new Audio("sounds/jetpack.mp3")
-      const sourceNode = this.audioContext.createMediaElementSource(this.spaceSource)
-      sourceNode.connect(this.gainNode)
-    })
-  }
-
-  handleSpaceKeyPress() {
-    // Start playing the space sound and fade it in over 0.5 seconds
-    this.spaceSource.currentTime = 0
-    this.spaceSource.play()
-    const fadeTime = 500 // milliseconds
-    this.fadeInJetpackSound(0, fadeTime)
-  }
-
-  handleSpaceKeyRelease() {
-    // Stop playing the space sound and fade it out over 0.5 seconds
-    const fadeTime = 500 // milliseconds
-    this.fadeOutJetpackSound(this.jetpackVolume, fadeTime)
   }
 
   handle_keypress(event: JQuery.KeyDownEvent) {
@@ -160,28 +68,34 @@ export class Controls {
 
     switch (event.code) {
       case KeyCodes.W:
-        this.forwards_amount = 0.05
+        this.playerStoppedMoving = false
+        const forwards = vec3.create()
+        vec3.cross(forwards, this.camera.right, this.camera.up)
+        vec3.normalize(forwards, forwards)
+        this.forwards_amount = -0.05
+        this.move_player(this.forwards_amount, 0, 0, forwards)
         break
       case KeyCodes.S:
-        this.forwards_amount = -0.05
+        this.playerStoppedMoving = false
+        this.forwards_amount = 0.05
         break
       case KeyCodes.A:
+        this.playerStoppedMoving = false
         this.right_amount = -0.05
         break
       case KeyCodes.D:
+        this.playerStoppedMoving = false
         this.right_amount = 0.05
+
         break
       case KeyCodes.SPACE:
-        if (this.canJump) {
-          this.up_amount = 0.04
-          this.canJump = false
-
-          // Start playing the space sound and fade it in over 0.5 seconds
-          this.handleSpaceKeyPress()
-        }
+        this.playerStoppedMoving = false
+        this.up_amount = 0.04
         break
       case KeyCodes.LEFT_CONTROL:
+        this.playerStoppedMoving = false
         this.up_amount = -0.05
+
         break
       case KeyCodes.LEFT_SHIFT:
         this.shiftKeyHeld = true
@@ -194,24 +108,22 @@ export class Controls {
 
     switch (event.code) {
       case KeyCodes.W:
+        this.playerStoppedMoving = true
+        break
       case KeyCodes.S:
-        this.forwards_amount = 0
+        this.playerStoppedMoving = true
         break
       case KeyCodes.A:
+        this.playerStoppedMoving = true
+        break
       case KeyCodes.D:
-        this.right_amount = 0
+        this.playerStoppedMoving = true
         break
       case KeyCodes.SPACE:
-        if (!this.canJump) {
-          this.up_amount = 0
-          this.canJump = true
-
-          // Stop playing the space sound and fade it out over 0.5 seconds
-          this.handleSpaceKeyRelease()
-        }
+        this.playerStoppedMoving = true
         break
       case KeyCodes.LEFT_CONTROL:
-        this.up_amount = 0
+        this.playerStoppedMoving = true
         break
       case KeyCodes.LEFT_SHIFT:
         this.shiftKeyHeld = false
@@ -219,73 +131,73 @@ export class Controls {
     }
   }
 
-  fadeInJetpackSound(currentVolume: number, fadeTime: number) {
-    const newVolume = Math.min(currentVolume + this.step, 0.5)
-    this.jetpackVolume = newVolume
-    this.gainNode.gain.setValueAtTime(this.jetpackVolume, this.audioContext.currentTime)
-
-    if (newVolume < 0.5) {
-      setTimeout(() => this.fadeInJetpackSound(newVolume, fadeTime), fadeTime / 10)
-    }
-  }
-
-  fadeOutJetpackSound(currentVolume: number, fadeTime: number) {
-    const newVolume = Math.max(currentVolume - this.step, 0)
-    this.jetpackVolume = newVolume
-    this.gainNode.gain.setValueAtTime(this.jetpackVolume, this.audioContext.currentTime)
-
-    if (newVolume > 0) {
-      setTimeout(() => this.fadeOutJetpackSound(newVolume, fadeTime), fadeTime / 10)
-    }
-  }
-
   handle_mouse_move(event: MouseEvent) {
-    this.spin_player(event.movementX / 5, event.movementY / 5)
+    if (this.isMouseActive) this.spin_player(event.movementX / 5, event.movementY / 5)
   }
   // Function to update camera rotation based on mouse movement
   spin_player(dX: number, dY: number) {
-    this.scene.player.eulers[2] -= dX // Update yaw
-    this.scene.player.eulers[2] %= 360 // Keep yaw in the range [0, 360)
+    const sensitivity = 0.05
+    const orientation = this.camera.orientation
 
-    this.scene.player.eulers[1] = Math.min(89, Math.max(-89, this.scene.player.eulers[1] - dY)) // Update pitch and keep it in the range [-89, 89]
+    orientation[0] -= dX * sensitivity
+    orientation[1] -= dY * sensitivity
+
+    // Limit the vertical orientation angle
+    const maxAngle = Math.PI / 2.5
+    const minAngle = -Math.PI / 2.5
+
+    if (orientation[1] > maxAngle) {
+      orientation[1] = maxAngle
+    } else if (orientation[1] < minAngle) {
+      orientation[1] = minAngle
+    }
+
+    this.camera.update()
   }
 
-  move_player(forwards_amount: number, right_amount: number, up_amount: number) {
-    const GROUND_HEIGHT = 1.0 // The height of the ground
-    const GRAVITY = -0.02 // The strength of the gravitational force
-    const MAX_JUMP_HEIGHT = 10.0 // The maximum height of the jump
-    const JUMP_SPEED = 0.5 // The speed of the jump
+  move_player(forwards_amount: number, right_amount: number, up_amount: number, forward: vec3) {
+    const speed = this.shiftKeyHeld ? 10 : 5
+    const deceleration = 0.9
+    const acceleration = 1.5
 
-    // Apply gravity to the player's movement if they are in the air
-    if (this.scene.player.position[2] > GROUND_HEIGHT) {
-      up_amount += GRAVITY
+    const right = vec3.clone(this.camera.right)
+    right[1] = 0
+    vec3.normalize(right, right)
+
+    const up = vec3.clone(this.camera.up)
+    vec3.normalize(up, up)
+
+    const movement = vec3.create()
+
+    if (forwards_amount < 0.5) {
+      forwards_amount *= acceleration
+      if (forwards_amount > 0.5) {
+        forwards_amount = 0.5
+      }
     }
 
-    // Update the player's position based on their movement
-    vec3.scaleAndAdd(this.scene.player.position, this.scene.player.position, this.scene.player.forwards, forwards_amount)
-    vec3.scaleAndAdd(this.scene.player.position, this.scene.player.position, this.scene.player.right, right_amount)
-    vec3.scaleAndAdd(this.scene.player.position, this.scene.player.position, this.scene.player.up, up_amount)
+    vec3.scale(movement, forward, forwards_amount * speed)
+    vec3.scaleAndAdd(movement, movement, right, right_amount * speed)
+    vec3.scaleAndAdd(movement, movement, up, up_amount * speed)
 
-    // Limit the player's jump height
-    if (this.scene.player.position[2] - GROUND_HEIGHT > MAX_JUMP_HEIGHT) {
-      this.scene.player.position[2] = GROUND_HEIGHT + MAX_JUMP_HEIGHT
-    }
+    vec3.add(this.camera.position, this.camera.position, movement)
+    this.camera.update()
 
-    // Set the y-coordinate to the ground height if the player is on the ground
-    if (this.scene.player.position[2] <= GROUND_HEIGHT) {
-      this.scene.player.position[2] = GROUND_HEIGHT
-      this.canJump = true // Reset the ability to jump if the player is on the ground
-    }
+    // Apply deceleration effect only when player has stopped moving
+    if (this.playerStoppedMoving) {
+      this.forwards_amount *= deceleration
+      this.right_amount *= deceleration
+      this.up_amount *= deceleration
 
-    // Check if the player can jump
-    if (up_amount > 0 && this.canJump) {
-      // Apply the jump speed to the player's upward movement
-      up_amount = JUMP_SPEED
-      this.canJump = false // Set the ability to jump to false
-    } else if (up_amount < 0 && !this.canJump) {
-      // Apply gravity to the player's downward movement when they're falling
-      up_amount += GRAVITY
+      if (Math.abs(this.forwards_amount) < 0.01) {
+        this.forwards_amount = 0
+      }
+      if (Math.abs(this.right_amount) < 0.01) {
+        this.right_amount = 0
+      }
+      if (Math.abs(this.up_amount) < 0.01) {
+        this.up_amount = 0
+      }
     }
   }
 }
- */

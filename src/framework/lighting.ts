@@ -1,28 +1,27 @@
 import { vec3 } from "gl-matrix"
 
-export const lightDataSize = 80
-
 export class Light {
   public pointLightPositions: Float32Array[]
 
   constructor(numLights: number) {
     this.pointLightPositions = new Array(numLights)
     for (let i = 0; i < numLights; i++) {
-      this.pointLightPositions[i] = new Float32Array(3)
+      this.pointLightPositions[i] = new Float32Array(4)
     }
   }
 
-  public setPointLightPosition(index: number, position: vec3): void {
-    const x = position[0]
-    const y = position[1]
-    const z = position[2]
-    this.pointLightPositions[index][0] = x
-    this.pointLightPositions[index][1] = y
-    this.pointLightPositions[index][2] = z
+  public setPointLightPosition(index: number, position: vec3) {
+    this.pointLightPositions[index][0] = position[0]
+    this.pointLightPositions[index][1] = position[1]
+    this.pointLightPositions[index][2] = position[2]
   }
 
-  public getPointLightPosition(index: number): { x: number; y: number; z: number } {
+  public getPointLightPosition(index: number): vec3 {
     const position = this.pointLightPositions[index]
-    return { x: position[0], y: position[1], z: position[2] }
+    return vec3.fromValues(position[0], position[1], position[2])
+  }
+
+  public getNumLights(): number {
+    return this.pointLightPositions.length
   }
 }

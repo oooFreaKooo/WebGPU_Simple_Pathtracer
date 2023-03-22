@@ -1,21 +1,21 @@
 import { vec3 } from "gl-matrix"
 import { setTexture } from "./helper"
 
-export const materialDataSize = 8
+export const materialDataSize = 16
 
 export class Material {
-  shininess: number
-  //ambient: vec3
-  //diffuse: vec3
-  //specular: vec3
+  private diffuse: number
+  private specular: number
+  private ambient: number
+  private shininess: number
 
   diffusetexture: ImageBitmap
 
-  constructor(diffusetexture?: ImageBitmap, shininess: number = 100.0) {
+  constructor(diffusetexture?: ImageBitmap, diffuse: number = 0.2, specular: number = 0.2, ambient: number = 0.2, shininess: number = 100.0) {
+    this.diffuse = diffuse
+    this.specular = specular
+    this.ambient = ambient
     this.shininess = shininess
-    //this.ambient = ambient
-    //this.diffuse = diffuse
-    //this.specular = specular
 
     if (diffusetexture) {
       this.diffusetexture = diffusetexture
@@ -26,6 +26,18 @@ export class Material {
     }
   }
 
+  public getDiffuse(): Float32Array {
+    return new Float32Array([this.diffuse])
+  }
+
+  public getSpecular(): Float32Array {
+    return new Float32Array([this.specular])
+  }
+
+  public getAmbient(): Float32Array {
+    return new Float32Array([this.ambient])
+  }
+
   public getShininess(): Float32Array {
     return new Float32Array([this.shininess])
   }
@@ -33,17 +45,4 @@ export class Material {
   public getDiffuseTexture(): ImageBitmap {
     return this.diffusetexture
   }
-
-  /*   public getAmbient(): Float32Array {
-    return new Float32Array(this.ambient)
-  }
-
-  public getDiffuse(): Float32Array {
-    return new Float32Array(this.diffuse)
-  }
-
-  public getSpecular(): Float32Array {
-    return new Float32Array(this.specular)
-  }
- */
 }

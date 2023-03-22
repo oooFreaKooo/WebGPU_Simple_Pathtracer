@@ -17,10 +17,8 @@ async function mainFunc() {
   document.body.appendChild(canvas)
 
   // CAMERA + CONTROLS
-  const camera = new Camera(canvas.width / canvas.height)
-  const cameraControls = new Controls(camera)
-  camera.z = 10
-  camera.y = 10
+  const camera = new Camera([5, 3, 0], 0, 0)
+  const cameraControls = new Controls(canvas, camera)
 
   // ASSETS
   const renderer = new Renderer()
@@ -35,7 +33,7 @@ async function mainFunc() {
   obj.clear()
   const hatData = await obj.initialize("./models/cowboy_hat.obj")
   obj.clear()
-  const groundData = await obj.initialize("./models/moon_ground.obj")
+  const groundData = await obj.initialize("./models/building.obj")
   obj.clear()
   const skyboxData = await obj.initialize("./models/background.obj")
 
@@ -43,32 +41,31 @@ async function mainFunc() {
 
   const textureSpider = await setTexture("./img/despacitospidertx.png")
   const textureHat = await setTexture("./img/cowboy_hat.png")
-  const textureGround = await setTexture("./img/moon/1_Base_Color.jpg")
+  const textureGround = await setTexture("./img/building.jpg")
   const textureSky = await setTexture("./img/milkyway.jpg")
   const textureLightbulb = await setTexture("./img/lightbulb.png")
 
   //SET MATERIAL
 
-  const spiderMaterial = new Material(textureSpider) // default shininess = 100.0
-  const skyboxMaterial = new Material(textureSky, 10.0)
-  const groundMaterial = new Material(textureGround, 1.0)
+  const spiderMaterial = new Material(textureSpider, 0.3, 0.1, 0.1, 100)
+  const skyboxMaterial = new Material(textureSky)
+  const groundMaterial = new Material(textureGround)
   const hatMaterial = new Material(textureHat, 40.0)
   const lightbulbMaterial = new Material(textureLightbulb)
 
-  const lights = new Light(3)
+  const numLights = 3
+  const lights = new Light(numLights)
 
   // INITIALIZE RENDERER
-  renderer.init(canvas).then((success) => {
+  renderer.init(canvas, numLights).then((success) => {
     if (!success) return
-    //const objectGroup_1: ObjMesh[] = []
 
     const spider = new ObjMesh(spiderData, spiderMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
 
     let lightbulb1 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
-    const lightbulb2 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
-    const lightbulb3 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
-    const lightbulb4 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
-    const ground = new ObjMesh(groundData, groundMaterial, { scaleX: 110.0, scaleY: 110.0, scaleZ: 110.0 })
+    let lightbulb2 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
+    let lightbulb3 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
+    const ground = new ObjMesh(groundData, groundMaterial, { scaleX: 10.0, scaleY: 10.0, scaleZ: 10.0 })
     const skybox = new ObjMesh(skyboxData, skyboxMaterial, { scaleX: 200.0, scaleY: 200.0, scaleZ: 200.0 })
 
     root.attach(ground)
@@ -78,73 +75,78 @@ async function mainFunc() {
     ground.attach(skybox)
     ground.attach(spider)
 
-    spider.translate(0.0, 8.0, 0.0)
-
     const spiderRadius = 5.0 // radius of circle
     const spiderCount = 12 // number of spiders to create
 
     for (let i = 0; i < spiderCount; i++) {
-      const smallSpider = new ObjMesh(spiderData, spiderMaterial, {
+      let smallSpider = new ObjMesh(spiderData, spiderMaterial, {
         scaleX: 0.1,
         scaleY: 0.1,
         scaleZ: 0.1,
         x: Math.cos((Math.PI * i) / spiderCount) * spiderRadius,
-        y: 5.5,
+        y: 1.0,
         z: Math.sin((Math.PI * i) / spiderCount) * spiderRadius,
       })
+      for (let j = 0; j < spiderCount / 2; j++) {
+        const tinySpider = new ObjMesh(spiderData, spiderMaterial, {
+          scaleX: 0.025,
+          scaleY: 0.025,
+          scaleZ: 0.025,
+          x: (Math.cos((Math.PI * i) / spiderCount) * spiderRadius) / 2,
+          y: 5.0,
+          z: (Math.sin((Math.PI * i) / spiderCount) * spiderRadius) / 2,
+        })
+        smallSpider.attach(tinySpider)
+      }
       spider.attach(smallSpider)
     }
-    //objectGroup_1.push(spider)
-    //objectGroup_1.push(cowboyhat)
+    spider.translate(0, 5, 0)
 
     const doFrame = () => {
       // ANIMATE
       const now = Date.now() / 1000
-      cameraControls.update()
+      const speed = cameraControls.shiftKeyHeld ? 2.0 : 1.0
+      const forwards = vec3.create()
+      vec3.cross(forwards, camera.right, camera.up)
+      vec3.normalize(forwards, forwards)
+      cameraControls.move_player(cameraControls.forwards_amount * speed, cameraControls.right_amount * speed, cameraControls.up_amount, forwards)
+      camera.update()
 
       for (let i = 0; i < spider.children.length; i++) {
         let child = spider.children[i]
         let radius = 20 * Math.cos(now) // set the radius of the orbit
-        //let radius = 20 * (i + 1) // set the radius of the orbit
         let speed = i + Math.sin(now) // set the speed of the orbit
-        //child.x = radius * Math.sin(speed * Math.sin(now)) // calculate the x position of the child
-        //child.z = radius * Math.sin(speed * Math.cos(now)) // calculate the z position of the child
         child.x = radius * Math.sin(speed + now)
+        child.y = (radius / 2) * Math.cos(speed + Math.PI + now)
         child.z = radius * Math.cos(speed + now)
       }
 
-      spider.rotate(0, Math.sin(now) / 10, 0)
-      spider.translate(0, Math.sin(now) / 10, 0)
-      //cowboyhat.translate(0, Math.sin(now) / 50, 0)
-      //spider.translate(Math.sin(now), 0, Math.sin(now))
+      spider.translate(0, Math.cos(now) / 20, 0)
+      spider.rotate(0, Math.cos(now) / 20, 0)
 
       // MOVE LIGHT AND LIGHT BULB
 
-      lights.setPointLightPosition(0, [Math.cos(now) * 15, 4, Math.sin(now) * 15])
-      lights.setPointLightPosition(1, [Math.cos(now) * 30, 4, Math.cos(now) * 30])
-      lights.setPointLightPosition(2, [Math.sin(now) * 45, 4, Math.sin(now) * 45])
+      lights.setPointLightPosition(0, [Math.cos(now) * 10, 4, -Math.sin(now) * 10])
+      lights.setPointLightPosition(1, [Math.cos(now) * 20, 4, Math.sin(now) * 20])
+      lights.setPointLightPosition(2, [Math.cos(now) * 30, 8, Math.sin(now) * 30])
 
-      lightbulb1.x = lights.getPointLightPosition(0).x
-      lightbulb1.y = lights.getPointLightPosition(0).y
-      lightbulb1.z = lights.getPointLightPosition(0).z
+      lightbulb1.x = lights.getPointLightPosition(0)[0]
+      lightbulb1.y = lights.getPointLightPosition(0)[1]
+      lightbulb1.z = lights.getPointLightPosition(0)[2]
 
-      lightbulb2.x = lights.getPointLightPosition(1).x
-      lightbulb2.y = lights.getPointLightPosition(1).y
-      lightbulb2.z = lights.getPointLightPosition(1).z
+      lightbulb2.x = lights.getPointLightPosition(1)[0]
+      lightbulb2.y = lights.getPointLightPosition(1)[1]
+      lightbulb2.z = lights.getPointLightPosition(1)[2]
 
-      lightbulb3.x = lights.getPointLightPosition(2).x
-      lightbulb3.y = lights.getPointLightPosition(2).y
-      lightbulb3.z = lights.getPointLightPosition(2).z
+      lightbulb3.x = lights.getPointLightPosition(2)[0]
+      lightbulb3.y = lights.getPointLightPosition(2)[1]
+      lightbulb3.z = lights.getPointLightPosition(2)[2]
 
       const cameracoords = camera.getCameraEye()
       skybox.x = cameracoords[0]
       skybox.y = cameracoords[1]
       skybox.z = cameracoords[2]
-
-      //for (let c of objectGroup_1) {
-      //  c.rotate(0, Math.cos(now) / 100, 0)
-      //}
-
+      skybox.rotate(0, 0.0005, 0.0005)
       // RENDER
       renderer.frame(camera, lights, root)
       requestAnimationFrame(doFrame)

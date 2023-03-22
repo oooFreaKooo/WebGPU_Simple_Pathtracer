@@ -1,7 +1,6 @@
 import { vec3, vec2, mat4 } from "gl-matrix"
 import { Color, CreateGPUBuffer, CreatePipeline, CreateStorageBuffer, CreateUniformBuffer, ObjParameter } from "./helper"
 import { device, cameraUniformBuffer, lightDataBuffer, materialDataBuffer, cameraPosBuffer } from "./renderer"
-import { lightDataSize } from "../framework/lighting"
 import vertex from "./shaders/vertex.wgsl"
 import fragment from "./shaders/fragment.wgsl"
 import { Node3d } from "./newnode"
@@ -89,16 +88,14 @@ export class ObjMesh extends Node3d {
     this.colorBuffer.unmap()
 
     // MATERIAL BUFFER
+    const diffuse = material ? material.getDiffuse() : this.defaultMaterial.getDiffuse()
+    const specular = material ? material.getSpecular() : this.defaultMaterial.getSpecular()
+    const ambient = material ? material.getAmbient() : this.defaultMaterial.getAmbient()
     const shininess = material ? material.getShininess() : this.defaultMaterial.getShininess()
-    device.queue.writeBuffer(materialDataBuffer, 0, shininess.buffer, shininess.byteOffset, shininess.byteLength)
-
-    //const ambient = material ? material.getAmbient() : this.defaultMaterial.getAmbient()
-    //const diffuse = material ? material.getDiffuse() : this.defaultMaterial.getDiffuse()
-    //const specular = material ? material.getSpecular() : this.defaultMaterial.getSpecular()
-
-    //device.queue.writeBuffer(materialDataBuffer, 0, ambient.buffer, ambient.byteOffset, ambient.byteLength)
-    //device.queue.writeBuffer(materialDataBuffer, 16, diffuse.buffer, diffuse.byteOffset, diffuse.byteLength)
-    //device.queue.writeBuffer(materialDataBuffer, 32, specular.buffer, specular.byteOffset, specular.byteLength)
+    device.queue.writeBuffer(materialDataBuffer, 0, diffuse.buffer, diffuse.byteOffset, diffuse.byteLength)
+    device.queue.writeBuffer(materialDataBuffer, 4, specular.buffer, specular.byteOffset, specular.byteLength)
+    device.queue.writeBuffer(materialDataBuffer, 8, ambient.buffer, ambient.byteOffset, ambient.byteLength)
+    device.queue.writeBuffer(materialDataBuffer, 12, shininess.buffer, shininess.byteOffset, shininess.byteLength)
 
     const diffuseBitmap = material ? material.getDiffuseTexture() : this.defaultMaterial.getDiffuseTexture()
     let diffuseTexture = device.createTexture({
@@ -138,8 +135,6 @@ export class ObjMesh extends Node3d {
         binding: 3,
         resource: {
           buffer: lightDataBuffer,
-          offset: 0,
-          size: lightDataSize,
         },
       },
       {

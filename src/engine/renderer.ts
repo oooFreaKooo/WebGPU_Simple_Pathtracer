@@ -1,6 +1,5 @@
 import { Light } from "../framework/lighting"
 import { Camera } from "./camera"
-import { lightDataSize } from "../framework/lighting"
 import { CreateDepthStencil, CreateUniformBuffer } from "./helper"
 import { Node3d } from "./newnode"
 import { ObjMesh } from "./obj-mesh"
@@ -11,6 +10,7 @@ export var cameraUniformBuffer: GPUBuffer
 export var lightDataBuffer: GPUBuffer
 export var cameraPosBuffer: GPUBuffer
 export var materialDataBuffer: GPUBuffer
+export var lightDataSize: number
 
 export class Renderer {
   readonly swapChainFormat = "bgra8unorm"
@@ -25,7 +25,7 @@ export class Renderer {
 
   constructor() {}
 
-  public async init(canvas: HTMLCanvasElement): Promise<boolean> {
+  public async init(canvas: HTMLCanvasElement, numLights: number): Promise<boolean> {
     if (!canvas) {
       console.log("missing canvas!")
       return false
@@ -62,9 +62,11 @@ export class Renderer {
     }
 
     cameraUniformBuffer = CreateUniformBuffer(device, this.matrixSize)
-    lightDataBuffer = CreateUniformBuffer(device, lightDataSize)
     cameraPosBuffer = CreateUniformBuffer(device, 16)
     materialDataBuffer = CreateUniformBuffer(device, materialDataSize)
+
+    lightDataSize = numLights * 12 * 3
+    lightDataBuffer = CreateUniformBuffer(device, lightDataSize)
 
     return (this.initSuccess = true)
   }
@@ -101,16 +103,17 @@ export class Renderer {
       cameraViewProjectionMatrix.byteLength,
     )
 
-    // LIGHT BUFFER
+    // CAMERA BUFFER
     const eyePosition = camera.getCameraEye()
-    const lightPositions = new Float32Array(light.pointLightPositions.length * 3)
-    for (let i = 0; i < light.pointLightPositions.length; i++) {
-      const position = light.pointLightPositions[i]
-      lightPositions.set([position[0], position[1], position[2]], i * 3)
-    }
-    device.queue.writeBuffer(lightDataBuffer, 0, lightPositions.buffer, lightPositions.byteOffset, lightPositions.byteLength)
-
     device.queue.writeBuffer(cameraPosBuffer, 0, eyePosition.buffer, eyePosition.byteOffset, eyePosition.byteLength)
+
+    // LIGHT BUFFER
+    for (let i = 0; i < light.getNumLights(); i++) {
+      const position = light.getPointLightPosition(i)
+      const lightDataArray = [position[0], position[1], position[2]]
+      const lightData = new Float32Array(lightDataArray)
+      device.queue.writeBuffer(lightDataBuffer, i * 16, lightData.buffer)
+    }
     ;(this.renderPassDescriptor.colorAttachments as [GPURenderPassColorAttachment])[0].view = this.context.getCurrentTexture().createView()
 
     const commandEncoder = device.createCommandEncoder()
