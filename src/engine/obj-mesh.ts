@@ -6,7 +6,6 @@ import {
   cameraPosBuffer,
   ambientLightBuffer,
   diffuseLightBuffer,
-  specularLightBuffer,
   positionLightBuffer,
   materialDataBuffer,
 } from "./renderer"
@@ -101,14 +100,31 @@ export class ObjMesh extends Node3d {
 
     // MATERIAL BUFFER
 
+    const ambient = material ? material.getAmbient() : this.defaultMaterial.getAmbient()
     const diffuse = material ? material.getDiffuse() : this.defaultMaterial.getDiffuse()
     const specular = material ? material.getSpecular() : this.defaultMaterial.getSpecular()
-    const ambient = material ? material.getAmbient() : this.defaultMaterial.getAmbient()
     const shininess = material ? material.getShininess() : this.defaultMaterial.getShininess()
-    device.queue.writeBuffer(materialDataBuffer, 0 + objectCount * 16, diffuse.buffer)
-    device.queue.writeBuffer(materialDataBuffer, 4 + objectCount * 16, specular.buffer)
-    device.queue.writeBuffer(materialDataBuffer, 8 + objectCount * 16, ambient.buffer)
+    device.queue.writeBuffer(materialDataBuffer, 0 + objectCount * 16, ambient.buffer)
+    device.queue.writeBuffer(materialDataBuffer, 4 + objectCount * 16, diffuse.buffer)
+    device.queue.writeBuffer(materialDataBuffer, 8 + objectCount * 16, specular.buffer)
     device.queue.writeBuffer(materialDataBuffer, 12 + objectCount * 16, shininess.buffer)
+
+    document.querySelector("#ambient")!.addEventListener("input", (e: Event) => {
+      ambient[0] = +(e.target as HTMLInputElement).value
+      device.queue.writeBuffer(materialDataBuffer, 0, ambient.buffer)
+    })
+    document.querySelector("#diffuse")!.addEventListener("input", (e: Event) => {
+      diffuse[0] = +(e.target as HTMLInputElement).value
+      device.queue.writeBuffer(materialDataBuffer, 4, diffuse.buffer)
+    })
+    document.querySelector("#specular")!.addEventListener("input", (e: Event) => {
+      specular[0] = +(e.target as HTMLInputElement).value
+      device.queue.writeBuffer(materialDataBuffer, 8, specular.buffer)
+    })
+    document.querySelector("#shininess")!.addEventListener("input", (e: Event) => {
+      shininess[0] = +(e.target as HTMLInputElement).value
+      device.queue.writeBuffer(materialDataBuffer, 12, shininess.buffer)
+    })
 
     const diffuseBitmap = material ? material.getDiffuseTexture() : this.defaultMaterial.getDiffuseTexture()
     let diffuseTexture = device.createTexture({
@@ -149,7 +165,6 @@ export class ObjMesh extends Node3d {
         resource: {
           buffer: cameraPosBuffer,
           offset: 0,
-          size: 16,
         },
       },
       {
@@ -177,12 +192,6 @@ export class ObjMesh extends Node3d {
         binding: 8,
         resource: {
           buffer: diffuseLightBuffer,
-        },
-      },
-      {
-        binding: 9,
-        resource: {
-          buffer: specularLightBuffer,
         },
       },
       {

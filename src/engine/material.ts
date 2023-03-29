@@ -2,21 +2,21 @@ import { vec3 } from "gl-matrix"
 import { MaterialParameter, setTexture } from "./helper"
 
 export class Material {
+  private ambient: number
   private diffuse: number
   private specular: number
-  private ambient: number
   private shininess: number
 
   diffusetexture: ImageBitmap
 
   constructor(diffusetexture?: ImageBitmap, materialParameter?: MaterialParameter) {
+    const ambient = materialParameter?.ambient || 0.2
     const diffuse = materialParameter?.diffuse || 0.2
     const specular = materialParameter?.specular || 0.2
-    const ambient = materialParameter?.ambient || 0.2
     const shininess = materialParameter?.shininess || 100.0
+    this.ambient = ambient
     this.diffuse = diffuse
     this.specular = specular
-    this.ambient = ambient
     this.shininess = shininess
 
     if (diffusetexture) {

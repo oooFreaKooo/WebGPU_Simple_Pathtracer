@@ -5,25 +5,58 @@
     <title>Let's try WebGPU</title>
     <link rel="icon" href="data:;base64,iVBORwOKGO=" />
     <style>
-      body {
-        margin: 0px;
-        overflow: hidden
-      }
-  
-      .cubeButton {
-        position: absolute;
-        left: 85%;
-        top: 10%;
-      }
-  
-      .pyramidButton {
-        position: absolute;
-        left: 85%;
-        top: 15%;
-      }
+      html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            color: #fff;
+            display: flex;
+            text-align: center;
+            flex-direction: column;
+            justify-content: center;
+            font-family: Avenir, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }p {
+            font-size: 14px;
+            margin: 0
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+        .inputs {
+            position: fixed;
+            top: 1em;
+            right: 1em;
+            display: flex;
+            flex-direction: column;
+            gap: 1em;
+            text-align: left;
+            width: 150px;
+        }
+        input {
+            width: 100%;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
+  <div class="inputs">
+    <span>Ambient</span>
+      <input id="ambient" type="range" min="0" max="2" step="0.1" value="0.2" />
+    <span>Diffuse</span>
+      <input id="diffuse" type="range" min="0" max="2" step="0.1" value="0.2" />
+    <span>Specular</span>
+      <input id="specular" type="range" min="0" max="2" step="0.1" value="0.2" />
+    <span>Shininess</span>
+      <input id="shininess" type="range" min="1" max="1000" step="0.1" value="1" />
+    <span>Ambient Light</span>
+      <input id="ambient-light" type="range" min="0" max="1" step="0.1" value="0.1" />
+    <span>Number of Lights</span>
+      <input id="num-lights" type="range" min="0" max="100" step="0.1" value="1.0" />
+  </div>
   <h2 id="key-label"></h2>
   <h2 id="mouse-x-label"></h2>
   <h2 id="mouse-y-label"></h2>

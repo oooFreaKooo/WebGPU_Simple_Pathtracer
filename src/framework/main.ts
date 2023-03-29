@@ -45,37 +45,25 @@ async function mainFunc() {
   //SET MATERIAL
 
   const spiderMaterial = new Material(textureSpider, {
-    diffuse: 0.9,
-    specular: 0.9,
-    ambient: 0.9,
+    diffuse: 0.7,
+    specular: 0.5,
+    ambient: 0.7,
     shininess: 100.0,
   })
-  const skyboxMaterial = new Material(textureSky, {
-    diffuse: 0.01,
-    specular: 0.01,
-    ambient: 0.01,
-    shininess: 0.01,
-  })
-  const groundMaterial = new Material(textureGround, {
-    diffuse: 100.1,
-    specular: 11.2,
-    ambient: 0.2,
-  })
+  const skyboxMaterial = new Material(textureSky)
+  const groundMaterial = new Material(textureGround)
   const lightbulbMaterial = new Material(textureLightbulb)
-
-  const numLights = 3
+  const maxnumlights = 100
+  const numLights = 30
   const lights = new Light(numLights, [0.1, 0.1, 0.1])
 
   lights.setAmbientColor([0.1, 0.1, 0.1])
-  lights.setDiffuseColor(0, [0.9, 0.9, 0.9])
-  lights.setDiffuseColor(1, [0.9, 0.0, 0.0])
-  lights.setDiffuseColor(2, [0.5, 1, 1])
-  lights.setSpecularColor(0, [0.9, 0.9, 0.9])
-  lights.setSpecularColor(1, [0.9, 0.0, 0.0])
-  lights.setSpecularColor(2, [0.5, 1, 1])
 
+  for (let i = 0; i < numLights; i++) {
+    lights.setDiffuseColor(i, [Math.random() * 1.0, Math.random() * 1.0, Math.random() * 1.0])
+  }
   // INITIALIZE RENDERER
-  renderer.init(canvas, numLights).then((success) => {
+  renderer.init(canvas, maxnumlights).then((success) => {
     if (!success) return
 
     const spider = new ObjMesh(spiderData, spiderMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
@@ -133,11 +121,19 @@ async function mainFunc() {
 
       // MOVE LIGHT AND LIGHT BULB
 
-      lights.setPointLightPosition(0, [Math.cos(now) * 10, 4, -Math.sin(now) * 10])
-      lights.setPointLightPosition(1, [Math.cos(now) * 10, 4, Math.sin(now) * 10])
-      lights.setPointLightPosition(2, [Math.cos(now) * 25, 8, Math.sin(now) * 25])
+      const LIGHT_SPEED = 0.05 // adjust this value to change the speed of the light movement
+      const LIGHT_RANGE = 5 // adjust this value to change the range of the light movement
 
-      lightbulb1.x = lights.getPointLightPosition(0)[0]
+      for (let i = 0; i < numLights; i++) {
+        const timeOffset = i * 0.1 // adjust this value to change the amount of offset between lights
+        const x = Math.cos(now + timeOffset) * LIGHT_RANGE + i + Math.random() * 0.2 - 0.1 // add a random offset to the x position
+        const y = 1
+        const z = -Math.sin(now + timeOffset) * LIGHT_RANGE + i + Math.random() * 0.2 - 0.1 // add a random offset to the z position
+
+        lights.setPointLightPosition(i, [x, y, z])
+      }
+
+      /*       lightbulb1.x = lights.getPointLightPosition(0)[0]
       lightbulb1.y = lights.getPointLightPosition(0)[1]
       lightbulb1.z = lights.getPointLightPosition(0)[2]
 
@@ -147,7 +143,7 @@ async function mainFunc() {
 
       lightbulb3.x = lights.getPointLightPosition(2)[0]
       lightbulb3.y = lights.getPointLightPosition(2)[1]
-      lightbulb3.z = lights.getPointLightPosition(2)[2]
+      lightbulb3.z = lights.getPointLightPosition(2)[2] */
 
       const cameracoords = camera.getCameraEye()
       skybox.x = cameracoords[0]

@@ -61,4 +61,8 @@ export class Camera {
   public getCameraEye(): Float32Array {
     return new Float32Array(this.position)
   }
+
+  public getDirection(): Float32Array {
+    return new Float32Array(this.forwards)
+  }
 }
