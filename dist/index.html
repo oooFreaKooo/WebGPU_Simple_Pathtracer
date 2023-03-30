@@ -44,6 +44,24 @@
 </head>
 <body>
   <div class="inputs">
+    <span>Move Lights</span>
+    <label for="light-index">Select Light:</label>
+    <select id="light-index">
+      <option value="0">Light 1</option>
+      <option value="1">Light 2</option>
+      <option value="2">Light 3</option>
+      <option value="3">Light 4</option>
+      <option value="4">Light 5</option>
+      <option value="5">Light 6</option>
+      <option value="6">Light 7</option>
+      <option value="7">Light 8</option>
+    </select>
+    <label for="light-position-x">Light Position X:</label>
+    <input type="number" id="light-position-x" value="0">
+    <label for="light-position-y">Light Position Y:</label>
+    <input type="number" id="light-position-y" value="0">
+    <label for="light-position-z">Light Position Z:</label>
+    <input type="number" id="light-position-z" value="0">
     <span>Ambient</span>
       <input id="ambient" type="range" min="0" max="2" step="0.1" value="0.2" />
     <span>Diffuse</span>
@@ -54,8 +72,6 @@
       <input id="shininess" type="range" min="1" max="1000" step="0.1" value="1" />
     <span>Ambient Light</span>
       <input id="ambient-light" type="range" min="0" max="1" step="0.1" value="0.1" />
-    <span>Number of Lights</span>
-      <input id="num-lights" type="range" min="0" max="100" step="0.1" value="1.0" />
   </div>
   <h2 id="key-label"></h2>
   <h2 id="mouse-x-label"></h2>

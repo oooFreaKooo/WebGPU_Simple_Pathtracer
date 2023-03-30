@@ -6,6 +6,7 @@ export class ObjLoader {
   vt: vec2[]
   vn: vec3[]
   vertices: Float32Array
+  objectVertices: Float32Array[]
   vertexCount: number
 
   constructor() {
@@ -14,16 +15,16 @@ export class ObjLoader {
     this.vn = []
   }
 
-  async initialize(obj_path: string) {
+  async initialize(obj_path: string): Promise<Float32Array[]> {
     await this.readFile(obj_path)
     this.vertexCount = this.vertices.length / 8
-
-    return this.vertices
+    return this.objectVertices
   }
 
   async readFile(url: string) {
     var results: number[][] = []
     var currentObj: number[] = []
+    this.objectVertices = []
 
     try {
       const response: Response = await fetch(url)
@@ -31,29 +32,30 @@ export class ObjLoader {
       const lines = file_contents.split("\n")
 
       lines.forEach((line) => {
-        if (line.startsWith("o ")) {
-          // Start of a new object, add the current one to results and create a new buffer
+        if (line.startsWith("usemtl ")) {
           if (currentObj.length > 0) {
             results.push(currentObj)
+            this.objectVertices.push(new Float32Array(currentObj))
             currentObj = []
           }
-        } else if (line.startsWith("v ")) {
-          this.read_vertex_data(line)
-        } else if (line.startsWith("vt")) {
-          this.read_texcoord_data(line)
-        } else if (line.startsWith("vn")) {
-          this.read_normal_data(line)
-        } else if (line.startsWith("f")) {
-          this.read_face_data(line, currentObj)
+        } else {
+          if (line.startsWith("v ")) {
+            this.read_vertex_data(line)
+          } else if (line.startsWith("vt")) {
+            this.read_texcoord_data(line)
+          } else if (line.startsWith("vn")) {
+            this.read_normal_data(line)
+          } else if (line.startsWith("f")) {
+            this.read_face_data(line, currentObj)
+          }
         }
       })
 
-      // Add the last object to the results
       if (currentObj.length > 0) {
         results.push(currentObj)
+        this.objectVertices.push(new Float32Array(currentObj))
       }
 
-      // Combine all the object parts into a single buffer
       this.vertices = new Float32Array(results.flat())
     } catch (error) {
       console.error("Error while reading file:", error)

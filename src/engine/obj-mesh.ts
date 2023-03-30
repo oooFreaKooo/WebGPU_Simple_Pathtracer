@@ -54,7 +54,7 @@ export class ObjMesh extends Node3d {
   private perVertex = 3 + 3 + 2 // 3 for position, 3 for normal, 2 for uv
   private stride = this.perVertex * 4 // stride = byte length of vertex data array
 
-  constructor(vertices: Float32Array, material?: Material, parameter?: ObjParameter, color?: Color) {
+  constructor(vertices: Float32Array, public material?: Material, parameter?: ObjParameter, color?: Color) {
     objectCount++
     super(parameter)
     super.rotate(this.rotX, this.rotY, this.rotZ)
@@ -261,5 +261,10 @@ export class ObjMesh extends Node3d {
     this.scaleX = parameter.scaleX ? parameter.scaleX : 1
     this.scaleY = parameter.scaleY ? parameter.scaleY : 1
     this.scaleZ = parameter.scaleZ ? parameter.scaleZ : 1
+  }
+
+  public getMaterial(): Material {
+    if (this.material) return this.material
+    return this.defaultMaterial
   }
 }

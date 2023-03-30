@@ -17,7 +17,7 @@ async function mainFunc() {
   document.body.appendChild(canvas)
 
   // CAMERA + CONTROLS
-  const camera = new Camera([10, 3, 10], 20, 20)
+  const camera = new Camera([40, 3, 0], 0, 0)
   const cameraControls = new Controls(canvas, camera)
 
   // ASSETS
@@ -27,76 +27,156 @@ async function mainFunc() {
 
   // INITIALIZE OBJECTS
 
-  const spiderData = await obj.initialize("./models/Spider.obj")
+  const garageData = await obj.initialize("./models/warehouse.obj")
   obj.clear()
-  const lightbulbData = await obj.initialize("./models/lightbulb.obj")
+  const carData = await obj.initialize("./models/car.obj")
   obj.clear()
-  const groundData = await obj.initialize("./models/building.obj")
+  const bulbData = await obj.initialize("./models/bulb.obj")
   obj.clear()
-  const skyboxData = await obj.initialize("./models/background.obj")
-
   // SET TEXTURES
 
-  const textureSpider = await setTexture("./img/despacitospidertx.png")
-  const textureGround = await setTexture("./img/building.jpg")
+  const textureGround = await setTexture("./img/snow2.jpg")
+  const textureRock = await setTexture("./img/snow1.jpg")
   const textureSky = await setTexture("./img/milkyway.jpg")
-  const textureLightbulb = await setTexture("./img/lightbulb.png")
+  const textureBulb = await setTexture("./img/bulb.png")
 
+  const texturesGarage = [
+    await setTexture("./img/garage/Tavan_Base_Color.jpg"),
+    await setTexture("./img/garage/Zemin_Base_Color.jpg"),
+    await setTexture("./img/garage/Duvarlar_Base_Color.jpg"),
+    await setTexture("./img/garage/Demirler_Base_Color.jpg"),
+    await setTexture("./img/garage/Odunlar_Base_Color.jpg"),
+    await setTexture("./img/garage/ipler_Base_Color.jpg"),
+  ]
+
+  const texturesCar = [
+    await setTexture("./img/car/paint.png"),
+    await setTexture("./img/car/lens.png"),
+    await setTexture("./img/car/tire.png"),
+    await setTexture("./img/car/tire.png"),
+    await setTexture("./img/car/tire.png"),
+    await setTexture("./img/car/tire.png"),
+    await setTexture("./img/car/textures_color.png"),
+    await setTexture("./img/car/carbon.png"),
+    await setTexture("./img/car/headlight.png"),
+    await setTexture("./img/car/brake_lamp.png"),
+    await setTexture("./img/car/reverse_lamp.png"),
+    await setTexture("./img/car/turnsignal.png"),
+    await setTexture("./img/car/brakes.png"),
+    await setTexture("./img/car/ssr_color.png"),
+    await setTexture("./img/car/tire.png"),
+    await setTexture("./img/car/brakes.png"),
+    await setTexture("./img/car/brakes.png"),
+    await setTexture("./img/car/ssr_color.png"),
+    await setTexture("./img/car/tire.png"),
+    await setTexture("./img/car/brakes.png"),
+    await setTexture("./img/car/brakes.png"),
+    await setTexture("./img/car/ssr_color.png"),
+    await setTexture("./img/car/tire.png"),
+    await setTexture("./img/car/brakes.png"),
+    await setTexture("./img/car/brakes.png"),
+    await setTexture("./img/car/ssr_color.png"),
+    await setTexture("./img/car/tire.png"),
+    await setTexture("./img/car/brakes.png"),
+  ]
+  console.log(texturesGarage.length)
+  console.log(garageData.length)
   //SET MATERIAL
 
-  const spiderMaterial = new Material(textureSpider, {
-    diffuse: 0.7,
-    specular: 0.5,
-    ambient: 0.7,
-    shininess: 100.0,
-  })
   const skyboxMaterial = new Material(textureSky)
   const groundMaterial = new Material(textureGround)
-  const lightbulbMaterial = new Material(textureLightbulb)
+  const rockMaterial = new Material(textureRock)
+  const bulbMaterial = new Material(textureBulb)
+
   const maxnumlights = 100
-  const numLights = 30
+  const numLights = 14
   const lights = new Light(numLights, [0.1, 0.1, 0.1])
 
   lights.setAmbientColor([0.1, 0.1, 0.1])
 
-  for (let i = 0; i < numLights; i++) {
-    lights.setDiffuseColor(i, [Math.random() * 1.0, Math.random() * 1.0, Math.random() * 1.0])
+  for (let i = 0; i < numLights - 6; i++) {
+    lights.setDiffuseColor(i, [7, 7, 4])
   }
+
+  lights.setDiffuseColor(8, [0, 0, 3])
+  lights.setDiffuseColor(9, [3, 0, 0])
+  lights.setDiffuseColor(10, [0, 3, 0])
+  lights.setDiffuseColor(11, [0, 3, 3])
+  lights.setDiffuseColor(12, [3, 0, 3])
+  lights.setDiffuseColor(13, [3, 3, 0])
+  // Set up event listener for light index selection
+  const lightIndexSelect = document.querySelector<HTMLSelectElement>("#light-index")!
+  lightIndexSelect.addEventListener("change", () => {
+    const selectedIndex = lightIndexSelect.selectedIndex
+    const currentPosition = lights.getPointLightPosition(selectedIndex)
+    document.querySelector<HTMLInputElement>("#light-position-x")!.value = currentPosition[0].toString()
+    document.querySelector<HTMLInputElement>("#light-position-y")!.value = currentPosition[1].toString()
+    document.querySelector<HTMLInputElement>("#light-position-z")!.value = currentPosition[2].toString()
+  })
+  // Set up event listener for light position changes
+  const lightPositionXInput = document.querySelector<HTMLInputElement>("#light-position-x")!
+  const lightPositionYInput = document.querySelector<HTMLInputElement>("#light-position-y")!
+  const lightPositionZInput = document.querySelector<HTMLInputElement>("#light-position-z")!
+  function setLightPosition() {
+    const selectedIndex = lightIndexSelect.selectedIndex
+    const x = Number(lightPositionXInput.value)
+    const y = Number(lightPositionYInput.value)
+    const z = Number(lightPositionZInput.value)
+    lights.setPointLightPosition(selectedIndex, [x, y, z])
+  }
+  lightPositionXInput.addEventListener("input", setLightPosition)
+  lightPositionYInput.addEventListener("input", setLightPosition)
+  lightPositionZInput.addEventListener("input", setLightPosition)
+
   // INITIALIZE RENDERER
   renderer.init(canvas, maxnumlights).then((success) => {
     if (!success) return
-
-    const spider = new ObjMesh(spiderData, spiderMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
-
-    let lightbulb1 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
-    let lightbulb2 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
-    let lightbulb3 = new ObjMesh(lightbulbData, lightbulbMaterial, { scaleX: 0.3, scaleY: 0.3, scaleZ: 0.3 })
-    const ground = new ObjMesh(groundData, groundMaterial, { scaleX: 10.0, scaleY: 10.0, scaleZ: 10.0 })
-    const skybox = new ObjMesh(skyboxData, skyboxMaterial, { scaleX: 200.0, scaleY: 200.0, scaleZ: 200.0 })
-
-    root.attach(ground)
-    root.attach(lightbulb1)
-    root.attach(lightbulb2)
-    root.attach(lightbulb3)
-    ground.attach(skybox)
-    ground.attach(spider)
-
-    const spiderRadius = 5.0 // radius of circle
-    const spiderCount = 12 // number of spiders to create
-
-    for (let i = 0; i < spiderCount; i++) {
-      let smallSpider = new ObjMesh(spiderData, spiderMaterial, {
-        scaleX: 0.1,
-        scaleY: 0.1,
-        scaleZ: 0.1,
-        x: Math.cos(Math.PI / spiderCount) * spiderRadius,
-        y: 1.0,
-        z: Math.sin(Math.PI / spiderCount) * spiderRadius,
-      })
-      spider.attach(smallSpider)
+    const carParts: ObjMesh[] = []
+    for (let i = 0; i < carData.length; i++) {
+      const texture = texturesCar[i]
+      const car = new ObjMesh(carData[i], new Material(texture), { x: -5, y: -1, z: -5, scaleX: 10.0, scaleY: 10.0, scaleZ: 10.0 })
+      car.rotate(0, 45, 0)
+      root.attach(car)
+      carParts.push(car)
     }
-    spider.translate(0, 5, 0)
 
+    for (let i = 0; i < garageData.length; i++) {
+      const texture = texturesGarage[i]
+      const garage = new ObjMesh(garageData[i], new Material(texture), { x: 45, z: 100, scaleX: 0.1, scaleY: 0.1, scaleZ: 0.1 })
+      root.attach(garage)
+    }
+
+    const bulb1 = new ObjMesh(bulbData[0], bulbMaterial, { scaleX: 0.01, scaleY: 0.01, scaleZ: 0.01 })
+    const bulb2 = new ObjMesh(bulbData[0], bulbMaterial, { scaleX: 0.01, scaleY: 0.01, scaleZ: 0.01 })
+    const bulb3 = new ObjMesh(bulbData[0], bulbMaterial, { scaleX: 0.01, scaleY: 0.01, scaleZ: 0.01 })
+    const bulb4 = new ObjMesh(bulbData[0], bulbMaterial, { scaleX: 0.01, scaleY: 0.01, scaleZ: 0.01 })
+    const bulb5 = new ObjMesh(bulbData[0], bulbMaterial, { scaleX: 0.01, scaleY: 0.01, scaleZ: 0.01 })
+    const bulb6 = new ObjMesh(bulbData[0], bulbMaterial, { scaleX: 0.01, scaleY: 0.01, scaleZ: 0.01 })
+    const bulb7 = new ObjMesh(bulbData[0], bulbMaterial, { scaleX: 0.01, scaleY: 0.01, scaleZ: 0.01 })
+    const bulb8 = new ObjMesh(bulbData[0], bulbMaterial, { scaleX: 0.01, scaleY: 0.01, scaleZ: 0.01 })
+    root.attach(bulb1)
+    root.attach(bulb2)
+    root.attach(bulb3)
+    root.attach(bulb4)
+    root.attach(bulb5)
+    root.attach(bulb6)
+    root.attach(bulb7)
+    root.attach(bulb8)
+    lights.setPointLightPosition(0, [-2.2, 25.3, 3.7])
+    lights.setPointLightPosition(1, [-2.2, 25.3, -14.0])
+    lights.setPointLightPosition(2, [-2.2, 25.3, 22])
+    lights.setPointLightPosition(3, [-2.2, 25.3, -32])
+    lights.setPointLightPosition(4, [-2.1, 22.8, 41.2])
+    lights.setPointLightPosition(5, [-2.2, 23.0, 66.6])
+    lights.setPointLightPosition(6, [-2.0, 23.89, 87.5])
+    lights.setPointLightPosition(7, [-2.2, 24.0, 109])
+
+    /* for (let i = 0; i < skyboxData.length; i++) {
+      const skybox = new ObjMesh(skyboxData[i], skyboxMaterial, { scaleX: 200.0, scaleY: 200.0, scaleZ: 200.0 })
+      root.attach(skybox)
+    } */
+
+    //root.attach(ground)
     const doFrame = () => {
       // ANIMATE
       const now = Date.now() / 1000
@@ -107,49 +187,73 @@ async function mainFunc() {
       cameraControls.move_player(cameraControls.forwards_amount * speed, cameraControls.right_amount * speed, cameraControls.up_amount, forwards)
       camera.update()
 
-      for (let i = 0; i < spider.children.length; i++) {
-        let child = spider.children[i]
-        let radius = 20 * Math.cos(now) // set the radius of the orbit
-        let speed = i + Math.sin(now) // set the speed of the orbit
-        child.x = radius * Math.sin(speed + now)
-        child.y = spider.y
-        child.z = radius * Math.cos(speed + now)
-      }
-
-      spider.translate(0, Math.cos(now) / 20, 0)
-      spider.rotate(0, Math.cos(now) / 20, 0)
+      // Move each car part along the x-axis
 
       // MOVE LIGHT AND LIGHT BULB
 
-      const LIGHT_SPEED = 0.05 // adjust this value to change the speed of the light movement
-      const LIGHT_RANGE = 5 // adjust this value to change the range of the light movement
+      const radius = 20 // radius of the circle
+      const center = [-5, 0, -5] // center of the circle
 
-      for (let i = 0; i < numLights; i++) {
-        const timeOffset = i * 0.1 // adjust this value to change the amount of offset between lights
-        const x = Math.cos(now + timeOffset) * LIGHT_RANGE + i + Math.random() * 0.2 - 0.1 // add a random offset to the x position
-        const y = 1
-        const z = -Math.sin(now + timeOffset) * LIGHT_RANGE + i + Math.random() * 0.2 - 0.1 // add a random offset to the z position
+      for (let i = 8; i < numLights - 3; i++) {
+        const timeOffset = i * 2 // time offset for animation
+        const angle = now + timeOffset // angle of rotation for animation
 
+        const x = center[0] + radius * Math.cos(angle) // x coordinate of light position
+        const y = center[1] // y coordinate of light position
+        const z = center[2] + radius * Math.sin(angle) // z coordinate of light position
+
+        // set the position of the light
         lights.setPointLightPosition(i, [x, y, z])
       }
 
-      /*       lightbulb1.x = lights.getPointLightPosition(0)[0]
-      lightbulb1.y = lights.getPointLightPosition(0)[1]
-      lightbulb1.z = lights.getPointLightPosition(0)[2]
+      for (let i = 11; i < numLights; i++) {
+        const timeOffset = i * 2 // time offset for animation
+        const angle = now + timeOffset // angle of rotation for animation
 
-      lightbulb2.x = lights.getPointLightPosition(1)[0]
-      lightbulb2.y = lights.getPointLightPosition(1)[1]
-      lightbulb2.z = lights.getPointLightPosition(1)[2]
+        const x = center[0] + radius * Math.cos(angle) // x coordinate of light position
+        const y = center[1] // y coordinate of light position
+        const z = center[2] + radius * Math.sin(angle) // z coordinate of light position
 
-      lightbulb3.x = lights.getPointLightPosition(2)[0]
-      lightbulb3.y = lights.getPointLightPosition(2)[1]
-      lightbulb3.z = lights.getPointLightPosition(2)[2] */
+        // set the position of the light
+        lights.setPointLightPosition(i, [z, y, x])
+      }
 
-      const cameracoords = camera.getCameraEye()
-      skybox.x = cameracoords[0]
-      skybox.y = cameracoords[1]
-      skybox.z = cameracoords[2]
-      skybox.rotate(0, 0.0005, 0.0005)
+      bulb1.x = lights.getPointLightPosition(0)[0]
+      bulb1.y = lights.getPointLightPosition(0)[1]
+      bulb1.z = lights.getPointLightPosition(0)[2]
+
+      bulb2.x = lights.getPointLightPosition(1)[0]
+      bulb2.y = lights.getPointLightPosition(1)[1]
+      bulb2.z = lights.getPointLightPosition(1)[2]
+
+      bulb3.x = lights.getPointLightPosition(2)[0]
+      bulb3.y = lights.getPointLightPosition(2)[1]
+      bulb3.z = lights.getPointLightPosition(2)[2]
+
+      bulb4.x = lights.getPointLightPosition(3)[0]
+      bulb4.y = lights.getPointLightPosition(3)[1]
+      bulb4.z = lights.getPointLightPosition(3)[2]
+
+      bulb5.x = lights.getPointLightPosition(4)[0]
+      bulb5.y = lights.getPointLightPosition(4)[1]
+      bulb5.z = lights.getPointLightPosition(4)[2]
+
+      bulb6.x = lights.getPointLightPosition(5)[0]
+      bulb6.y = lights.getPointLightPosition(5)[1]
+      bulb6.z = lights.getPointLightPosition(5)[2]
+
+      bulb7.x = lights.getPointLightPosition(6)[0]
+      bulb7.y = lights.getPointLightPosition(6)[1]
+      bulb7.z = lights.getPointLightPosition(6)[2]
+
+      bulb8.x = lights.getPointLightPosition(7)[0]
+      bulb8.y = lights.getPointLightPosition(7)[1]
+      bulb8.z = lights.getPointLightPosition(7)[2]
+      /* const cameracoords = camera.getCameraEye()
+      root.x = cameracoords[0]
+      root.y = cameracoords[1]
+      root.z = cameracoords[2]
+      root.rotate(0, 0.0005, 0.0005) */
       // RENDER
       renderer.frame(camera, lights, root)
       requestAnimationFrame(doFrame)

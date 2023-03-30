@@ -47,10 +47,6 @@ export class Node3d {
     }
   }
 
-  public attachLight(light: Light): void {
-    this.lights.push(light)
-  }
-
   public rotate(x: number, y: number, z: number): void {
     this.rotX += x
     this.rotY += y

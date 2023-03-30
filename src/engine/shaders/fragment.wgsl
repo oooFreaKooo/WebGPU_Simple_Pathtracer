@@ -9,8 +9,8 @@ struct Camera {
   eyePosition: vec3<f32>,
 }
 const MAX_LIGHTS = 100;
-const attenuationValue = 0.001;
-const lightRadius = 40.0;
+const attenuationValue = 0.005;
+const lightRadius = 15.0;
 
 @group(0) @binding(3) var<uniform> camera : Camera;
 @group(0) @binding(4) var<uniform> m : Material;

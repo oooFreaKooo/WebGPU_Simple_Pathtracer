@@ -47,4 +47,10 @@ export class Material {
   public getDiffuseTexture(): ImageBitmap {
     return this.diffusetexture
   }
+
+  /*   public getIsTransparent(): boolean {
+    return this.isTransparent
+  } */
 }
+
+//public isTransparent: boolean = false
