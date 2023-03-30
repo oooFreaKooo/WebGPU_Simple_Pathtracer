@@ -33,8 +33,8 @@ async function mainFunc() {
   obj.clear()
   const bulbData = await obj.initialize("./models/bulb.obj")
   obj.clear()
-  // SET TEXTURES
 
+  // SET TEXTURES
   const textureGround = await setTexture("./img/snow2.jpg")
   const textureRock = await setTexture("./img/snow1.jpg")
   const textureSky = await setTexture("./img/milkyway.jpg")
