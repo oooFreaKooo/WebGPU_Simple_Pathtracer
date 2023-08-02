@@ -23,7 +23,7 @@ export class Scene {
   }
 
   private setupCamera(): void {
-    this.camera = new Camera([5, 0, 5])
+    this.camera = new Camera([-15, 0, -5])
     this.cameraControls = new Controls(this.canvas, this.camera)
   }
 

@@ -2,8 +2,7 @@ import { color_buffer_view, sceneParameters, sky_texture, lightBuffer, sampler, 
 import raytracer_kernel from "../assets/shaders//raytracer_kernel.wgsl"
 import screen_shader from "../assets/shaders/screen_shader.wgsl"
 import { mat4, vec2, vec3 } from "gl-matrix"
-import { deg2Rad } from "./math"
-import { ObjLoader } from "./obj-loader"
+import { getTriangleCenter } from "./math"
 import { Node } from "./node"
 import { Triangle } from "./triangle"
 import { blasDescription } from "./blas_description"
@@ -41,7 +40,7 @@ export class ObjMeshRT extends Node3d {
   screen_bind_group: GPUBindGroup
 
   // Properties from the Object class
-  model = mat4.create()
+  model: mat4
   vertices: vec3[]
   textureCoords: vec2[]
   vertexNormals: vec3[]
@@ -51,10 +50,17 @@ export class ObjMeshRT extends Node3d {
   triangles: Triangle[] = []
   triangleIndices: number[] = []
   nodes: Node[] = []
-  nodesUsed = 0
-  blasDescription: blasDescription
-  loaded: boolean
+
+  loaded: boolean = false
+  blas_consumed: boolean = false
   frametime: number
+
+  // BVH properties
+  nodesUsed: number = 0
+  tlasNodesMax: number
+  blasDescription: blasDescription[] = []
+
+  blasIndices: number[] = []
 
   constructor(
     objData: {
@@ -70,10 +76,17 @@ export class ObjMeshRT extends Node3d {
     parameter?: ObjParameter,
   ) {
     super(parameter)
-    super.rotate(this.rotX, this.rotY, this.rotZ)
-    super.translate(this.x, this.y, this.z)
-    super.scale(this.scaleX, this.scaleY, this.scaleZ)
     this.setTransformation(parameter)
+
+    // Initialize the model matrix
+    this.model = mat4.create()
+    // Apply transformations to the model matrix
+    mat4.translate(this.model, this.model, [this.x, this.y, this.z])
+    mat4.rotateX(this.model, this.model, this.rotX)
+    mat4.rotateY(this.model, this.model, this.rotY)
+    mat4.rotateZ(this.model, this.model, this.rotZ)
+    mat4.scale(this.model, this.model, [this.scaleX, this.scaleY, this.scaleZ])
+
     Object.assign(this, objData)
     this.init()
   }
@@ -81,10 +94,10 @@ export class ObjMeshRT extends Node3d {
   async init(): Promise<void> {
     await Promise.all([
       this.makeBindGroupLayouts(),
+      this.buildBVH(),
       this.createAssets(),
       this.makeBindGroups(),
       this.makePipelines(),
-      this.buildBVH(),
       this.prepareScene(),
     ])
   }
@@ -186,80 +199,119 @@ export class ObjMeshRT extends Node3d {
     })
   }
 
-  async buildBVH() {
+  buildBVH() {
     this.nodesUsed = 0
-    this.blasDescription = new blasDescription(this.minCorner, this.maxCorner, this.model)
-    this.resetNodes()
-    this.setRootNode()
+
+    // Assuming the ObjMeshRT class has its own method or property to get blasDescriptions
+    this.blasDescription = this.getBlasDescription()
+    this.blasIndices = Array.from({ length: this.blasDescription.length }, (_, i) => i)
+
+    const rootNode = new Node()
+    rootNode.leftChild = 0
+    rootNode.primitiveCount = this.blasDescription.length
+    this.nodes[0] = rootNode
+    this.nodesUsed += 1
+
     this.updateBounds(0)
     this.subdivide(0)
-  }
-
-  private resetNodes() {
-    for (let i = 0; i < this.nodes.length; i++) {
-      this.nodes[i].leftChild = 0
-      this.nodes[i].primitiveCount = 0
-      this.nodes[i].minCorner = [0, 0, 0]
-      this.nodes[i].maxCorner = [0, 0, 0]
-    }
-  }
-
-  private setRootNode() {
-    const root = this.nodes[0]
-    root.leftChild = 0
-    root.primitiveCount = 1 // Only one object
-    this.nodesUsed += 1
   }
 
   updateBounds(nodeIndex: number) {
     const node = this.nodes[nodeIndex]
     node.minCorner = [MAX_VALUE, MAX_VALUE, MAX_VALUE]
     node.maxCorner = [MIN_VALUE, MIN_VALUE, MIN_VALUE]
-    vec3.min(node.minCorner, node.minCorner, this.blasDescription.minCorner)
-    vec3.max(node.maxCorner, node.maxCorner, this.blasDescription.maxCorner)
+
+    for (let i = 0; i < node.primitiveCount; i++) {
+      const description = this.blasDescription[this.blasIndices[node.leftChild + i]]
+      for (let j = 0; j < 3; j++) {
+        node.minCorner[j] = Math.min(node.minCorner[j], description.minCorner[j])
+        node.maxCorner[j] = Math.max(node.maxCorner[j], description.maxCorner[j])
+      }
+    }
   }
 
   subdivide(nodeIndex: number) {
     const node = this.nodes[nodeIndex]
+
     if (node.primitiveCount < 2) return
-    const extent = vec3.subtract(vec3.create(), node.maxCorner, node.minCorner)
-    const axis = this.getSplitAxis(extent)
-    const splitPosition = node.minCorner[axis] + extent[axis] / 2
-    this.partitionblasDescription(node, splitPosition, axis)
-  }
 
-  private getSplitAxis(extent: vec3): number {
+    const extent = [node.maxCorner[0] - node.minCorner[0], node.maxCorner[1] - node.minCorner[1], node.maxCorner[2] - node.minCorner[2]]
     let axis = 0
-    if (extent[1] > extent[axis]) axis = 1
+    if (extent[1] > extent[0]) axis = 1
     if (extent[2] > extent[axis]) axis = 2
-    return axis
-  }
 
-  private partitionblasDescription(node: Node, splitPosition: number, axis: number) {
-    if (this.blasDescription.center[axis] < splitPosition) {
-      this.createChildNodes(node, true)
-    } else {
-      this.createChildNodes(node, false)
-    }
-  }
+    const splitPosition = node.minCorner[axis] + extent[axis] / 2
 
-  private createChildNodes(node: Node, isLeft: boolean) {
-    if (isLeft) {
-      node.leftChild = this.nodesUsed++
-      this.nodes[node.leftChild].primitiveCount = 1
-    } else {
-      const rightChildIndex = this.nodesUsed++
-      this.nodes[rightChildIndex].leftChild = node.leftChild + 1
-      this.nodes[rightChildIndex].primitiveCount = 1
+    let i = node.leftChild
+    let j = i + node.primitiveCount - 1
+
+    while (i <= j) {
+      if (this.blasDescription[this.blasIndices[i]].center[axis] < splitPosition) {
+        i++
+      } else {
+        const temp = this.blasIndices[i]
+        this.blasIndices[i] = this.blasIndices[j]
+        this.blasIndices[j] = temp
+        j--
+      }
     }
-    this.updateBounds(node.leftChild)
+
+    const leftCount = i - node.leftChild
+    if (leftCount === 0 || leftCount === node.primitiveCount) return
+
+    const leftChildIndex = this.nodesUsed++
+    const rightChildIndex = this.nodesUsed++
+
+    this.nodes[leftChildIndex] = new Node()
+    this.nodes[leftChildIndex].leftChild = node.leftChild
+    this.nodes[leftChildIndex].primitiveCount = leftCount
+
+    this.nodes[rightChildIndex] = new Node()
+    this.nodes[rightChildIndex].leftChild = i
+    this.nodes[rightChildIndex].primitiveCount = node.primitiveCount - leftCount
+
+    node.leftChild = leftChildIndex
+    node.primitiveCount = 0
+
+    this.updateBounds(leftChildIndex)
+    this.updateBounds(rightChildIndex)
+    this.subdivide(leftChildIndex)
+    this.subdivide(rightChildIndex)
   }
 
   finalizeBVH() {
+    // Assuming the ObjMeshRT class has its own nodes
     for (let i = 0; i < this.nodesUsed; i++) {
       const nodeToUpload = this.nodes[i]
-      this.nodes[i] = nodeToUpload
+      if (nodeToUpload.primitiveCount === 0) {
+        nodeToUpload.leftChild += this.tlasNodesMax
+      }
+      this.nodes[this.tlasNodesMax + i] = nodeToUpload
     }
+  }
+
+  getBlasDescription(): blasDescription[] {
+    const descriptions: blasDescription[] = []
+
+    for (const triangle of this.triangles) {
+      // Compute the bounding box for the triangle
+      const minCorner: vec3 = new Float32Array([MAX_VALUE, MAX_VALUE, MAX_VALUE])
+      const maxCorner: vec3 = new Float32Array([MIN_VALUE, MIN_VALUE, MIN_VALUE])
+
+      for (const corner of triangle.corners) {
+        for (let i = 0; i < 3; i++) {
+          minCorner[i] = Math.min(minCorner[i], corner[i])
+          maxCorner[i] = Math.max(maxCorner[i], corner[i])
+        }
+      }
+
+      // Create a blasDescription for the triangle
+      // Using the model matrix of the ObjMeshRT class for the transformation
+      const description = new blasDescription(minCorner, maxCorner, this.model)
+      descriptions.push(description)
+    }
+
+    return descriptions
   }
 
   async createAssets() {
@@ -418,12 +470,12 @@ export class ObjMeshRT extends Node3d {
   async prepareScene() {
     const blasDescriptionData: Float32Array = new Float32Array(20)
     for (let j = 0; j < 16; j++) {
-      blasDescriptionData[j] = <number>this.blasDescription.inverseModel.at(j)
+      blasDescriptionData[j] = <number>this.blasDescription[0].inverseModel.at(j)
     }
-    blasDescriptionData[16] = this.blasDescription.rootNodeIndex
-    blasDescriptionData[17] = this.blasDescription.rootNodeIndex
-    blasDescriptionData[18] = this.blasDescription.rootNodeIndex
-    blasDescriptionData[19] = this.blasDescription.rootNodeIndex
+    blasDescriptionData[16] = this.blasDescription[0].rootNodeIndex
+    blasDescriptionData[17] = this.blasDescription[0].rootNodeIndex
+    blasDescriptionData[18] = this.blasDescription[0].rootNodeIndex
+    blasDescriptionData[19] = this.blasDescription[0].rootNodeIndex
     device.queue.writeBuffer(this.blasDescriptionBuffer, 0, blasDescriptionData)
 
     // Write the nodes
@@ -440,9 +492,9 @@ export class ObjMeshRT extends Node3d {
     }
     device.queue.writeBuffer(this.nodeBuffer, 0, nodeData)
 
-    /*     if (this.loaded) {
+    if (this.loaded) {
       return
-    } */
+    }
     this.loaded = true
     const triangleData: Float32Array = new Float32Array(28 * this.triangles.length)
     for (let i = 0; i < this.triangles.length; i++) {
@@ -504,15 +556,12 @@ export class ObjMeshRT extends Node3d {
     if (parameter == null) {
       return
     }
-
     this.x = parameter.x ? parameter.x : 0
     this.y = parameter.y ? parameter.y : 0
     this.z = parameter.z ? parameter.z : 0
-
     this.rotX = parameter.rotX ? parameter.rotX : 0
     this.rotY = parameter.rotY ? parameter.rotY : 0
     this.rotZ = parameter.rotZ ? parameter.rotZ : 0
-
     this.scaleX = parameter.scaleX ? parameter.scaleX : 1
     this.scaleY = parameter.scaleY ? parameter.scaleY : 1
     this.scaleZ = parameter.scaleZ ? parameter.scaleZ : 1

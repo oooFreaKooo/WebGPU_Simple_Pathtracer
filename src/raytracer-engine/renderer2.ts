@@ -1,9 +1,6 @@
 import { Node3d } from "../objects/Node3d"
-import { CreateDepthStencil } from "../utils/helper"
 import { ObjMeshRT } from "./ObjMeshRT"
-import { Camera } from "./camera"
 import { CubeMapMaterial } from "./cube_material"
-import { Light } from "./light"
 import { Scene } from "./scene"
 
 export var device: GPUDevice
@@ -111,13 +108,13 @@ export class Renderer {
     const commandEncoder = device.createCommandEncoder()
     const textureView = this.context.getCurrentTexture().createView()
 
-    const nodes: Node3d[] = []
-    this.makeNodes(node, nodes)
+    const objMeshNodes: ObjMeshRT[] = []
+    this.makeNodes(node, objMeshNodes)
 
     // Begin the ray tracing pass
     const ray_trace_pass = commandEncoder.beginComputePass()
-    for (let child of nodes) {
-      if (child instanceof ObjMeshRT) child.drawCombined(ray_trace_pass, canvas)
+    for (let child of objMeshNodes) {
+      child.drawCombined(ray_trace_pass, canvas)
     }
     ray_trace_pass.end()
 
@@ -133,8 +130,8 @@ export class Renderer {
       ],
     })
 
-    for (let child of nodes) {
-      if (child instanceof ObjMeshRT) child.drawCombined(renderpass, canvas)
+    for (let child of objMeshNodes) {
+      child.drawCombined(renderpass, canvas)
     }
     renderpass.end()
 

@@ -45,25 +45,30 @@ export class ObjLoader {
   async readFile(url: string) {
     const response = await fetch(url)
     const file_contents = await response.text()
-    const lines = file_contents.split("\n")
 
-    lines.forEach((line) => {
-      const prefix = line.slice(0, 2)
-      switch (prefix) {
-        case "v ":
-          this.read_vertex_data(line)
-          break
-        case "vt":
-          this.read_texcoord_data(line)
-          break
-        case "vn":
-          this.read_normal_data(line)
-          break
-        case "f ":
-          this.read_face_data(line)
-          break
+    let line = ""
+    for (let i = 0; i < file_contents.length; i++) {
+      if (file_contents[i] === "\n" || i === file_contents.length - 1) {
+        const prefix = line.slice(0, 2)
+        switch (prefix) {
+          case "v ":
+            this.read_vertex_data(line)
+            break
+          case "vt":
+            this.read_texcoord_data(line)
+            break
+          case "vn":
+            this.read_normal_data(line)
+            break
+          case "f ":
+            this.read_face_data(line)
+            break
+        }
+        line = ""
+      } else {
+        line += file_contents[i]
       }
-    })
+    }
   }
 
   read_vertex_data(line: string) {
