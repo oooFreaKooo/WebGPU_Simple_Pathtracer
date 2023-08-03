@@ -96,16 +96,16 @@ export class Controls {
       this.forwardsAmount = -0.03
     }
     if (this.keysPressed[KeyCodes.A]) {
-      this.rightAmount = -0.03
-    }
-    if (this.keysPressed[KeyCodes.D]) {
       this.rightAmount = 0.03
     }
+    if (this.keysPressed[KeyCodes.D]) {
+      this.rightAmount = -0.03
+    }
     if (this.keysPressed[KeyCodes.SPACE]) {
-      this.upAmount = -0.03
+      this.upAmount = 0.03
     }
     if (this.keysPressed[KeyCodes.LEFT_CONTROL]) {
-      this.upAmount = 0.03
+      this.upAmount = -0.03
     }
     this.shiftKeyHeld = this.keysPressed[KeyCodes.LEFT_SHIFT]
 
@@ -128,10 +128,11 @@ export class Controls {
     }
   }
   rotate_camera(dX: number, dY: number) {
-    this.camera.phi += dX
-    this.camera.theta += dY
+    this.camera.theta += dX
+    this.camera.phi += dY
 
-    this.camera.theta = Math.max(10, Math.min(165, this.camera.theta))
+    // Restrict the vertical rotation to prevent flipping
+    this.camera.phi = Math.max(-85, Math.min(85, this.camera.phi))
 
     this.camera.recalculate_vectors()
   }

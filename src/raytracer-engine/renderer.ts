@@ -234,15 +234,15 @@ export class Renderer {
     this.blasIndexBuffer = this.device.createBuffer(blasIndexBufferDescriptor)
 
     const skyboxUrls = [
-      "./src/assets/textures/skybox/sky_front.png",
-      "./src/assets/textures/skybox/sky_back.png",
-      "./src/assets/textures/skybox/sky_left.png",
-      "./src/assets/textures/skybox/sky_right.png",
-      "./src/assets/textures/skybox/sky_bottom.png",
-      "./src/assets/textures/skybox/sky_top.png",
+      "./src/assets/textures/skybox/milkyway.jpg",
+      "./src/assets/textures/skybox/milkyway.jpg",
+      "./src/assets/textures/skybox/milkyway.jpg",
+      "./src/assets/textures/skybox/milkyway.jpg",
+      "./src/assets/textures/skybox/milkyway.jpg",
+      "./src/assets/textures/skybox/milkyway.jpg",
     ]
     this.sky_texture = new CubeMapMaterial()
-    await this.sky_texture.initialize(this.device, skyboxUrls)
+    await this.sky_texture.initialize(this.device, "./src/assets/textures/skybox/skybox.png")
 
     this.lightBuffer = this.device.createBuffer({
       size: 32,
@@ -365,7 +365,6 @@ export class Renderer {
           },
         ],
       },
-
       primitive: {
         topology: "triangle-list",
       },
@@ -510,6 +509,7 @@ export class Renderer {
     ray_trace_pass.end()
 
     const textureView: GPUTextureView = this.context.getCurrentTexture().createView()
+
     const renderpass: GPURenderPassEncoder = commandEncoder.beginRenderPass({
       colorAttachments: [
         {

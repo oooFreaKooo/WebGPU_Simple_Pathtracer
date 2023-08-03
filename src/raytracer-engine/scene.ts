@@ -8,9 +8,6 @@ import { Triangle } from "./triangle"
 import { Object } from "./object"
 import { Node } from "./node"
 
-const DEFAULT_SPEED = 1.0
-const SHIFT_SPEED_MULTIPLIER = 2.0
-
 export class Scene {
   canvas: HTMLCanvasElement
   camera: Camera
@@ -30,15 +27,20 @@ export class Scene {
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
     this.objectMesh = new ObjLoader()
-    this.object = new Array(9)
-    var i: number = 0
+    /*     this.object = new Array(1)
+    this.object[0] = new Object([0, 0, 0], [180, 0, 90]) */
+    this.object = new Array(1)
+    this.object[0] = new Object([0, 0, 0], [90, 0, 0])
+    /*     this.object = new Array(9)
     var i: number = 0
     for (let y = -1; y < 2; y++) {
       for (let x = -1; x < 2; x++) {
         this.object[i] = new Object([2 * x, 2 * y, 0], [180, 0, 90])
         i += 1
       }
-    }
+    } */
+    // Create the Ground object
+
     this.initialize()
   }
 
@@ -48,41 +50,19 @@ export class Scene {
     this.cameraControls = new Controls(this.canvas, this.camera)
   }
 
-  animateCamera(): void {
-    const speed = this.cameraControls.shiftKeyHeld ? DEFAULT_SPEED * SHIFT_SPEED_MULTIPLIER : DEFAULT_SPEED
-
-    // Calculate new forwards direction
-    const forwards = vec3.create()
-    vec3.cross(forwards, this.camera.right, this.camera.up)
-    vec3.normalize(forwards, forwards)
-
-    // Use the calculated forwards vector in the movePlayer method
-    this.cameraControls.movePlayer(
-      this.cameraControls.forwardsAmount * speed,
-      this.cameraControls.rightAmount * speed,
-      this.cameraControls.upAmount * speed, // Multiply upAmount by speed if desired
-      forwards,
-    )
-
-    this.camera.recalculate_vectors()
-  }
-
   async make_scene() {
-    await this.objectMesh.initialize([1.0, 1.0, 1.0], "./src/assets/models/statue.obj")
-    //await this.objectMesh.initialize([1.0, 1.0, 1.0], "dist/models/ground.obj");
+    /*     await this.objectMesh.initialize([1.0, 1.0, 1.0], "./src/assets/models/statue.obj")
+    this.meshGroup[0] = this.objectMesh */
+    await this.objectMesh.initialize([1.0, 0.0, 1.0], "./src/assets/models/cube.obj")
 
     this.triangles = []
-    //console.log("Triangles:")
     this.objectMesh.triangles.forEach((tri) => {
       this.triangles.push(tri)
-      //console.log(tri.centroid);
     })
 
     this.triangleIndices = []
-    //console.log("Triangle Indices:")
     this.objectMesh.triangleIndices.forEach((index) => {
       this.triangleIndices.push(index)
-      //console.log(index)
     })
     this.tlasNodesMax = 2 * this.object.length - 1
     const blasNodesUsed: number = this.objectMesh.nodesUsed
@@ -103,7 +83,6 @@ export class Scene {
     this.object.forEach((statue) => {
       statue.update(frametime / 16.667)
     })
-
     this.buildBVH()
   }
 
@@ -219,5 +198,11 @@ export class Scene {
       //store node
       this.nodes[this.tlasNodesMax + i] = nodeToUpload
     }
+  }
+}
+
+class Ground extends Object {
+  constructor(position: vec3, rotation: vec3) {
+    super(position, rotation)
   }
 }

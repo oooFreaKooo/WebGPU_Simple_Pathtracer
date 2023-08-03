@@ -80,9 +80,11 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     let screen_size: vec2<i32> = vec2<i32>(textureDimensions(color_buffer));
     let screen_pos : vec2<i32> = vec2<i32>(i32(GlobalInvocationID.x), i32(GlobalInvocationID.y));
 
-    let horizontal_coefficient: f32 = (f32(screen_pos.x) - f32(screen_size.x) / 2) / f32(screen_size.y);
-    let vertical_coefficient: f32 = (f32(screen_pos.y) - f32(screen_size.y) / 2) / f32(screen_size.y);
-
+    let aspect_ratio: f32 = f32(screen_size.x) / f32(screen_size.y);
+    
+    // Adjusted coefficients:
+    let horizontal_coefficient: f32 = (f32(screen_pos.x) - f32(screen_size.x) / 2) / (f32(screen_size.x));
+    let vertical_coefficient: f32 = (f32(screen_pos.y) - f32(screen_size.y) / 2) / (f32(screen_size.y) * aspect_ratio);
 
     let forwards: vec3<f32> = scene.cameraForwards;
     let right: vec3<f32> = scene.cameraRight;
@@ -96,6 +98,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
 
     textureStore(color_buffer, screen_pos, vec4<f32>(pixel_color, 1.0));
 }
+
 
 fn rayColor(ray: Ray) -> vec3<f32> {
     var color: vec3<f32> = vec3(1.0, 1.0, 1.0);
