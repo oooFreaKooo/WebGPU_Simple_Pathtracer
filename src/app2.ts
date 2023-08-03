@@ -1,47 +1,32 @@
 import { Scene } from "../src/raytracer-engine/scene"
-import { Renderer } from "../src/raytracer-engine/renderer2"
-import { Node3d } from "./objects/Node3d"
-import { ObjLoader } from "./raytracer-engine/obj-loader"
-import { ObjMeshRT } from "./raytracer-engine/ObjMeshRT"
-
-let previousTime = 0
-let frameTime = 0
-let renderTime = 0
-let fps = 0
+import { Renderer } from "./raytracer-engine/renderer"
 
 export class Application2 {
   private canvas: HTMLCanvasElement
   private scene: Scene
   private renderer: Renderer
   private animationFrameId?: number
-  private root: Node3d = new Node3d()
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
     this.scene = new Scene(canvas)
-    this.renderer = new Renderer(this.scene)
+    this.renderer = new Renderer(this.canvas, this.scene)
   }
 
   async start() {
-    await this.initRenderer()
-    await this.loadAssets()
-    if (this.root.children.length > 0) {
-      this.animationFrameId = requestAnimationFrame(this.loop)
-    }
+    await this.scene.make_scene()
+
+    await this.renderer.Initialize()
   }
 
-  private async initRenderer() {
-    await this.renderer.init(this.canvas)
-  }
-
-  private async loadAssets() {
+  /*   private async loadAssets() {
     const objLoader = new ObjLoader()
-    const cubeData = await objLoader.initialize([1, 1, 1], "./src/assets/models/cube.obj")
-    const cube = new ObjMeshRT(cubeData, { x: 0, y: 0, z: 0, scaleX: 0.5, scaleY: 0.5, scaleZ: 0.5 })
+    const cubeData = await objLoader.initialize([1, 1, 1], "./src/assets/models/statue.obj")
+    const cube = new ObjMeshRT(cubeData, { x: 0, y: 0, z: 0, scaleX: 10.5, scaleY: 10.5, scaleZ: 10.5 })
     this.root.attach(cube)
-  }
+  } */
 
-  private render() {
+  /*   private render() {
     const uploadStart = performance.now()
 
     if (this.renderer) {
@@ -76,7 +61,7 @@ export class Application2 {
 
     this.animationFrameId = requestAnimationFrame(this.loop)
   }
-
+*/
   stop() {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId)

@@ -2,10 +2,9 @@ import { mat4 } from "gl-matrix"
 import { Light } from "./Light"
 import { ObjParameter } from "../utils/helper"
 import { ObjMesh } from "./ObjMesh"
-import { ObjMeshRT } from "../raytracer-engine/ObjMeshRT"
 
 export class Node3d {
-  public children: (Node3d | ObjMesh | ObjMeshRT)[] = []
+  public children: (Node3d | ObjMesh)[] = []
   public lights: Light[] = []
   public parent: Node3d | undefined = undefined
   public x: number = 0
@@ -30,7 +29,7 @@ export class Node3d {
     this.scaleZ = params.scaleZ || 1
   }
 
-  public async attach(child: Node3d | ObjMesh | ObjMeshRT) {
+  public async attach(child: Node3d | ObjMesh) {
     if (child.parent) {
       child.parent.detach(child)
     }
@@ -39,7 +38,7 @@ export class Node3d {
     this.children.push(child)
   }
 
-  public detach(child: Node3d | ObjMesh | ObjMeshRT): void {
+  public detach(child: Node3d | ObjMesh): void {
     const index = this.children.indexOf(child)
 
     if (index !== -1) {
