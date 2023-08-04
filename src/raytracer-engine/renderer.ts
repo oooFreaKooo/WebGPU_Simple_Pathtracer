@@ -24,6 +24,7 @@ export class Renderer {
   blasIndexBuffer: GPUBuffer
   sky_texture: CubeMapMaterial
   lightBuffer: GPUBuffer
+  materialBuffer: GPUBuffer
 
   // Pipeline objects
   ray_tracing_pipeline: GPUComputePipeline
@@ -36,7 +37,7 @@ export class Renderer {
   // Scene to render
   scene: Scene
   frametime: number
-  loaded: boolean
+  loadCount = 0
   animationFrameId?: number
 
   constructor(canvas: HTMLCanvasElement, scene: Scene) {
@@ -56,7 +57,6 @@ export class Renderer {
     await this.makePipelines()
 
     this.frametime = 16
-    this.loaded = false
 
     this.render()
   }
@@ -156,6 +156,13 @@ export class Renderer {
             type: "uniform",
           },
         },
+        {
+          binding: 10,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {
+            type: "uniform",
+          },
+        },
       ],
     })
 
@@ -197,7 +204,7 @@ export class Renderer {
     this.sampler = this.device.createSampler(samplerDescriptor)
 
     const parameterBufferDescriptor: GPUBufferDescriptor = {
-      size: 64,
+      size: 18 * 6,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     }
     this.sceneParameters = this.device.createBuffer(parameterBufferDescriptor)
@@ -233,19 +240,15 @@ export class Renderer {
     }
     this.blasIndexBuffer = this.device.createBuffer(blasIndexBufferDescriptor)
 
-    const skyboxUrls = [
-      "./src/assets/textures/skybox/milkyway.jpg",
-      "./src/assets/textures/skybox/milkyway.jpg",
-      "./src/assets/textures/skybox/milkyway.jpg",
-      "./src/assets/textures/skybox/milkyway.jpg",
-      "./src/assets/textures/skybox/milkyway.jpg",
-      "./src/assets/textures/skybox/milkyway.jpg",
-    ]
     this.sky_texture = new CubeMapMaterial()
     await this.sky_texture.initialize(this.device, "./src/assets/textures/skybox/skybox.png")
 
     this.lightBuffer = this.device.createBuffer({
       size: 32,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    })
+    this.materialBuffer = this.device.createBuffer({
+      size: 28,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })
   }
@@ -306,6 +309,12 @@ export class Renderer {
           binding: 9,
           resource: {
             buffer: this.lightBuffer,
+          },
+        },
+        {
+          binding: 10,
+          resource: {
+            buffer: this.materialBuffer,
           },
         },
       ],
@@ -379,6 +388,7 @@ export class Renderer {
       cameraForwards: this.scene.camera.forwards,
       cameraRight: this.scene.camera.right,
       cameraUp: this.scene.camera.up,
+      fov: this.scene.camera.fov,
     }
     const maxBounces: number = 4
     this.device.queue.writeBuffer(
@@ -396,19 +406,38 @@ export class Renderer {
         sceneData.cameraRight[0],
         sceneData.cameraRight[1],
         sceneData.cameraRight[2],
-        maxBounces,
+        0.0,
         sceneData.cameraUp[0],
         sceneData.cameraUp[1],
         sceneData.cameraUp[2],
-        0.0,
+        sceneData.fov,
+        maxBounces,
       ]),
       0,
-      16,
+      17,
     )
-
+    // LIGHT
+    this.scene.light.intensity = parseFloat(document.querySelector<HTMLInputElement>("#intensity")!.value)
+    // MATERIAL
+    this.scene.material.ambient = parseFloat(document.querySelector<HTMLInputElement>("#ambient")!.value)
+    this.scene.material.diffuse = parseFloat(document.querySelector<HTMLInputElement>("#diffuse")!.value)
+    this.scene.material.specular = parseFloat(document.querySelector<HTMLInputElement>("#specular")!.value)
+    this.scene.material.shininess = parseFloat(document.querySelector<HTMLInputElement>("#shininess")!.value)
+    this.scene.material.reflectivity = parseFloat(document.querySelector<HTMLInputElement>("#reflectivity")!.value)
+    this.scene.material.refraction = parseFloat(document.querySelector<HTMLInputElement>("#refraction")!.value)
+    this.scene.material.transparency = parseFloat(document.querySelector<HTMLInputElement>("#transparency")!.value)
+    // LIGHT
     const { position, color, intensity } = this.scene.light
     const lightData = new Float32Array([...position, 0.0, ...color, intensity])
     this.device.queue.writeBuffer(this.lightBuffer, 0, lightData)
+
+    // MATERIAL
+    const { ambient, diffuse, specular, shininess, reflectivity, refraction, transparency } = this.scene.material
+    const materialData = new Float32Array([ambient, diffuse, specular, shininess, reflectivity, refraction, transparency])
+    this.device.queue.writeBuffer(this.materialBuffer, 0, materialData)
+
+    if (!this.loadCount) this.loadCount = 0
+    const totalNodesUsed = this.scene.objectMesh.reduce((sum, mesh) => sum + mesh.nodesUsed, 0)
 
     const blasDescriptionData: Float32Array = new Float32Array(20 * this.scene.blasDescriptions.length)
     for (let i = 0; i < this.scene.blasDescriptions.length; i++) {
@@ -429,7 +458,7 @@ export class Renderer {
     this.device.queue.writeBuffer(this.blasIndexBuffer, 0, blasIndexData, 0, this.scene.blasIndices.length)
 
     //Write the tlas nodes
-    var nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
+    const nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
     for (let i = 0; i < this.scene.nodesUsed; i++) {
       nodeData_a[8 * i] = this.scene.nodes[i].minCorner[0]
       nodeData_a[8 * i + 1] = this.scene.nodes[i].minCorner[1]
@@ -446,10 +475,11 @@ export class Renderer {
     const uploadTimeLabel: HTMLElement = <HTMLElement>document.getElementById("upload-time")
     uploadTimeLabel.innerText = (uploadEnd - uploadStart).toFixed(2).toString()
 
-    if (this.loaded) {
+    if (this.loadCount >= this.scene.objectMesh.length) {
       return
     }
-    this.loaded = true
+    this.loadCount++
+
     const triangleData: Float32Array = new Float32Array(28 * this.scene.triangles.length)
     for (let i = 0; i < this.scene.triangles.length; i++) {
       for (var corner = 0; corner < 3; corner++) {
@@ -471,20 +501,24 @@ export class Renderer {
     this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, 28 * this.scene.triangles.length)
 
     //Write blas data
-    var nodeData_b = new Float32Array(8 * this.scene.objectMesh.nodesUsed)
-    for (let i = 0; i < this.scene.objectMesh.nodesUsed; i++) {
-      let baseIndex: number = this.scene.tlasNodesMax + i
-      nodeData_b[8 * i] = this.scene.nodes[baseIndex].minCorner[0]
-      nodeData_b[8 * i + 1] = this.scene.nodes[baseIndex].minCorner[1]
-      nodeData_b[8 * i + 2] = this.scene.nodes[baseIndex].minCorner[2]
-      nodeData_b[8 * i + 3] = this.scene.nodes[baseIndex].leftChild
-      nodeData_b[8 * i + 4] = this.scene.nodes[baseIndex].maxCorner[0]
-      nodeData_b[8 * i + 5] = this.scene.nodes[baseIndex].maxCorner[1]
-      nodeData_b[8 * i + 6] = this.scene.nodes[baseIndex].maxCorner[2]
-      nodeData_b[8 * i + 7] = this.scene.nodes[baseIndex].primitiveCount
+    let offset = this.scene.tlasNodesMax
+    const nodeData_b = new Float32Array(8 * totalNodesUsed)
+    for (const mesh of this.scene.objectMesh) {
+      for (let i = 0; i < mesh.nodesUsed; i++) {
+        let baseIndex: number = offset + i
+        nodeData_b[8 * i] = this.scene.nodes[baseIndex].minCorner[0]
+        nodeData_b[8 * i + 1] = this.scene.nodes[baseIndex].minCorner[1]
+        nodeData_b[8 * i + 2] = this.scene.nodes[baseIndex].minCorner[2]
+        nodeData_b[8 * i + 3] = this.scene.nodes[baseIndex].leftChild
+        nodeData_b[8 * i + 4] = this.scene.nodes[baseIndex].maxCorner[0]
+        nodeData_b[8 * i + 5] = this.scene.nodes[baseIndex].maxCorner[1]
+        nodeData_b[8 * i + 6] = this.scene.nodes[baseIndex].maxCorner[2]
+        nodeData_b[8 * i + 7] = this.scene.nodes[baseIndex].primitiveCount
+      }
+      offset += mesh.nodesUsed
     }
     let bufferOffset: number = 32 * this.scene.tlasNodesMax
-    this.device.queue.writeBuffer(this.nodeBuffer, bufferOffset, nodeData_b, 0, 8 * this.scene.objectMesh.nodesUsed)
+    this.device.queue.writeBuffer(this.nodeBuffer, bufferOffset, nodeData_b, 0, 8 * totalNodesUsed)
 
     const triangleIndexData: Float32Array = new Float32Array(this.scene.triangles.length)
     for (let i = 0; i < this.scene.triangles.length; i++) {

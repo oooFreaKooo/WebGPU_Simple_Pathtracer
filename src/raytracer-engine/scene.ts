@@ -7,12 +7,14 @@ import { ObjLoader } from "./obj-loader"
 import { Triangle } from "./triangle"
 import { Object } from "./object"
 import { Node } from "./node"
+import { Material } from "./material"
 
 export class Scene {
   canvas: HTMLCanvasElement
   camera: Camera
   cameraControls: Controls
   light: Light
+  material: Material
   triangles: Triangle[]
   triangleIndices: number[]
   nodes: Node[]
@@ -20,81 +22,85 @@ export class Scene {
   tlasNodesMax: number
   blasIndices: number[]
   blasDescriptions: blasDescription[]
-  objectMesh: ObjLoader
+  objectMesh: ObjLoader[] = []
   object: Object[]
   blas_consumed: boolean = false
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
-    this.objectMesh = new ObjLoader()
-    /*     this.object = new Array(1)
-    this.object[0] = new Object([0, 0, 0], [180, 0, 90]) */
-    this.object = new Array(1)
-    this.object[0] = new Object([0, 0, 0], [90, 0, 0])
-    /*     this.object = new Array(9)
-    var i: number = 0
-    for (let y = -1; y < 2; y++) {
-      for (let x = -1; x < 2; x++) {
-        this.object[i] = new Object([2 * x, 2 * y, 0], [180, 0, 90])
-        i += 1
-      }
-    } */
-    // Create the Ground object
-
+    this.triangles = []
+    this.triangleIndices = []
+    this.nodes = []
+    this.object = []
+    this.objectMesh = new Array()
     this.initialize()
   }
 
   initialize() {
-    this.light = new Light(new Float32Array([1.0, 6.0, 1.0]), new Float32Array([1.0, 1.0, 1.0]), 2.0)
+    this.light = new Light(new Float32Array([1.0, 100.0, 0.0]), new Float32Array([1.0, 0.8, 0.3]), 1.0)
+    this.material = new Material()
     this.camera = new Camera([-15, 0, -5])
     this.cameraControls = new Controls(this.canvas, this.camera)
   }
 
-  async make_scene() {
-    /*     await this.objectMesh.initialize([1.0, 1.0, 1.0], "./src/assets/models/statue.obj")
-    this.meshGroup[0] = this.objectMesh */
-    await this.objectMesh.initialize([1.0, 0.0, 1.0], "./src/assets/models/cube.obj")
+  async loadObject(color: vec3, modelPath: string, position: vec3 = [1, 1, 1], rotation: vec3 = [0, 0, 0]) {
+    console.log(`Loading object from ${modelPath}...`)
 
-    this.triangles = []
-    this.objectMesh.triangles.forEach((tri) => {
+    const newObjectMesh = new ObjLoader()
+    await newObjectMesh.initialize(color, modelPath)
+
+    this.objectMesh.push(newObjectMesh)
+
+    this.object.push(new Object(position, rotation))
+
+    const currentTriangleCount = this.triangles.length
+    console.log(`Current triangle count: ${currentTriangleCount}`)
+
+    newObjectMesh.triangles.forEach((tri) => {
       this.triangles.push(tri)
     })
-
-    this.triangleIndices = []
-    this.objectMesh.triangleIndices.forEach((index) => {
-      this.triangleIndices.push(index)
+    console.log(`Triangles added from new object: ${newObjectMesh.triangles.length}`)
+    newObjectMesh.triangleIndices.forEach((index) => {
+      this.triangleIndices.push(index + currentTriangleCount)
     })
+    console.log(`Updated triangle count: ${this.triangles.length}`)
+    const totalNodesUsed = this.objectMesh.reduce((sum, mesh) => sum + mesh.nodesUsed, 0)
+
     this.tlasNodesMax = 2 * this.object.length - 1
-    const blasNodesUsed: number = this.objectMesh.nodesUsed
-    this.nodes = new Array(this.tlasNodesMax + blasNodesUsed)
-    for (var i: number = 0; i < this.tlasNodesMax + blasNodesUsed; i += 1) {
-      this.nodes[i] = new Node()
-      this.nodes[i].leftChild = 0
-      this.nodes[i].primitiveCount = 0
-      this.nodes[i].minCorner = [0, 0, 0]
-      this.nodes[i].maxCorner = [0, 0, 0]
+
+    const newNodeCount = this.tlasNodesMax + totalNodesUsed - (this.nodes ? this.nodes.length : 0)
+
+    for (let i: number = 0; i < newNodeCount; i += 1) {
+      const newNode = new Node()
+      newNode.leftChild = 0
+      newNode.primitiveCount = 0
+      newNode.minCorner = [0, 0, 0]
+      newNode.maxCorner = [0, 0, 0]
+      this.nodes.push(newNode)
     }
-    this.buildBVH()
-    this.finalizeBVH()
-    this.blas_consumed = true
   }
 
   update(frametime: number) {
-    this.object.forEach((statue) => {
-      statue.update(frametime / 16.667)
-    })
+    /*     this.object.forEach((obj) => {
+      obj.update(frametime / 16.667 / 2)
+    }) */
     this.buildBVH()
   }
 
-  buildBVH() {
-    const blasNodesUsed: number = this.objectMesh.nodesUsed
+  async buildBVH() {
+    let totalBlasNodesUsed = 0
+
+    for (let mesh of this.objectMesh) {
+      totalBlasNodesUsed += mesh.nodesUsed
+    }
 
     this.nodesUsed = 0
 
     this.blasDescriptions = new Array(this.object.length)
     this.blasIndices = new Array(this.object.length)
-    for (var i: number = 0; i < this.object.length; i++) {
-      var description: blasDescription = new blasDescription(this.objectMesh.minCorner, this.objectMesh.maxCorner, this.object[i].model)
+
+    for (let i = 0; i < this.object.length; i++) {
+      var description: blasDescription = new blasDescription(this.objectMesh[i].minCorner, this.objectMesh[i].maxCorner, this.object[i].model)
       description.rootNodeIndex = this.tlasNodesMax
 
       this.blasDescriptions[i] = description
@@ -164,7 +170,9 @@ export class Scene {
 
     var leftCount: number = i - node.leftChild
     if (leftCount == 0 || leftCount == node.primitiveCount) {
-      return
+      // if partitioning failed, fall back to evenly dividing along the axis
+      leftCount = Math.floor(node.primitiveCount / 2)
+      i = node.leftChild + leftCount
     }
 
     const leftChildIndex: number = this.nodesUsed
@@ -187,22 +195,15 @@ export class Scene {
     this.subdivide(rightChildIndex)
   }
 
-  finalizeBVH() {
-    for (var i: number = 0; i < this.objectMesh.nodesUsed; i++) {
-      var nodeToUpload = this.objectMesh.nodes[i]
-      if (nodeToUpload.primitiveCount == 0) {
-        //Internal node: leftChild must be shifted
-        nodeToUpload.leftChild += this.tlasNodesMax
+  async finalizeBVH() {
+    for (let mesh of this.objectMesh) {
+      for (let i = 0; i < mesh.nodesUsed; i++) {
+        let nodeToUpload = mesh.nodes[i]
+        if (nodeToUpload.primitiveCount == 0) {
+          nodeToUpload.leftChild += this.tlasNodesMax
+        }
+        this.nodes[this.tlasNodesMax + i] = nodeToUpload
       }
-
-      //store node
-      this.nodes[this.tlasNodesMax + i] = nodeToUpload
     }
-  }
-}
-
-class Ground extends Object {
-  constructor(position: vec3, rotation: vec3) {
-    super(position, rotation)
   }
 }

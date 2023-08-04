@@ -14,8 +14,11 @@ export class Application2 {
   }
 
   async start() {
-    await this.scene.make_scene()
-
+    await this.scene.loadObject([1.0, 1.0, 1.0], "./src/assets/models/scene.obj", [0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
+    //await this.scene.loadObject([1.0, 1.0, 0.0], "./src/assets/models/cube.obj", [0.0, 0.0, 0.0])
+    await this.scene.buildBVH()
+    await this.scene.finalizeBVH()
+    this.scene.blas_consumed = true
     await this.renderer.Initialize()
   }
 

@@ -1,7 +1,7 @@
 export class Light {
-  position: Float32Array // vec3 representing the position of the light
-  color: Float32Array // vec3 representing the color of the light
-  intensity: number // Scalar value representing the intensity of the light
+  position: Float32Array
+  color: Float32Array
+  intensity: number
 
   constructor(position: Float32Array, color: Float32Array, intensity: number) {
     this.position = position

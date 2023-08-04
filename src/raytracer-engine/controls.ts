@@ -12,7 +12,7 @@ enum KeyCodes {
   LEFT_CONTROL = "ControlLeft",
   LEFT_SHIFT = "ShiftLeft",
 }
-
+const SPEED = 0.05
 export class Controls {
   canvas: HTMLCanvasElement
   private camera: Camera
@@ -90,22 +90,22 @@ export class Controls {
     this.upAmount = 0
 
     if (this.keysPressed[KeyCodes.W]) {
-      this.forwardsAmount = 0.03
+      this.forwardsAmount = SPEED
     }
     if (this.keysPressed[KeyCodes.S]) {
-      this.forwardsAmount = -0.03
+      this.forwardsAmount = -SPEED
     }
     if (this.keysPressed[KeyCodes.A]) {
-      this.rightAmount = 0.03
+      this.rightAmount = SPEED
     }
     if (this.keysPressed[KeyCodes.D]) {
-      this.rightAmount = -0.03
+      this.rightAmount = -SPEED
     }
     if (this.keysPressed[KeyCodes.SPACE]) {
-      this.upAmount = 0.03
+      this.upAmount = SPEED
     }
     if (this.keysPressed[KeyCodes.LEFT_CONTROL]) {
-      this.upAmount = -0.03
+      this.upAmount = -SPEED
     }
     this.shiftKeyHeld = this.keysPressed[KeyCodes.LEFT_SHIFT]
 

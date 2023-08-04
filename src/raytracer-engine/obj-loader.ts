@@ -31,13 +31,21 @@ export class ObjLoader {
   async initialize(color: vec3, url: string) {
     this.color = color
     await this.readFile(url)
+
     this.v = []
     this.vt = []
     this.vn = []
+
+    this.nodes = []
+    this.nodesUsed = 0
+    this.triangleIndices = []
+
     this.buildBVH()
   }
 
   async readFile(url: string) {
+    console.log(`Reading file from ${url}...`)
+
     var result: number[] = []
 
     const response: Response = await fetch(url)
@@ -49,12 +57,16 @@ export class ObjLoader {
       //console.log(line);
       if (line[0] == "v" && line[1] == " ") {
         this.read_vertex_data(line)
+        console.log(`Vertices count: ${this.v.length}`)
       } else if (line[0] == "v" && line[1] == "t") {
         this.read_texcoord_data(line)
+        console.log(`Texture coords count: ${this.vt.length}`)
       } else if (line[0] == "v" && line[1] == "n") {
         this.read_normal_data(line)
+        console.log(`Normals count: ${this.vn.length}`)
       } else if (line[0] == "f") {
         this.read_face_data(line, result)
+        console.log(`Triangles count: ${this.triangles.length}`)
       }
     })
   }
@@ -89,15 +101,8 @@ export class ObjLoader {
   read_face_data(line: string, result: number[]) {
     line = line.replace("\n", "")
     const vertex_descriptions = line.split(" ")
-    // ["f", "v1", "v2", ...]
-    /*
-          triangle fan setup, eg.
-          v1 v2 v3 v4 => (v1, v2, v3), (v1, v3, v4)
 
-          no. of triangles = no. of vertices - 2
-      */
-
-    const triangle_count = vertex_descriptions.length - 3 // accounting also for "f"
+    const triangle_count = vertex_descriptions.length - 3
     for (var i = 0; i < triangle_count; i++) {
       var tri: Triangle = new Triangle()
       this.read_corner(vertex_descriptions[1], tri)
@@ -136,6 +141,8 @@ export class ObjLoader {
 
     this.updateBounds(0)
     this.subdivide(0)
+    console.log(`BVH built for object. Nodes used: ${this.nodesUsed}`)
+    console.log(`Triangle indices count: ${this.triangleIndices.length}`)
   }
 
   updateBounds(nodeIndex: number) {
