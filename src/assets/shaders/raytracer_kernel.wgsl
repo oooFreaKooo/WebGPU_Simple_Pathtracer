@@ -2,6 +2,7 @@ struct PointLight {
     position: vec3<f32>,
     color: vec3<f32>,
     intensity: f32,
+    size: f32,
 };
 
 struct Material {
@@ -137,97 +138,104 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
 }
 
 fn sampleRayColor(ray: Ray) -> vec3<f32> {
-    let skyIntensity = 1.0;
-
     var color: vec3<f32> = vec3(1.0, 1.0, 1.0);
-    var world_ray: Ray = ray;
-    let bounces: u32 = u32(scene.maxBounces);
-    var attenuation: vec3<f32> = vec3(1.0, 1.0, 1.0);
+    var result: RenderState;
 
+    var world_ray: Ray;
+    world_ray.origin = ray.origin;
+    world_ray.direction = ray.direction;
+
+    let bounces: u32 = u32(scene.maxBounces);
     for(var bounce: u32 = 0; bounce < bounces; bounce++) {
-        let result = trace_tlas(world_ray);
+        result = trace_tlas(world_ray);
 
         if (!result.hit) {
-            let atmosphereColor: vec3<f32> = calculateAtmosphere(normalize(world_ray.direction));
-            color *= attenuation * mix(atmosphereColor, textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz, skyIntensity);
+            // Sky color
+            color *= textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz;
             break;
         }
 
         let hitPoint = world_ray.origin + result.t * world_ray.direction;
+
         let lightDirection = normalize(light.position - hitPoint);
         let viewDirection = normalize(scene.cameraPos - hitPoint);
         let reflectDirection = reflect(-lightDirection, result.normal);
-
+        
+        let ambient = m.ambient; 
         let diffuse = max(dot(result.normal, lightDirection), 0.0);
         let specular = pow(max(dot(viewDirection, reflectDirection), 0.0), m.shininess);
-        var localColor: vec3<f32> = m.ambient * result.color;
+        let shadowFactor = is_in_shadow(hitPoint, result.normal, light);
+        let shadowedColor = mix(result.color, ambient * result.color, shadowFactor);
 
-        if (!is_in_shadow(hitPoint, result.normal, light)) {
-            localColor += result.color * (diffuse * m.diffuse + specular * m.specular) * light.color;
-        }
-
-        // Fresnel Effect
-        let n1 = 1.0; // air refraction index
-        let n2 = m.refraction; 
-        let R0 = pow((n1 - n2) / (n1 + n2), 2.0);
-        var cosX = -dot(result.normal, world_ray.direction);
-        if (n1 > n2) {
-            let sinT2 = n1 / n2 * sqrt(max(0.0, 1.0 - cosX * cosX));
-            if (sinT2 > 1.0) {
-                cosX = 1.0;
-            }
-        }
-        let fresnel = R0 + (1.0 - R0) * pow(1.0 - cosX, 5.0);
-
-        let reflectionRayDirection = reflect(world_ray.direction, result.normal);
-        let reflectionColor = trace_tlas(Ray(hitPoint + 0.01 * reflectionRayDirection, reflectionRayDirection)).color;
-
-        localColor = mix(localColor, reflectionColor, fresnel * m.reflectivity);
-
-        // Pseudo Transparency
-        if (m.transparency > 0.0) {
-            let bgColor = textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz;
-            localColor = mix(localColor, bgColor, m.transparency);
-        }
-
-        color *= attenuation * localColor * light.intensity;
-        
-        // Reflect or refract based on refraction value
-        if (m.refraction != 0.0) {
-            world_ray.direction = refract(world_ray.direction, result.normal, 1.0 / m.refraction);
-            if (length(world_ray.direction) == 0.0) {
-                world_ray.direction = reflect(world_ray.direction, result.normal);
-            }
+        if (shadowFactor < 1.0) {
+            color *= shadowedColor + (1.0 - shadowFactor) * (ambient + diffuse * m.diffuse + specular * m.specular) * light.color * light.intensity;
         } else {
+            color *= shadowedColor;
+        }
+
+        // Add epsilon to avoid self intersection
+        let epsilon = 0.001;
+        world_ray.origin = hitPoint + epsilon * world_ray.direction;
+        world_ray.direction = normalize(reflect(world_ray.direction, result.normal));
+
+        // Break out of loop if color is nearly black
+        if (length(color) < epsilon) {
             break;
         }
-
-        world_ray.origin = hitPoint + 0.01 * world_ray.direction;
-        attenuation *= 0.8;  // Decrease energy after each bounce
     }
-    
-    return clamp(color, vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(1.0, 1.0, 1.0));
+
+    return color;
 }
 
 
 
 
 
-
-fn is_in_shadow(hitPoint: vec3<f32>, normal: vec3<f32>, light: PointLight) -> bool {
-    let directionToLight = normalize(light.position - hitPoint);
-    let offsetHitPoint = hitPoint + 0.001 * normal; // move the hit point slightly towards the light to avoid self-shadowing
+fn is_in_shadow(hitPoint: vec3<f32>, normal: vec3<f32>, light: PointLight) -> f32 {
+    let offsetHitPoint = hitPoint + 0.001 * normal;
     var shadowRay: Ray;
     shadowRay.origin = offsetHitPoint;
-    shadowRay.direction = directionToLight;
 
-    let result = trace_tlas(shadowRay);
-    if (result.hit && result.t < length(light.position - hitPoint)) {
-        return true; // there is an object between the hit point and the light
+    let samples = 12; // Adjust as needed for performance/quality trade-off
+    var inShadowCount = 0;
+
+    let sqrtSamples = i32(sqrt(f32(samples)));
+
+    for (var x = 0; x < sqrtSamples; x++) {
+        for (var y = 0; y < sqrtSamples; y++) {
+            let u = (f32(x) + random2D(vec2(hitPoint.x + f32(x), hitPoint.y + f32(y)))) / f32(sqrtSamples);
+            let v = (f32(y) + random2D(vec2(hitPoint.y + f32(y), hitPoint.z + f32(x)))) / f32(sqrtSamples);
+
+            // Generate random offsets in a disc shape around the light
+            let theta = 2.0 * 3.14159 * u; 
+            let r = light.size * sqrt(v);
+            let xOff = r * cos(theta);
+            let yOff = r * sin(theta);
+
+            let randomOffset = vec3<f32>(xOff, yOff, 0.0);
+            shadowRay.direction = normalize((light.position + randomOffset) - hitPoint);
+
+            let result = trace_tlas(shadowRay);
+            if (result.hit && result.t < length((light.position + randomOffset) - hitPoint)) {
+                inShadowCount++;
+            }
+        }
     }
 
-    return false;
+    return f32(inShadowCount) / f32(samples); 
 }
+
+
+fn hash(p: vec3<f32>) -> f32 {
+    var p3 = fract(p * vec3(0.1031, 0.11369, 0.13787));
+    p3 += dot(p3, p3.yxz + 19.19);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+fn random2D(p: vec2<f32>) -> f32 {
+    return hash(vec3(p, 1.0));
+}
+
 
 fn calculateGlow(ray: Ray) -> vec3<f32> {
     let directionToLight = normalize(light.position - ray.origin);
@@ -253,22 +261,6 @@ fn calculateAtmosphere(ray_direction: vec3<f32>) -> vec3<f32> {
 
     return atmosphere;
 }
-
-// Schlick's approximation for Fresnel reflection
-fn fresnel(cosTheta: f32, refractionIndex: f32) -> f32 {
-    var r0 = (1.0 - refractionIndex) / (1.0 + refractionIndex);
-    r0 = r0 * r0;
-    return r0 + (1.0 - r0) * pow(1.0 - cosTheta, 2.0);
-}
-
-fn random(position: vec3<f32>) -> f32 {
-    const GOLDEN_RATIO: f32 = 1.618033988749895;
-    let phi = dot(position, vec3<f32>(GOLDEN_RATIO, GOLDEN_RATIO, GOLDEN_RATIO));
-    let fract_part = phi - floor(phi);
-    return fract_part;
-}
-
-
 
 fn trace_tlas(ray: Ray) -> RenderState {
 
@@ -546,28 +538,5 @@ fn hit_aabb(ray: Ray, node: Node) -> f32 {
     else {
         return t_min;
     }
-}
-
-// ray color function with SSAA
-fn rayColor(ray: Ray, pixelSize: vec2<f32>) -> vec3<f32> {
-    let samples: u32 = 1;  // number of samples per dimension, adjust as needed
-    var colorSum: vec3<f32> = vec3(0.0, 0.0, 0.0);
-
-    for(var i: u32 = 0; i < samples; i++) {
-        for(var j: u32 = 0; j < samples; j++) {
-            let xOffset: f32 = ((f32(i) + 0.5) / f32(samples) - 0.5) * 0.5 * pixelSize.x;
-            let yOffset: f32 = ((f32(j) + 0.5) / f32(samples) - 0.5) * 0.5 * pixelSize.y;
-
-
-            var sampleRay: Ray;
-            sampleRay.origin = ray.origin;
-            sampleRay.direction = normalize(ray.direction + vec3(xOffset, yOffset, 0));
-
-            colorSum += sampleRayColor(sampleRay);
-        }
-    }
-
-    return colorSum / f32(samples * samples);
-
 }
 

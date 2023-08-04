@@ -244,7 +244,7 @@ export class Renderer {
     await this.sky_texture.initialize(this.device, "./src/assets/textures/skybox/skybox.png")
 
     this.lightBuffer = this.device.createBuffer({
-      size: 32,
+      size: 48,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })
     this.materialBuffer = this.device.createBuffer({
@@ -418,6 +418,7 @@ export class Renderer {
     )
     // LIGHT
     this.scene.light.intensity = parseFloat(document.querySelector<HTMLInputElement>("#intensity")!.value)
+    this.scene.light.size = parseFloat(document.querySelector<HTMLInputElement>("#size")!.value)
     // MATERIAL
     this.scene.material.ambient = parseFloat(document.querySelector<HTMLInputElement>("#ambient")!.value)
     this.scene.material.diffuse = parseFloat(document.querySelector<HTMLInputElement>("#diffuse")!.value)
@@ -427,8 +428,8 @@ export class Renderer {
     this.scene.material.refraction = parseFloat(document.querySelector<HTMLInputElement>("#refraction")!.value)
     this.scene.material.transparency = parseFloat(document.querySelector<HTMLInputElement>("#transparency")!.value)
     // LIGHT
-    const { position, color, intensity } = this.scene.light
-    const lightData = new Float32Array([...position, 0.0, ...color, intensity])
+    const { position, color, intensity, size } = this.scene.light
+    const lightData = new Float32Array([...position, 0.0, ...color, intensity, size])
     this.device.queue.writeBuffer(this.lightBuffer, 0, lightData)
 
     // MATERIAL

@@ -2,11 +2,13 @@ export class Light {
   position: Float32Array
   color: Float32Array
   intensity: number
+  size: number
 
-  constructor(position: Float32Array, color: Float32Array, intensity: number) {
+  constructor(position: Float32Array, color: Float32Array, intensity: number, size: number) {
     this.position = position
     this.color = color
     this.intensity = intensity
+    this.size = size
   }
 
   // Getters
