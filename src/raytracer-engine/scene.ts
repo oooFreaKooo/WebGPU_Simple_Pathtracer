@@ -37,7 +37,7 @@ export class Scene {
   }
 
   initialize() {
-    this.light = new Light(new Float32Array([1.0, 100.0, 0.0]), new Float32Array([1.0, 1.0, 1.0]), 1.0, 2.0)
+    this.light = new Light(new Float32Array([50.0, 100.0, 50.0]), new Float32Array([1.0, 1.0, 1.0]), 1.0, 2.0)
     this.material = new Material()
     this.camera = new Camera([-15, 0, -5])
     this.cameraControls = new Controls(this.canvas, this.camera)

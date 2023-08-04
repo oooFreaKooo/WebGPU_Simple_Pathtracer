@@ -10,7 +10,7 @@ export class Camera {
   right: Float32Array
   up: Float32Array
 
-  constructor(position: number[], fovDegrees = 60.0) {
+  constructor(position: number[], fovDegrees = 120.0) {
     // Default FOV to 60 degrees
     this.position = new Float32Array(position)
     this.theta = 0.0

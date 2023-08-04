@@ -159,11 +159,13 @@ fn sampleRayColor(ray: Ray) -> vec3<f32> {
 
         let lightDirection = normalize(light.position - hitPoint);
         let viewDirection = normalize(scene.cameraPos - hitPoint);
-        let reflectDirection = reflect(-lightDirection, result.normal);
+        let reflectDirection = reflect(-world_ray.direction, result.normal);
+
         
         let ambient = m.ambient; 
-        let diffuse = max(dot(result.normal, lightDirection), 0.0);
-        let specular = pow(max(dot(viewDirection, reflectDirection), 0.0), m.shininess);
+        let diffuse = max(clamp(dot(result.normal, lightDirection), -1.0, 1.0), 0.0);
+        let specular = pow(max(clamp(dot(viewDirection, reflectDirection), -1.0, 1.0), 0.0), m.shininess);
+
         let shadowFactor = is_in_shadow(hitPoint, result.normal, light);
         let shadowedColor = mix(result.color, ambient * result.color, shadowFactor);
 
@@ -174,7 +176,8 @@ fn sampleRayColor(ray: Ray) -> vec3<f32> {
         }
 
         // Add epsilon to avoid self intersection
-        let epsilon = 0.001;
+        let epsilon = 0.0001 * result.t;
+
         world_ray.origin = hitPoint + epsilon * world_ray.direction;
         world_ray.direction = normalize(reflect(world_ray.direction, result.normal));
 
@@ -183,8 +186,7 @@ fn sampleRayColor(ray: Ray) -> vec3<f32> {
             break;
         }
     }
-
-    return color;
+    return pow(color, vec3<f32>(1.0/1.2, 1.0/1.2, 1.0/1.2));
 }
 
 
@@ -192,11 +194,11 @@ fn sampleRayColor(ray: Ray) -> vec3<f32> {
 
 
 fn is_in_shadow(hitPoint: vec3<f32>, normal: vec3<f32>, light: PointLight) -> f32 {
-    let offsetHitPoint = hitPoint + 0.001 * normal;
+    let offset = 0.001;
     var shadowRay: Ray;
-    shadowRay.origin = offsetHitPoint;
+    shadowRay.origin = hitPoint + offset * normal;
 
-    let samples = 12; // Adjust as needed for performance/quality trade-off
+    let samples = 32; // Adjust as needed for performance/quality trade-off
     var inShadowCount = 0;
 
     let sqrtSamples = i32(sqrt(f32(samples)));

@@ -240,8 +240,19 @@ export class Renderer {
     }
     this.blasIndexBuffer = this.device.createBuffer(blasIndexBufferDescriptor)
 
+    const urls = [
+      "./src/assets/textures/skybox/right.png",
+      "./src/assets/textures/skybox/left.png",
+      "./src/assets/textures/skybox/top.png",
+      "./src/assets/textures/skybox/bottom.png",
+      "./src/assets/textures/skybox/front.png",
+      "./src/assets/textures/skybox/back.png",
+    ]
+
     this.sky_texture = new CubeMapMaterial()
-    await this.sky_texture.initialize(this.device, "./src/assets/textures/skybox/skybox.png")
+    await this.sky_texture.initialize(this.device, urls)
+
+    //await this.sky_texture.initialize(this.device, "./src/assets/textures/skybox/skybox2.png")
 
     this.lightBuffer = this.device.createBuffer({
       size: 48,
