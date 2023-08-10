@@ -181,8 +181,21 @@ fn sampleRayColor(ray: Ray) -> vec3<f32> {
         world_ray.origin = hitPoint + epsilon * world_ray.direction;
         world_ray.direction = normalize(reflect(world_ray.direction, result.normal));
 
-        // Break out of loop if color is nearly black
-        if (length(color) < epsilon) {
+    var color: vec3<f32> = vec3(1.0, 1.0, 1.0);
+    var result: RenderState;
+
+    var world_ray: Ray;
+    world_ray.origin = ray.origin;
+    world_ray.direction = ray.direction;
+
+    let bounces: u32 = u32(scene.maxBounces);
+    for (var bounce: u32 = 0u; bounce < bounces; bounce++) {
+
+        result = trace_tlas(world_ray);
+
+        if !result.hit {
+            //sky color
+            color = color * textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz;
             break;
         }
     }
