@@ -1,5 +1,5 @@
 export class Material {
-  ambient: number
+  material_color: Float32Array
   diffuse: number
   specular: number
   shininess: number
@@ -8,7 +8,7 @@ export class Material {
   transparency: number
 
   constructor(
-    ambient: number = 0.2,
+    material_color: Float32Array = new Float32Array([1.0, 0.0, 1.0]),
     diffuse: number = 0.5,
     specular: number = 0.5,
     shininess: number = 35,
@@ -16,70 +16,12 @@ export class Material {
     refraction: number = 0.0,
     transparency: number = 0.0,
   ) {
-    this.ambient = ambient
+    this.material_color = material_color
     this.diffuse = diffuse
     this.specular = specular
     this.shininess = shininess
     this.reflectivity = reflectivity
     this.refraction = refraction
-    this.transparency = transparency
-  }
-
-  // Getters
-  getAmbient(): number {
-    return this.ambient
-  }
-
-  getDiffuse(): number {
-    return this.diffuse
-  }
-
-  getSpecular(): number {
-    return this.specular
-  }
-
-  getShininess(): number {
-    return this.shininess
-  }
-
-  getReflectivity(): number {
-    return this.reflectivity
-  }
-
-  getRefraction(): number {
-    return this.refraction
-  }
-
-  getTransparency(): number {
-    return this.transparency
-  }
-
-  // Setters
-  setAmbient(ambient: number): void {
-    this.ambient = ambient
-  }
-
-  setDiffuse(diffuse: number): void {
-    this.diffuse = diffuse
-  }
-
-  setSpecular(specular: number): void {
-    this.specular = specular
-  }
-
-  setShininess(shininess: number): void {
-    this.shininess = shininess
-  }
-
-  setReflectivity(reflectivity: number): void {
-    this.reflectivity = reflectivity
-  }
-
-  setRefraction(refraction: number): void {
-    this.refraction = refraction
-  }
-
-  setTransparency(transparency: number): void {
     this.transparency = transparency
   }
 }

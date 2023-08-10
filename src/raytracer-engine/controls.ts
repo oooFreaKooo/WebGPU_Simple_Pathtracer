@@ -1,7 +1,6 @@
-import { quat, vec3 } from "gl-matrix"
+import { vec3 } from "gl-matrix"
 import { Camera } from "./camera"
 import $ from "jquery"
-import { deg2Rad } from "./math"
 
 enum KeyCodes {
   W = "KeyW",
@@ -47,12 +46,10 @@ export class Controls {
   }
 
   initializeControls() {
-    // Lock the pointer to the canvas when the canvas is clicked
     this.canvas.onclick = () => {
       this.canvas.requestPointerLock()
     }
 
-    // Update the isMouseActive flag when the pointer is locked or unlocked
     document.addEventListener(
       "pointerlockchange",
       () => {
@@ -77,7 +74,6 @@ export class Controls {
       }
     })
 
-    // Add a check for the pointer lock state when initializing
     this.isMouseActive = document.pointerLockElement === this.canvas
     setInterval(() => {
       this.updateMovement()
@@ -109,11 +105,9 @@ export class Controls {
     }
     this.shiftKeyHeld = this.keysPressed[KeyCodes.LEFT_SHIFT]
 
-    // Always update the player's position after changing any movement amounts
     this.movePlayer(this.forwardsAmount, this.rightAmount, this.upAmount, this.camera.forwards)
   }
 
-  // Remove the movement updates from the handle_keypress and handle_keyrelease functions
   handle_keypress(event: JQuery.KeyDownEvent) {
     this.keyLabel.innerText = event.code
   }
@@ -130,7 +124,6 @@ export class Controls {
   rotate_camera(dX: number, dY: number) {
     this.camera.theta += dX
     this.camera.phi += dY
-
     // Restrict the vertical rotation to prevent flipping
     this.camera.phi = Math.max(-85, Math.min(85, this.camera.phi))
 
@@ -138,17 +131,14 @@ export class Controls {
   }
 
   movePlayer(forwards_amount: number, right_amount: number, up_amount: number, forward: vec3) {
-    // Moving in the forward direction using the passed 'forward' vector
     this.camera.position[0] += forward[0] * forwards_amount
     this.camera.position[1] += forward[1] * forwards_amount
     this.camera.position[2] += forward[2] * forwards_amount
 
-    // Moving in the right direction
     this.camera.position[0] += this.camera.right[0] * right_amount
     this.camera.position[1] += this.camera.right[1] * right_amount
     this.camera.position[2] += this.camera.right[2] * right_amount
 
-    // Moving in the up direction
     this.camera.position[0] += this.camera.up[0] * up_amount
     this.camera.position[1] += this.camera.up[1] * up_amount
     this.camera.position[2] += this.camera.up[2] * up_amount

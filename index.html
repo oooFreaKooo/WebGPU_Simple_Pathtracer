@@ -149,26 +149,24 @@
       <div class="control-group">
         <span>Light Properties</span>
         <div class="slider-control">
+          <label for="light-color">Light Color</label>
+          <input id="light-color" type="color" value="#ffffff" />
+        </div>
+        <div class="slider-control">
           <label for="intensity">Light Intensity</label>
           <input id="intensity" type="range" min="0" max="10" step="0.01"
             value="1.0" />
+        </div>
+        <div class="slider-control">
+          <label for="ambient-color">Ambient Light Color</label>
+          <input id="ambient-color" type="color" value="#ffffff" />
         </div>
         <div class="slider-control">
           <label for="size">Light Size</label>
           <input id="size" type="range" min="0" max="10" step="0.1"
             value="0.1" />
         </div>
-        <div class="slider-control">
-          <label for="ambient-light">Ambient Light</label>
-          <input id="ambient-light" type="range" min="0" max="1" step="0.1"
-            value="0.1" />
-        </div>
         <span>Material Properties</span>
-        <div class="slider-control">
-          <label for="ambient">Ambient</label>
-          <input id="ambient" type="range" min="0" max="1" step="0.01"
-            value="0.2" />
-        </div>
         <div class="slider-control">
           <label for="diffuse">Diffuse</label>
           <input id="diffuse" type="range" min="0" max="1" step="0.01"

@@ -1,6 +1,7 @@
 import { vec3, vec2 } from "gl-matrix"
 import { Triangle } from "./triangle"
 import { Node } from "./node"
+import { Material } from "./material"
 
 export class ObjLoader {
   v: vec3[]
@@ -8,7 +9,7 @@ export class ObjLoader {
   vn: vec3[]
 
   triangles: Triangle[]
-  color: vec3
+  material: Material
 
   triangleIndices: number[]
   nodes: Node[]
@@ -28,8 +29,9 @@ export class ObjLoader {
     this.maxCorner = [-999999, -999999, -999999]
   }
 
-  async initialize(color: vec3, url: string) {
-    this.color = color
+  async initialize(material: Material, url: string) {
+    this.material = material
+    this.material.material_color = material.material_color
     await this.readFile(url)
 
     this.v = []
@@ -44,8 +46,6 @@ export class ObjLoader {
   }
 
   async readFile(url: string) {
-    console.log(`Reading file from ${url}...`)
-
     var result: number[] = []
 
     const response: Response = await fetch(url)
@@ -54,19 +54,14 @@ export class ObjLoader {
     const lines = file_contents.split("\n")
 
     lines.forEach((line) => {
-      //console.log(line);
       if (line[0] == "v" && line[1] == " ") {
         this.read_vertex_data(line)
-        console.log(`Vertices count: ${this.v.length}`)
       } else if (line[0] == "v" && line[1] == "t") {
         this.read_texcoord_data(line)
-        console.log(`Texture coords count: ${this.vt.length}`)
       } else if (line[0] == "v" && line[1] == "n") {
         this.read_normal_data(line)
-        console.log(`Normals count: ${this.vn.length}`)
       } else if (line[0] == "f") {
         this.read_face_data(line, result)
-        console.log(`Triangles count: ${this.triangles.length}`)
       }
     })
   }
@@ -108,7 +103,8 @@ export class ObjLoader {
       this.read_corner(vertex_descriptions[1], tri)
       this.read_corner(vertex_descriptions[2 + i], tri)
       this.read_corner(vertex_descriptions[3 + i], tri)
-      tri.color = this.color
+      tri.material = this.material
+      tri.material.material_color = this.material.material_color
       tri.make_centroid()
       this.triangles.push(tri)
     }
@@ -141,8 +137,6 @@ export class ObjLoader {
 
     this.updateBounds(0)
     this.subdivide(0)
-    console.log(`BVH built for object. Nodes used: ${this.nodesUsed}`)
-    console.log(`Triangle indices count: ${this.triangleIndices.length}`)
   }
 
   updateBounds(nodeIndex: number) {
@@ -216,5 +210,23 @@ export class ObjLoader {
     this.updateBounds(rightChildIndex)
     this.subdivide(leftChildIndex)
     this.subdivide(rightChildIndex)
+  }
+  clear() {
+    // Clear vertex, texture, and normal data
+    this.v = []
+    this.vt = []
+    this.vn = []
+
+    // Clear triangles and related data
+    this.triangles = []
+    this.triangleIndices = []
+
+    // Reset nodes and related data
+    this.nodes = []
+    this.nodesUsed = 0
+
+    // Reset bounding box corners
+    this.minCorner = [999999, 999999, 999999]
+    this.maxCorner = [-999999, -999999, -999999]
   }
 }

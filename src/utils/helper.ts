@@ -171,6 +171,18 @@ export function Deg2Rad(theta: number): number {
   return (theta * Math.PI) / 180
 }
 
+export function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const bigint = parseInt(hex.slice(1), 16)
+  const r = (bigint >> 16) & 255
+  const g = (bigint >> 8) & 255
+  const b = bigint & 255
+  return { r, g, b }
+}
+
+export function updateAmbientLightIntensity(ambient: Float32Array, r: number, g: number, b: number): void {
+  const intensity = parseFloat(document.querySelector<HTMLInputElement>("#ambient-light")!.value)
+  ambient = new Float32Array([(r / 255) * intensity, (g / 255) * intensity, (b / 255) * intensity])
+}
 /* import { mat4, vec3 } from "gl-matrix"
 
 export const CheckWebGPU = () => {
