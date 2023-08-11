@@ -6,29 +6,7 @@ struct PointLight {
     size: f32,
 }
 
-struct Material {
-    color: vec3<f32>,
-    diffuse: f32,
-    specular: f32,
-    shininess: f32,
-    reflectivity: f32,
-    refraction: f32,
-    transparency: f32,
-}
 
-struct Triangle {
-    corner_a: vec3<f32>,
-    normal_a: vec3<f32>,
-    corner_b: vec3<f32>,
-    normal_b: vec3<f32>,
-    corner_c: vec3<f32>,
-    normal_c: vec3<f32>,
-    material: Material,
-}
-
-struct ObjectData {
-    triangles: array<Triangle>,
-}
 
 struct Node {
     minCorner: vec3<f32>,
@@ -68,12 +46,35 @@ struct SceneData {
     maxBounces: f32,
 }
 
+struct Material {
+    color: vec3<f32>,
+    diffuse: f32,
+    specular: f32,
+    shininess: f32,
+    reflectivity: f32,
+    refraction: f32,
+    transparency: f32,
+}
+
+struct Triangle {
+    corner_a: vec3<f32>,
+    normal_a: vec3<f32>,
+    corner_b: vec3<f32>,
+    normal_b: vec3<f32>,
+    corner_c: vec3<f32>,
+    normal_c: vec3<f32>,
+    materialIndex: u32,
+}
+
+struct ObjectData {
+    triangles: array<Triangle>,
+}
+
 struct RenderState {
     material: Material,
     t: f32,    // hit distance from ray origin to intersection point
     normal: vec3<f32>,
     hit: bool,
-
 }
 
 
@@ -87,14 +88,15 @@ struct RenderState {
 @group(0) @binding(7) var skyTexture : texture_cube<f32>;
 @group(0) @binding(8) var skySampler : sampler;
 @group(0) @binding(9) var<uniform> light : PointLight;
+@group(0) @binding(10) var<storage, read> materials : array<Material, 7>;
+
 
 //Constants for glow effect
 const GLOW_THRESHOLD : f32 = 0.78;
 const GLOW_RANGE : f32 = 0.2;
 const GLOW_POWER : f32 = 5.0;
 
-
-
+const LIGH_SAMPLES: u32 = 16u;
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
@@ -126,11 +128,11 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
 }
 
 fn rayColor(ray: Ray) -> vec3<f32> {
-
     var color: vec3<f32> = vec3(1.0, 1.0, 1.0);
     var result: RenderState;
-
     var world_ray: Ray;
+    let epsilon: f32 = 0.0001;
+
     world_ray.origin = ray.origin;
     world_ray.direction = ray.direction;
 
@@ -140,70 +142,71 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         result = trace_tlas(world_ray);
 
         if !result.hit {
-            //sky color
-            color = color * textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz;
-            break;
+            // Check for intersection with the infinite floor
+            result = hit_floor(world_ray, -10.0); // Assuming the floor is at y=0.0
+            if !result.hit {
+                color = color * textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz;
+                break;
+            } else {
+                // If the ray hits the floor, set the color to the floor's material color
+                color = result.material.color;
+                break;
+            }
         }
+        let hitPoint = world_ray.origin + result.t * world_ray.direction;
+        let norm = normalize(result.normal);
+        let viewDir = -world_ray.direction;
 
-        //unpack color
         color = color * result.material.color;
+        // Fresnel weighting for the reflected glow
+        let cosine = dot(viewDir, norm);
+        let fresnelGlow = pow(1.0 - cosine, 5.0);
 
-        //Set up for next trace
-        world_ray.origin = world_ray.origin + result.t * world_ray.direction;
-        world_ray.direction = normalize(reflect(world_ray.direction, result.normal));
+
+        // Add reflected glow from the objects
+        let reflectedGlow = calculateReflectedGlow(hitPoint, norm);
+        color += fresnelGlow * reflectedGlow;
+
+        // Lighting calculations
+        let lightDir = normalize(light.position - hitPoint);
+
+                // Ambient
+        let ambient = light.ambient;
+
+                // Diffuse
+        let diff = max(dot(norm, lightDir), 0.0);
+        let diffuse = diff * result.material.diffuse;
+
+                // Specular with Fresnel effect
+        let reflectDir = reflect(-lightDir, norm);
+        let fresnel = schlick(cosine, 0.5);
+        let spec = pow(max(dot(viewDir, reflectDir), 0.0), result.material.shininess);
+        let specular = spec * fresnel * result.material.specular * light.color;
+
+        var lightingColor = (ambient + diffuse + specular) * light.intensity;
+
+        // Combine lighting with material color
+        color = color * lightingColor;
+
+
+        // Set up for next trace
+        world_ray.origin = hitPoint + epsilon * norm;
+        world_ray.direction = normalize(reflect(world_ray.direction, norm));
     }
-
-    //Rays which reached terminal state and bounced indefinitely
-    if result.hit {
-        color = vec3(0.0, 0.0, 0.0);
+    // Rays which reached terminal state and bounced indefinitely
+    if result.hit && color.x == 1.0 && color.y == 1.0 && color.z == 1.0 {
+        color = result.material.color;
     }
 
     return color;
 }
 
 
-fn is_in_shadow(hitPoint: vec3<f32>, normal: vec3<f32>, light: PointLight) -> f32 {
-    let offset = 0.001;
-    var shadowRay: Ray;
-    shadowRay.origin = hitPoint + offset * normal;
 
-    let samples = 32; //Adjust as needed for performance / quality trade - off
-    var inShadowCount = 0;
-
-    let sqrtSamples = i32(sqrt(f32(samples)));
-
-    for (var x = 0; x < sqrtSamples; x++) {
-        for (var y = 0; y < sqrtSamples; y++) {
-            let u = (f32(x) + random2D(vec2(hitPoint.x + f32(x), hitPoint.y + f32(y)))) / f32(sqrtSamples);
-            let v = (f32(y) + random2D(vec2(hitPoint.y + f32(y), hitPoint.z + f32(x)))) / f32(sqrtSamples);
-
-            //Generate random offsets in a disc shape around the light
-            let theta = 2.0 * 3.14159 * u;
-            let r = light.size * sqrt(v);
-            let xOff = r * cos(theta);
-            let yOff = r * sin(theta);
-
-            let randomOffset = vec3<f32 >(xOff, yOff, 0.0);
-            shadowRay.direction = normalize((light.position + randomOffset) - hitPoint);
-
-            let result = trace_tlas(shadowRay);
-            if result.hit && result.t < length((light.position + randomOffset) - hitPoint) {
-                inShadowCount++;
-            }
-        }
-    }
-
-    return f32(inShadowCount) / f32(samples);
-}
-
-fn hash(p: vec3<f32>) -> f32 {
-    var p3 = fract(p * vec3(0.1031, 0.11369, 0.13787));
-    p3 += dot(p3, p3.yxz + 19.19);
-    return fract((p3.x + p3.y) * p3.z);
-}
-
-fn random2D(p: vec2<f32>) -> f32 {
-    return hash(vec3(p, 1.0));
+fn schlick(cosine: f32, ref_idx: f32) -> f32 {
+    let r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
+    let r0_sq = r0 * r0;
+    return r0_sq + (1.0 - r0_sq) * pow(1.0 - cosine, 5.0);
 }
 
 
@@ -216,7 +219,7 @@ fn calculateGlow(ray: Ray) -> vec3<f32> {
 
     if dotProduct > GLOW_THRESHOLD {
         let intensity = pow((dotProduct - GLOW_THRESHOLD) / GLOW_RANGE, GLOW_POWER) * distanceFactor;
-        return intensity * light.color * light.intensity;
+        return intensity * light.color * light.intensity * light.ambient;
     }
     return vec3<f32 >(0.0, 0.0, 0.0);
 }
@@ -227,7 +230,7 @@ fn calculateReflectedGlow(hitPoint: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
 
     var glowColor = calculateGlow(reflectionRay);
     //You can further modulate the glowColor here based on your surface properties, for instance:
-    glowColor *= light.color * light.intensity; //for shiny surfaces
+    glowColor *= light.color * light.intensity * light.ambient;
     return glowColor;
 }
 
@@ -321,13 +324,7 @@ fn trace_blas(
     var blasRenderState: RenderState;
     blasRenderState.t = renderState.t;
     blasRenderState.normal = renderState.normal;
-    blasRenderState.material = renderState.material;
-    blasRenderState.material.color = renderState.material.color;
-    blasRenderState.material.diffuse = renderState.material.diffuse;
-    blasRenderState.material.specular = renderState.material.specular;
-    blasRenderState.material.shininess = renderState.material.shininess;
-    blasRenderState.material.reflectivity = renderState.material.reflectivity;
-    blasRenderState.material.refraction = renderState.material.refraction;
+
     blasRenderState.hit = false;
 
     var blasNearestHit: f32 = nearestHit;
@@ -407,6 +404,7 @@ fn trace_blas(
     return blasRenderState;
 }
 
+// Funktion, die überprüft, ob ein Strahl ein Dreieck trifft.
 fn hit_triangle(
     ray: Ray,
     tri: Triangle,
@@ -415,43 +413,48 @@ fn hit_triangle(
     oldRenderState: RenderState
 ) -> RenderState {
 
+    // Initialisierung des Render-Zustands.
     var renderState: RenderState;
-    renderState.material = oldRenderState.material;
-    renderState.material.color = oldRenderState.material.color;
-    renderState.material.diffuse = oldRenderState.material.diffuse;
-    renderState.material.specular = oldRenderState.material.specular;
-    renderState.material.shininess = oldRenderState.material.shininess;
-    renderState.material.reflectivity = oldRenderState.material.reflectivity;
-    renderState.material.refraction = oldRenderState.material.refraction;
     renderState.hit = false;
 
-    //Direction vectors
+    // Berechnung der Richtungsvektoren des Dreiecks.
     let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
     let edge_ac: vec3<f32> = tri.corner_c - tri.corner_a;
-    //Normal of the triangle
+
+    // Berechnung der Normalen des Dreiecks durch Kreuzprodukt der Kanten.
     var n: vec3<f32> = normalize(cross(edge_ab, edge_ac));
+
+    // Skalarprodukt zwischen Strahlrichtung und Dreiecksnormale. Positiver Wert: Normale und Strahlrichtung gehen in selbe Richtung
     var ray_dot_tri: f32 = dot(ray.direction, n);
-    //backface reversal
+
+    // Überprüfung, ob der Strahl von der Rückseite des Dreiecks kommt (Backface Culling).
     if ray_dot_tri > 0.0 {
-        //ray_dot_tri = ray_dot_tri * -1;
-        //n = n * -1;
         return renderState;
     }
-    //early exit, ray parallel with triangle surface
+
+    // Parallel zum Dreieck? Absoluter wert nahe zu 0. (Dreieck wird tangential berührt)
     if abs(ray_dot_tri) < 0.00001 {
         return renderState;
     }
 
+    // Systemmatrix für die Berechnung der baryzentrischen Koordinaten.
+    // Nutze dazu den Richtungsvektor vom Strahl und die Kanten des Dreiecks
     var system_matrix: mat3x3<f32> = mat3x3<f32 >(
         ray.direction,
         tri.corner_a - tri.corner_b,
         tri.corner_a - tri.corner_c
     );
-    let denominator: f32 = determinant(system_matrix);
+    // det = 0 Vektoren kollinear, also spannen keinen vollen 3D Raum
+    // Dieser Wert gibt uns an wie "parallel" die vektoren zueinander sind
+    let denominator: f32 = determinant(system_matrix); // det(A) = a ⋅ (b x c) -> Skalarprodukt von a mit dem Kreuzprodukt von b und c
+
+    // Matrix ist nahezu singulär. Also nicht invertierbar.
     if abs(denominator) < 0.00001 {
         return renderState;
     }
 
+    // Cramersche Regel: Lösung eines lin. Gleichungssystems Ax = b ist gegeben durch xi = det(Ai) / det(A).
+    // Damit werden die baryzentrischen koordinaten verwendet
     system_matrix = mat3x3<f32 >(
         ray.direction,
         tri.corner_a - ray.origin,
@@ -459,20 +462,24 @@ fn hit_triangle(
     );
     let u: f32 = determinant(system_matrix) / denominator;
 
-    if u < 0.0 || u > 1.0 {
-        return renderState;
-    }
-
     system_matrix = mat3x3<f32 >(
         ray.direction,
         tri.corner_a - tri.corner_b,
         tri.corner_a - ray.origin,
     );
     let v: f32 = determinant(system_matrix) / denominator;
+
+    // Überprüfung, ob u und v ausserhalb des dreiecks liegt. u + v + w = 1 
+    // Wenn u ausserhalb des dreicks ist, dann ist sein Wert entweder kleiner 0 oder größer 1
+    if u < 0.0 || u > 1.0 {
+        return renderState;
+    }
+    // Das selbe mit v, aber wir prüfen ob beide Werte addiert größer 1 ergeben, weil dadurch ist w automatisch kleiner 0
     if v < 0.0 || u + v > 1.0 {
         return renderState;
     }
 
+    // t wird berechnet um den Abstand vom ray Ursprung zur Ebene des Dreiecks herauszufinden
     system_matrix = mat3x3<f32 >(
         tri.corner_a - ray.origin,
         tri.corner_a - tri.corner_b,
@@ -480,15 +487,11 @@ fn hit_triangle(
     );
     let t: f32 = determinant(system_matrix) / denominator;
 
+    // Prüfen ob t im gültigen Bereich liegt
     if t > tMin && t < tMax {
+        // Baryzentrische Interpolation: Damit wir keine konstante normale über die gesamte fläche haben
         renderState.normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
-        renderState.material = tri.material;
-        renderState.material.color = tri.material.color;
-        renderState.material.diffuse = tri.material.diffuse;
-        renderState.material.specular = tri.material.specular;
-        renderState.material.shininess = tri.material.shininess;
-        renderState.material.reflectivity = tri.material.reflectivity;
-        renderState.material.refraction = tri.material.refraction;
+        renderState.material = materials[tri.materialIndex];
         renderState.t = t;
         renderState.hit = true;
         return renderState;
@@ -496,18 +499,52 @@ fn hit_triangle(
 
     return renderState;
 }
+fn hit_floor(ray: Ray, height: f32) -> RenderState {
+    var renderState: RenderState;
+    renderState.hit = false;
+    // If ray is parallel to the floor, no hit
+    if abs(ray.direction.y) == 0.0001 {
+        return renderState;
+    }
 
+    // t wert berechnen für den schnittpunkt 
+    var t: f32 = (height - ray.origin.y) / ray.direction.y;
+
+    // Schauen ob t gültig ist
+    if t > 0.0 {
+        var hitPoint: vec3<f32> = ray.origin + t * ray.direction;
+
+        renderState.hit = true;
+        renderState.t = t;
+        renderState.normal = vec3<f32>(0.0, 1.0, 0.0);
+        // Invert the y-component of the ray's direction to flip the sky texture
+        let invertedDirection = vec3<f32>(ray.direction.x, -ray.direction.y, ray.direction.z);
+        // Sample the sky texture using the inverted direction
+        renderState.material.color = textureSampleLevel(skyTexture, skySampler, invertedDirection, 0.0).xyz;
+
+        return renderState;
+    }
+
+
+    return renderState;
+}
+// Prüfe ob bounding box getroffen wurde
 fn hit_aabb(ray: Ray, node: Node) -> f32 {
-
+    // Inverse Richtung des strahls berechnen um divisionen im code zu vermeiden (rechenzeit vebessern)
     var inverseDir: vec3<f32> = vec3(1.0) / ray.direction;
+    // Berechnung der t werte (bei welchen Wert(distanz) trifft unser Strahl unsere bounding box achse?)
     var t1: vec3<f32> = (node.minCorner - ray.origin) * inverseDir;
     var t2: vec3<f32> = (node.maxCorner - ray.origin) * inverseDir;
+    // Sicherstellen dass tMin immer den kleineren und tMax den größeren Wert für jede Achse enthält. (zB bei negativer Stahrrichtung)
     var tMin: vec3<f32> = min(t1, t2);
     var tMax: vec3<f32> = max(t1, t2);
-
+    // Bestimmen den größten minimalen wert (sicherstellen dass der Stahl tatsächlich in der Box ist und durch alle 3 Seiten ging)
     var t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
+    // Bestimme den kleinsten maximalen Wert (Wann der strahl unsere bounding box verlässt)
     var t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
+    // Prüfen ob der Schnittpunkt gültig ist. eintrittspunkt muss kleiner als der ausstrittspunkt sein. 
+    //Und wenn t_max kleiner null ist der punkt hinter dem strahl ursprung.
     if t_min > t_max || t_max < 0.0 {
         return 99999.0;
     } else {
