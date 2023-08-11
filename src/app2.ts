@@ -1,4 +1,5 @@
 import { Scene } from "../src/raytracer-engine/scene"
+import { Material } from "./raytracer-engine/material"
 import { Renderer } from "./raytracer-engine/renderer"
 
 export class Application2 {
@@ -14,10 +15,12 @@ export class Application2 {
   }
 
   async start() {
-    await this.scene.createObject("./src/assets/models/cube.obj", [5.0, 0.0, 0.0], [0.0, 0.0, 0.0])
-    await this.scene.createObject("./src/assets/models/cube.obj", [10.0, 0.0, 0.0], [0.0, 0.0, 0.0])
-    await this.scene.createObject("./src/assets/models/cube.obj", [15.0, 0.0, 0.0], [0.0, 0.0, 0.0])
-    //await this.scene.createObject([1.0, 1.0, 0.0], "./src/assets/models/scene.obj", [20.0, 0.0, 0.0], [0.0, 0.0, 0.0])
+    const material1 = new Material(new Float32Array([1.0, 1.0, 1.0]))
+    const material2 = new Material(new Float32Array([1.0, 1.0, 1.0]))
+    await this.scene.createObject("./src/assets/models/scene.obj", material1, [0.0, 0.0, 0.0])
+    //await this.scene.createObject("./src/assets/models/cube.obj", material1, [5.0, 0.0, 0.0])
+    //await this.scene.createObject("./src/assets/models/cube.obj", material2, [-5.0, 0.0, 0.0])
+    //await this.scene.createObject("./src/assets/models/cube.obj", material2, [0.0, -1.2, 0.0], [10.0, 0.2, 10.0], [0.0, 0.0, 0.0])
 
     this.scene.buildBVH()
     this.scene.finalizeBVH()

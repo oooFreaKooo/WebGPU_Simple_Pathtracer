@@ -24,6 +24,7 @@ export class Renderer {
   triangleIndexBuffer: GPUBuffer
   blasIndexBuffer: GPUBuffer
   sky_texture: CubeMapMaterial
+  materialBuffer: GPUBuffer
   lightBuffer: GPUBuffer
 
   // Pipeline objects
@@ -157,6 +158,14 @@ export class Renderer {
             type: "uniform",
           },
         },
+        {
+          binding: 10,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {
+            type: "read-only-storage",
+            hasDynamicOffset: false,
+          },
+        },
       ],
     })
 
@@ -235,12 +244,12 @@ export class Renderer {
     this.blasIndexBuffer = this.device.createBuffer(blasIndexBufferDescriptor)
 
     const urls = [
-      "./src/assets/textures/skybox/right.png",
-      "./src/assets/textures/skybox/left.png",
-      "./src/assets/textures/skybox/top.png",
-      "./src/assets/textures/skybox/bottom.png",
-      "./src/assets/textures/skybox/front.png",
-      "./src/assets/textures/skybox/back.png",
+      "./src/assets/textures/skybox/right3.png",
+      "./src/assets/textures/skybox/left3.png",
+      "./src/assets/textures/skybox/top3.png",
+      "./src/assets/textures/skybox/bottom3.png",
+      "./src/assets/textures/skybox/front3.png",
+      "./src/assets/textures/skybox/back3.png",
     ]
 
     this.sky_texture = new CubeMapMaterial()
@@ -252,6 +261,12 @@ export class Renderer {
       size: 64,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })
+
+    const materialBufferDescriptor: GPUBufferDescriptor = {
+      size: 336,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    }
+    this.materialBuffer = this.device.createBuffer(materialBufferDescriptor)
   }
 
   async makeBindGroups() {
@@ -310,6 +325,12 @@ export class Renderer {
           binding: 9,
           resource: {
             buffer: this.lightBuffer,
+          },
+        },
+        {
+          binding: 10,
+          resource: {
+            buffer: this.materialBuffer,
           },
         },
       ],
@@ -427,14 +448,6 @@ export class Renderer {
     this.scene.light.intensity = parseFloat(document.querySelector<HTMLInputElement>("#intensity")!.value)
     this.scene.light.size = parseFloat(document.querySelector<HTMLInputElement>("#size")!.value)
 
-    // MATERIAL
-
-    this.scene.material.diffuse = parseFloat(document.querySelector<HTMLInputElement>("#diffuse")!.value)
-    this.scene.material.specular = parseFloat(document.querySelector<HTMLInputElement>("#specular")!.value)
-    this.scene.material.shininess = parseFloat(document.querySelector<HTMLInputElement>("#shininess")!.value)
-    this.scene.material.reflectivity = parseFloat(document.querySelector<HTMLInputElement>("#reflectivity")!.value)
-    this.scene.material.refraction = parseFloat(document.querySelector<HTMLInputElement>("#refraction")!.value)
-    this.scene.material.transparency = parseFloat(document.querySelector<HTMLInputElement>("#transparency")!.value)
     // LIGHT
     const { position, light_color, ambient, intensity, size } = this.scene.light
     const lightData = new Float32Array([...position, 0.0, ...light_color, 0.0, ...ambient, intensity, size])
@@ -480,26 +493,44 @@ export class Renderer {
       return
     }
     this.loaded = true
-    const triangleDataSize = 36
-    const triangleData: Float32Array = new Float32Array(triangleDataSize * this.scene.triangles.length)
 
-    for (let i = 0; i < this.scene.triangles.length; i++) {
-      for (var corner = 0; corner < 3; corner++) {
-        triangleData[triangleDataSize * i + 8 * corner] = this.scene.triangles[i].corners[corner][0]
-        triangleData[triangleDataSize * i + 8 * corner + 1] = this.scene.triangles[i].corners[corner][1]
-        triangleData[triangleDataSize * i + 8 * corner + 2] = this.scene.triangles[i].corners[corner][2]
-        triangleData[triangleDataSize * i + 8 * corner + 3] = 0.0
+    const triangleDataSize = 24
+    const totalTriangles = this.scene.objectMeshes.reduce((acc, mesh) => acc + mesh.triangles.length, 0)
+    const triangleData: Float32Array = new Float32Array(triangleDataSize * totalTriangles)
 
-        triangleData[triangleDataSize * i + 8 * corner + 4] = this.scene.triangles[i].normals[corner][0]
-        triangleData[triangleDataSize * i + 8 * corner + 5] = this.scene.triangles[i].normals[corner][1]
-        triangleData[triangleDataSize * i + 8 * corner + 6] = this.scene.triangles[i].normals[corner][2]
-        triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0
+    let dataIndex = 0
+
+    for (const objectMesh of this.scene.objectMeshes) {
+      for (const triangle of objectMesh.triangles) {
+        for (var corner = 0; corner < 3; corner++) {
+          triangleData[triangleDataSize * dataIndex + 8 * corner] = triangle.corners[corner][0]
+          triangleData[triangleDataSize * dataIndex + 8 * corner + 1] = triangle.corners[corner][1]
+          triangleData[triangleDataSize * dataIndex + 8 * corner + 2] = triangle.corners[corner][2]
+          triangleData[triangleDataSize * dataIndex + 8 * corner + 3] = 0.0
+
+          triangleData[triangleDataSize * dataIndex + 8 * corner + 4] = triangle.normals[corner][0]
+          triangleData[triangleDataSize * dataIndex + 8 * corner + 5] = triangle.normals[corner][1]
+          triangleData[triangleDataSize * dataIndex + 8 * corner + 6] = triangle.normals[corner][2]
+          triangleData[triangleDataSize * dataIndex + 8 * corner + 7] = triangle.materialIndex
+        }
+
+        //triangleData[triangleDataSize * dataIndex + 24] = triangle.materialIndex
+        console.log(`Triangle ${dataIndex}, Material Index: ${triangle.materialIndex}`)
+
+        dataIndex++
       }
-      const materialStartIndex = triangleDataSize * i + 24
-      const { material_color, diffuse, specular, shininess, reflectivity, refraction, transparency } = this.scene.material
-      triangleData.set([...material_color, 0.0, diffuse, specular, shininess, reflectivity, refraction, transparency], materialStartIndex)
     }
-    this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, 24 * this.scene.triangles.length)
+    this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * totalTriangles)
+
+    const materials = this.scene.materials
+
+    const materialDataSize = 11
+    const materialData = new Float32Array(materialDataSize * materials.length)
+    materials.forEach((material, index) => {
+      const { material_color, diffuse, specular, shininess, reflectivity, refraction, transparency } = material
+      materialData.set([...material_color, 0.0, diffuse, specular, shininess, reflectivity, refraction, transparency], materialDataSize * index)
+    })
+    this.device.queue.writeBuffer(this.materialBuffer, 0, materialData)
 
     // Calculate the total nodes used across all object meshes
     let totalNodesUsed = this.scene.objectMeshes.reduce((sum, mesh) => sum + mesh.nodesUsed, 0)

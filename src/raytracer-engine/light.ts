@@ -8,7 +8,7 @@ export class Light {
   constructor(
     position: Float32Array,
     light_color: Float32Array = new Float32Array([1.0, 1.0, 1.0]),
-    ambient: Float32Array = new Float32Array([0.3, 0.3, 0.3]),
+    ambient: Float32Array = new Float32Array([0.5, 0.5, 0.5]),
     intensity: number = 2.0,
     size: number = 1.0,
   ) {

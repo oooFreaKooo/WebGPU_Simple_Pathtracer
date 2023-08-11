@@ -15,7 +15,6 @@ export class Scene {
 
   cameraControls: Controls
   light: Light
-  material: Material
 
   triangles: Triangle[]
   triangleIndices: number[]
@@ -27,6 +26,7 @@ export class Scene {
   objectMeshes: ObjLoader[] = []
   object: Object[]
   blas_consumed: boolean = false
+  materials: Material[] = []
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -38,17 +38,25 @@ export class Scene {
   }
 
   initialize() {
-    this.light = new Light(new Float32Array([50.0, 100.0, 50.0]))
-    this.material = new Material()
-    this.camera = new Camera([-15, 0, -5])
+    this.light = new Light(new Float32Array([150.0, 75.0, 0.0]))
+
+    this.camera = new Camera([0, 5, -15])
     this.cameraControls = new Controls(this.canvas, this.camera)
   }
 
-  async createObject(modelPath: string, position: vec3 = [0, 0, 0], rotation: vec3 = [0, 0, 0]) {
-    const newObject = new Object(position, rotation)
+  async createObject(modelPath: string, material: Material, position: vec3 = [0, 0, 0], scale: vec3 = [1, 1, 1], rotation: vec3 = [0, 0, 0]) {
+    const newObject = new Object(position, scale, rotation)
     this.object.push(newObject)
     const objectMesh = new ObjLoader()
-    await objectMesh.initialize(this.material, modelPath)
+
+    // Check if material already exists
+    let materialIndex = this.materials.findIndex((mat) => JSON.stringify(mat) === JSON.stringify(material))
+    if (materialIndex === -1) {
+      this.materials.push(material)
+      materialIndex = this.materials.length - 1
+      console.log(`Added material with index ${materialIndex}:`, material)
+    }
+    await objectMesh.initialize(modelPath, materialIndex)
 
     objectMesh.triangles.forEach((tri) => {
       this.triangles.push(tri)

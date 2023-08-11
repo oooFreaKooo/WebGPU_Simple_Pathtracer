@@ -8,12 +8,12 @@ export class Material {
   transparency: number
 
   constructor(
-    material_color: Float32Array = new Float32Array([1.0, 0.0, 1.0]),
+    material_color: Float32Array,
     diffuse: number = 0.5,
     specular: number = 0.5,
     shininess: number = 35,
-    reflectivity: number = 0.0,
-    refraction: number = 0.0,
+    reflectivity: number = 0.3,
+    refraction: number = 0.2,
     transparency: number = 0.0,
   ) {
     this.material_color = material_color

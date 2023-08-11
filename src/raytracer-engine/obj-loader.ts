@@ -1,7 +1,6 @@
 import { vec3, vec2 } from "gl-matrix"
 import { Triangle } from "./triangle"
 import { Node } from "./node"
-import { Material } from "./material"
 
 export class ObjLoader {
   v: vec3[]
@@ -9,7 +8,6 @@ export class ObjLoader {
   vn: vec3[]
 
   triangles: Triangle[]
-  material: Material
 
   triangleIndices: number[]
   nodes: Node[]
@@ -29,10 +27,8 @@ export class ObjLoader {
     this.maxCorner = [-999999, -999999, -999999]
   }
 
-  async initialize(material: Material, url: string) {
-    this.material = material
-    this.material.material_color = material.material_color
-    await this.readFile(url)
+  async initialize(url: string, materialIndex: number) {
+    await this.readFile(url, materialIndex)
 
     this.v = []
     this.vt = []
@@ -45,9 +41,7 @@ export class ObjLoader {
     this.buildBVH()
   }
 
-  async readFile(url: string) {
-    var result: number[] = []
-
+  async readFile(url: string, materialIndex: number) {
     const response: Response = await fetch(url)
     const blob: Blob = await response.blob()
     const file_contents = await blob.text()
@@ -61,7 +55,7 @@ export class ObjLoader {
       } else if (line[0] == "v" && line[1] == "n") {
         this.read_normal_data(line)
       } else if (line[0] == "f") {
-        this.read_face_data(line, result)
+        this.read_face_data(line, materialIndex)
       }
     })
   }
@@ -93,7 +87,7 @@ export class ObjLoader {
     this.vn.push(new_normal)
   }
 
-  read_face_data(line: string, result: number[]) {
+  read_face_data(line: string, materialIndex: number) {
     line = line.replace("\n", "")
     const vertex_descriptions = line.split(" ")
 
@@ -103,9 +97,9 @@ export class ObjLoader {
       this.read_corner(vertex_descriptions[1], tri)
       this.read_corner(vertex_descriptions[2 + i], tri)
       this.read_corner(vertex_descriptions[3 + i], tri)
-      tri.material = this.material
-      tri.material.material_color = this.material.material_color
+
       tri.make_centroid()
+      tri.materialIndex = materialIndex
       this.triangles.push(tri)
     }
   }
