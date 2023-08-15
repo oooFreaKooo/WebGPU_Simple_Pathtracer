@@ -6,8 +6,6 @@ struct PointLight {
     size: f32,
 }
 
-
-
 struct Node {
     minCorner: vec3<f32>,
     leftChild: f32,
@@ -46,16 +44,6 @@ struct SceneData {
     maxBounces: f32,
 }
 
-struct Material {
-    color: vec3<f32>,
-    diffuse: f32,
-    specular: f32,
-    shininess: f32,
-    reflectivity: f32,
-    refraction: f32,
-    transparency: f32,
-}
-
 struct Triangle {
     corner_a: vec3<f32>,
     normal_a: vec3<f32>,
@@ -63,7 +51,7 @@ struct Triangle {
     normal_b: vec3<f32>,
     corner_c: vec3<f32>,
     normal_c: vec3<f32>,
-    materialIndex: u32,
+    diffuse: vec3<f32>,
 }
 
 struct ObjectData {
@@ -71,7 +59,7 @@ struct ObjectData {
 }
 
 struct RenderState {
-    material: Material,
+    diffuse: vec3<f32>,
     t: f32,    // hit distance from ray origin to intersection point
     normal: vec3<f32>,
     hit: bool,
@@ -88,7 +76,6 @@ struct RenderState {
 @group(0) @binding(7) var skyTexture : texture_cube<f32>;
 @group(0) @binding(8) var skySampler : sampler;
 @group(0) @binding(9) var<uniform> light : PointLight;
-@group(0) @binding(10) var<storage, read> materials : array<Material, 7>;
 
 
 //Constants for glow effect
@@ -149,7 +136,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
                 break;
             } else {
                 // If the ray hits the floor, set the color to the floor's material color
-                color = result.material.color;
+                color = result.diffuse;
                 break;
             }
         }
@@ -157,31 +144,25 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         let norm = normalize(result.normal);
         let viewDir = -world_ray.direction;
 
-        color = color * result.material.color;
         // Fresnel weighting for the reflected glow
         let cosine = dot(viewDir, norm);
         let fresnelGlow = pow(1.0 - cosine, 5.0);
 
-
-        // Add reflected glow from the objects
-        let reflectedGlow = calculateReflectedGlow(hitPoint, norm);
-        color += fresnelGlow * reflectedGlow;
-
         // Lighting calculations
         let lightDir = normalize(light.position - hitPoint);
 
-                // Ambient
+        // Ambient
         let ambient = light.ambient;
 
-                // Diffuse
+        // Diffuse
         let diff = max(dot(norm, lightDir), 0.0);
-        let diffuse = diff * result.material.diffuse;
+        let diffuse = diff * result.diffuse;
 
-                // Specular with Fresnel effect
+        // Specular with Fresnel effect
         let reflectDir = reflect(-lightDir, norm);
-        let fresnel = schlick(cosine, 0.5);
-        let spec = pow(max(dot(viewDir, reflectDir), 0.0), result.material.shininess);
-        let specular = spec * fresnel * result.material.specular * light.color;
+
+        let spec = pow(max(dot(viewDir, reflectDir), 0.0), 35.0);
+        let specular = spec * light.color;
 
         var lightingColor = (ambient + diffuse + specular) * light.intensity;
 
@@ -195,18 +176,10 @@ fn rayColor(ray: Ray) -> vec3<f32> {
     }
     // Rays which reached terminal state and bounced indefinitely
     if result.hit && color.x == 1.0 && color.y == 1.0 && color.z == 1.0 {
-        color = result.material.color;
+        color = result.diffuse;
     }
 
     return color;
-}
-
-
-
-fn schlick(cosine: f32, ref_idx: f32) -> f32 {
-    let r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
-    let r0_sq = r0 * r0;
-    return r0_sq + (1.0 - r0_sq) * pow(1.0 - cosine, 5.0);
 }
 
 
@@ -222,16 +195,6 @@ fn calculateGlow(ray: Ray) -> vec3<f32> {
         return intensity * light.color * light.intensity * light.ambient;
     }
     return vec3<f32 >(0.0, 0.0, 0.0);
-}
-fn calculateReflectedGlow(hitPoint: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
-    var reflectionRay: Ray;
-    reflectionRay.origin = hitPoint;
-    reflectionRay.direction = reflect(normalize(light.position - hitPoint), normal);
-
-    var glowColor = calculateGlow(reflectionRay);
-    //You can further modulate the glowColor here based on your surface properties, for instance:
-    glowColor *= light.color * light.intensity * light.ambient;
-    return glowColor;
 }
 
 fn trace_tlas(ray: Ray) -> RenderState {
@@ -324,7 +287,7 @@ fn trace_blas(
     var blasRenderState: RenderState;
     blasRenderState.t = renderState.t;
     blasRenderState.normal = renderState.normal;
-
+    blasRenderState.diffuse = renderState.diffuse;
     blasRenderState.hit = false;
 
     var blasNearestHit: f32 = nearestHit;
@@ -416,6 +379,7 @@ fn hit_triangle(
     // Initialisierung des Render-Zustands.
     var renderState: RenderState;
     renderState.hit = false;
+    renderState.diffuse = oldRenderState.diffuse;
 
     // Berechnung der Richtungsvektoren des Dreiecks.
     let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
@@ -491,7 +455,7 @@ fn hit_triangle(
     if t > tMin && t < tMax {
         // Baryzentrische Interpolation: Damit wir keine konstante normale über die gesamte fläche haben
         renderState.normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
-        renderState.material = materials[tri.materialIndex];
+        renderState.diffuse = tri.diffuse;
         renderState.t = t;
         renderState.hit = true;
         return renderState;
@@ -520,7 +484,7 @@ fn hit_floor(ray: Ray, height: f32) -> RenderState {
         // Invert the y-component of the ray's direction to flip the sky texture
         let invertedDirection = vec3<f32>(ray.direction.x, -ray.direction.y, ray.direction.z);
         // Sample the sky texture using the inverted direction
-        renderState.material.color = textureSampleLevel(skyTexture, skySampler, invertedDirection, 0.0).xyz;
+        renderState.diffuse = textureSampleLevel(skyTexture, skySampler, invertedDirection, 0.0).xyz;
 
         return renderState;
     }
