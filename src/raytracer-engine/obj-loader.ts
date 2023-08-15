@@ -1,6 +1,8 @@
-import { vec3, vec2 } from "gl-matrix"
+import { vec3, vec2, mat4 } from "gl-matrix"
 import { Triangle } from "./triangle"
 import { Node } from "./node"
+import { Material } from "./material"
+import { deg2Rad } from "./math"
 
 export class ObjLoader {
   v: vec3[]
@@ -16,7 +18,14 @@ export class ObjLoader {
   minCorner: vec3
   maxCorner: vec3
 
-  constructor() {
+  material: Material
+  model: mat4
+  position: vec3
+  rotation: vec3
+  scale: vec3
+
+  constructor(material: Material, position: vec3, scale: vec3, rotation: vec3) {
+    this.material = material
     this.v = []
     this.vt = []
     this.vn = []
@@ -25,10 +34,31 @@ export class ObjLoader {
 
     this.minCorner = [999999, 999999, 999999]
     this.maxCorner = [-999999, -999999, -999999]
+
+    this.position = position
+    this.rotation = rotation
+    this.scale = scale
+    this.calculate_transform()
   }
 
-  async initialize(url: string, materialIndex: number) {
-    await this.readFile(url, materialIndex)
+  update(rate: number) {
+    this.rotation[2] += rate * 0.5
+    if (this.rotation[2] > 360) {
+      this.rotation[2] -= 360
+    }
+    this.calculate_transform()
+  }
+
+  calculate_transform() {
+    this.model = mat4.create()
+    mat4.translate(this.model, this.model, this.position)
+    mat4.rotateZ(this.model, this.model, deg2Rad(this.rotation[2]))
+    mat4.rotateX(this.model, this.model, deg2Rad(this.rotation[0]))
+    mat4.scale(this.model, this.model, this.scale)
+  }
+
+  async initialize(url: string) {
+    await this.readFile(url)
 
     this.v = []
     this.vt = []
@@ -41,7 +71,7 @@ export class ObjLoader {
     this.buildBVH()
   }
 
-  async readFile(url: string, materialIndex: number) {
+  async readFile(url: string) {
     const response: Response = await fetch(url)
     const blob: Blob = await response.blob()
     const file_contents = await blob.text()
@@ -55,7 +85,7 @@ export class ObjLoader {
       } else if (line[0] == "v" && line[1] == "n") {
         this.read_normal_data(line)
       } else if (line[0] == "f") {
-        this.read_face_data(line, materialIndex)
+        this.read_face_data(line)
       }
     })
   }
@@ -87,7 +117,7 @@ export class ObjLoader {
     this.vn.push(new_normal)
   }
 
-  read_face_data(line: string, materialIndex: number) {
+  read_face_data(line: string) {
     line = line.replace("\n", "")
     const vertex_descriptions = line.split(" ")
 
@@ -99,7 +129,8 @@ export class ObjLoader {
       this.read_corner(vertex_descriptions[3 + i], tri)
 
       tri.make_centroid()
-      tri.materialIndex = materialIndex
+      tri.diffuse = this.material.diffuse
+      tri.specular = this.material.specular
       this.triangles.push(tri)
     }
   }

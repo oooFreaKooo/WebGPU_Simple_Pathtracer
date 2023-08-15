@@ -5,7 +5,6 @@ import { Light } from "./light"
 import { blasDescription } from "./blas_description"
 import { ObjLoader } from "./obj-loader"
 import { Triangle } from "./triangle"
-import { Object } from "./object"
 import { Node } from "./node"
 import { Material } from "./material"
 
@@ -24,8 +23,6 @@ export class Scene {
   blasIndices: number[]
   blasDescriptions: blasDescription[]
   objectMeshes: ObjLoader[] = []
-  object: Object[]
-  blas_consumed: boolean = false
   materials: Material[] = []
 
   constructor(canvas: HTMLCanvasElement) {
@@ -33,7 +30,7 @@ export class Scene {
     this.triangles = []
     this.triangleIndices = []
     this.nodes = []
-    this.object = []
+
     this.initialize()
   }
 
@@ -45,29 +42,32 @@ export class Scene {
   }
 
   async createObject(modelPath: string, material: Material, position: vec3 = [0, 0, 0], scale: vec3 = [1, 1, 1], rotation: vec3 = [0, 0, 0]) {
-    const newObject = new Object(position, scale, rotation)
-    this.object.push(newObject)
-    const objectMesh = new ObjLoader()
+    const objectMesh = new ObjLoader(material, position, scale, rotation)
+    await objectMesh.initialize(modelPath)
 
-    // Check if material already exists
-    let materialIndex = this.materials.findIndex((mat) => JSON.stringify(mat) === JSON.stringify(material))
-    if (materialIndex === -1) {
-      this.materials.push(material)
-      materialIndex = this.materials.length - 1
-      console.log(`Added material with index ${materialIndex}:`, material)
-    }
-    await objectMesh.initialize(modelPath, materialIndex)
+    this.objectMeshes.push(objectMesh)
+  }
 
-    objectMesh.triangles.forEach((tri) => {
-      this.triangles.push(tri)
+  update(frametime: number) {
+    //this.buildBVH()
+  }
+
+  prepareBVH() {
+    // Iterate over all objectMeshes
+    this.objectMeshes.forEach((objectMesh) => {
+      objectMesh.triangles.forEach((tri) => {
+        this.triangles.push(tri)
+      })
+
+      objectMesh.triangleIndices.forEach((index) => {
+        this.triangleIndices.push(index)
+      })
     })
 
-    objectMesh.triangleIndices.forEach((index) => {
-      this.triangleIndices.push(index)
-    })
+    this.tlasNodesMax = 2 * this.objectMeshes.length - 1
 
-    this.tlasNodesMax = 2 * this.object.length - 1
-    const blasNodesUsed: number = objectMesh.nodesUsed
+    const blasNodesUsed: number = this.objectMeshes.reduce((acc, objectMesh) => acc + objectMesh.nodesUsed, 0)
+
     const existingNodesLength: number = this.nodes.length
     this.nodes.length += this.tlasNodesMax + blasNodesUsed - existingNodesLength
 
@@ -78,23 +78,18 @@ export class Scene {
       this.nodes[i].minCorner = [0, 0, 0]
       this.nodes[i].maxCorner = [0, 0, 0]
     }
-    this.objectMeshes.push(objectMesh)
-  }
-
-  update(frametime: number) {
-    this.buildBVH()
   }
 
   buildBVH() {
     this.nodesUsed = 0
 
-    this.blasDescriptions = new Array(this.object.length)
-    this.blasIndices = new Array(this.object.length)
-    for (var i: number = 0; i < this.object.length; i++) {
+    this.blasDescriptions = new Array(this.objectMeshes.length)
+    this.blasIndices = new Array(this.objectMeshes.length)
+    for (var i: number = 0; i < this.objectMeshes.length; i++) {
       var description: blasDescription = new blasDescription(
         this.objectMeshes[i].minCorner,
         this.objectMeshes[i].maxCorner,
-        this.object[i].model,
+        this.objectMeshes[i].model,
       )
       description.rootNodeIndex = this.tlasNodesMax
 

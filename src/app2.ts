@@ -15,17 +15,13 @@ export class Application2 {
   }
 
   async start() {
-    const material1 = new Material(new Float32Array([1.0, 1.0, 1.0]))
+    const material1 = new Material(new Float32Array([1.0, 0.0, 0.0]))
     const material2 = new Material(new Float32Array([1.0, 1.0, 1.0]))
-    await this.scene.createObject("./src/assets/models/scene.obj", material1, [0.0, 0.0, 0.0])
-    //await this.scene.createObject("./src/assets/models/cube.obj", material1, [5.0, 0.0, 0.0])
-    //await this.scene.createObject("./src/assets/models/cube.obj", material2, [-5.0, 0.0, 0.0])
-    //await this.scene.createObject("./src/assets/models/cube.obj", material2, [0.0, -1.2, 0.0], [10.0, 0.2, 10.0], [0.0, 0.0, 0.0])
-
+    await this.scene.createObject("./src/assets/models/pyramid.obj", material1, [0.0, 0.0, 0.0])
+    await this.scene.createObject("./src/assets/models/cube.obj", material2, [15.0, 0.0, 0.0])
+    this.scene.prepareBVH()
     this.scene.buildBVH()
     this.scene.finalizeBVH()
-
-    this.scene.blas_consumed = true
 
     await this.renderer.Initialize()
   }

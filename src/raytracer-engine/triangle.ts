@@ -5,9 +5,14 @@ export class Triangle {
   normals: vec3[]
   centroid: vec3
 
-  materialIndex: number
+  diffuse: vec3
+  specular: vec3
+  shininess: number
 
-  constructor() {
+  constructor(diffuse: vec3 = [1.0, 1.0, 1.0], specular: vec3 = [1.0, 1.0, 1.0], shininess: number = 35) {
+    this.diffuse = diffuse
+    this.specular = specular
+    this.shininess = shininess
     this.corners = []
     this.normals = []
   }
