@@ -5,14 +5,30 @@ export class Triangle {
   normals: vec3[]
   centroid: vec3
 
+  ambient: vec3
   diffuse: vec3
   specular: vec3
+  emission: vec3
   shininess: number
+  refraction: number
+  dissolve: number
 
-  constructor(diffuse: vec3 = [1.0, 1.0, 1.0], specular: vec3 = [1.0, 1.0, 1.0], shininess: number = 35) {
+  constructor(
+    diffuse: vec3 = [1.0, 1.0, 1.0],
+    specular: vec3 = [1.0, 1.0, 1.0],
+    shininess: number = 35,
+    ambient: vec3 = [0.2, 0.2, 0.2], // Default values for ambient
+    emission: vec3 = [0, 0, 0], // Default values for emission
+    refraction: number = 1.0, // Default value for refraction (air)
+    dissolve: number = 1.0, // Default value for dissolve (fully opaque)
+  ) {
+    this.ambient = ambient
     this.diffuse = diffuse
     this.specular = specular
+    this.emission = emission
     this.shininess = shininess
+    this.refraction = refraction
+    this.dissolve = dissolve
     this.corners = []
     this.normals = []
   }

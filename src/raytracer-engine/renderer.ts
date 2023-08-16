@@ -205,7 +205,7 @@ export class Renderer {
 
     //console.log("Scene has %d triangles", this.scene.triangles.length)
     const triangleBufferDescriptor: GPUBufferDescriptor = {
-      size: 112 * this.scene.triangles.length,
+      size: 176 * this.scene.triangles.length,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     }
     this.triangleBuffer = this.device.createBuffer(triangleBufferDescriptor)
@@ -468,54 +468,47 @@ export class Renderer {
     const uploadTimeLabel: HTMLElement = <HTMLElement>document.getElementById("upload-time")
     uploadTimeLabel.innerText = (uploadEnd - uploadStart).toFixed(2).toString()
 
+    // Get the color input elements
+    document.querySelector<HTMLInputElement>("#diffuse")!.addEventListener("input", (event) => {
+      const colorValue = (event.target as HTMLInputElement).value
+      const rgb = hexToRgb(colorValue)
+      for (let triangle of this.scene.triangles) {
+        triangle.diffuse = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
+      }
+      this.updateTriangleData()
+    })
+    document.querySelector<HTMLInputElement>("#specular")!.addEventListener("input", (event) => {
+      const colorValue = (event.target as HTMLInputElement).value
+      const rgb = hexToRgb(colorValue)
+      for (let triangle of this.scene.triangles) {
+        triangle.specular = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
+      }
+      this.updateTriangleData()
+    })
     if (this.loaded) {
       return
     }
     this.loaded = true
 
-    const triangleDataSize = 28
+    this.updateTriangleData()
 
-    const triangleData: Float32Array = new Float32Array(28 * this.scene.triangles.length)
-    for (let i = 0; i < this.scene.triangles.length; i++) {
-      for (var corner = 0; corner < 3; corner++) {
-        triangleData[triangleDataSize * i + 8 * corner] = this.scene.triangles[i].corners[corner][0]
-        triangleData[triangleDataSize * i + 8 * corner + 1] = this.scene.triangles[i].corners[corner][1]
-        triangleData[triangleDataSize * i + 8 * corner + 2] = this.scene.triangles[i].corners[corner][2]
-        triangleData[triangleDataSize * i + 8 * corner + 3] = 0.0
-
-        triangleData[triangleDataSize * i + 8 * corner + 4] = this.scene.triangles[i].normals[corner][0]
-        triangleData[triangleDataSize * i + 8 * corner + 5] = this.scene.triangles[i].normals[corner][1]
-        triangleData[triangleDataSize * i + 8 * corner + 6] = this.scene.triangles[i].normals[corner][2]
-        triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0
+    //Write blas data
+    this.scene.objectMeshes.forEach((objectMesh) => {
+      var nodeData_b = new Float32Array(8 * objectMesh.nodesUsed)
+      for (let i = 0; i < objectMesh.nodesUsed; i++) {
+        let baseIndex: number = this.scene.tlasNodesMax + i
+        nodeData_b[8 * i] = this.scene.nodes[baseIndex].minCorner[0]
+        nodeData_b[8 * i + 1] = this.scene.nodes[baseIndex].minCorner[1]
+        nodeData_b[8 * i + 2] = this.scene.nodes[baseIndex].minCorner[2]
+        nodeData_b[8 * i + 3] = this.scene.nodes[baseIndex].leftChild
+        nodeData_b[8 * i + 4] = this.scene.nodes[baseIndex].maxCorner[0]
+        nodeData_b[8 * i + 5] = this.scene.nodes[baseIndex].maxCorner[1]
+        nodeData_b[8 * i + 6] = this.scene.nodes[baseIndex].maxCorner[2]
+        nodeData_b[8 * i + 7] = this.scene.nodes[baseIndex].primitiveCount
       }
-      for (var channel = 0; channel < 3; channel++) {
-        triangleData[triangleDataSize * i + 24 + channel] = this.scene.triangles[i].diffuse[channel]
-      }
-      triangleData[triangleDataSize * i + 27] = 0.0
-    }
-    this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, 28 * this.scene.triangles.length)
-
-    let totalNodesUsed = this.scene.objectMeshes.reduce((sum, mesh) => sum + mesh.nodesUsed, 0)
-
-    // Write blas data
-    var nodeData_b = new Float32Array(8 * totalNodesUsed)
-    let offset = 0
-    for (let mesh of this.scene.objectMeshes) {
-      for (let i = 0; i < mesh.nodesUsed; i++) {
-        let baseIndex: number = this.scene.tlasNodesMax + offset + i
-        nodeData_b[8 * (offset + i)] = this.scene.nodes[baseIndex].minCorner[0]
-        nodeData_b[8 * (offset + i) + 1] = this.scene.nodes[baseIndex].minCorner[1]
-        nodeData_b[8 * (offset + i) + 2] = this.scene.nodes[baseIndex].minCorner[2]
-        nodeData_b[8 * (offset + i) + 3] = this.scene.nodes[baseIndex].leftChild
-        nodeData_b[8 * (offset + i) + 4] = this.scene.nodes[baseIndex].maxCorner[0]
-        nodeData_b[8 * (offset + i) + 5] = this.scene.nodes[baseIndex].maxCorner[1]
-        nodeData_b[8 * (offset + i) + 6] = this.scene.nodes[baseIndex].maxCorner[2]
-        nodeData_b[8 * (offset + i) + 7] = this.scene.nodes[baseIndex].primitiveCount
-      }
-      offset += mesh.nodesUsed
-    }
-    let bufferOffset: number = 32 * this.scene.tlasNodesMax
-    this.device.queue.writeBuffer(this.nodeBuffer, bufferOffset, nodeData_b, 0, 8 * totalNodesUsed)
+      let bufferOffset: number = 32 * this.scene.tlasNodesMax
+      this.device.queue.writeBuffer(this.nodeBuffer, bufferOffset, nodeData_b, 0, 8 * objectMesh.nodesUsed)
+    })
 
     const triangleIndexData: Float32Array = new Float32Array(this.scene.triangles.length)
     for (let i = 0; i < this.scene.triangles.length; i++) {
@@ -585,5 +578,52 @@ export class Renderer {
       cancelAnimationFrame(this.animationFrameId)
       this.animationFrameId = undefined
     }
+  }
+
+  updateTriangleData() {
+    const triangleDataSize = 44 // Adjusted size
+
+    const triangleData: Float32Array = new Float32Array(triangleDataSize * this.scene.triangles.length)
+    for (let i = 0; i < this.scene.triangles.length; i++) {
+      const tri = this.scene.triangles[i]
+      for (var corner = 0; corner < 3; corner++) {
+        triangleData[triangleDataSize * i + 8 * corner] = this.scene.triangles[i].corners[corner][0]
+        triangleData[triangleDataSize * i + 8 * corner + 1] = this.scene.triangles[i].corners[corner][1]
+        triangleData[triangleDataSize * i + 8 * corner + 2] = this.scene.triangles[i].corners[corner][2]
+        triangleData[triangleDataSize * i + 8 * corner + 3] = 0.0
+
+        triangleData[triangleDataSize * i + 8 * corner + 4] = this.scene.triangles[i].normals[corner][0]
+        triangleData[triangleDataSize * i + 8 * corner + 5] = this.scene.triangles[i].normals[corner][1]
+        triangleData[triangleDataSize * i + 8 * corner + 6] = this.scene.triangles[i].normals[corner][2]
+        triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0
+      }
+
+      triangleData[triangleDataSize * i + 24] = tri.ambient[0]
+      triangleData[triangleDataSize * i + 25] = tri.ambient[1]
+      triangleData[triangleDataSize * i + 26] = tri.ambient[2]
+      triangleData[triangleDataSize * i + 27] = 0.0 // Padding
+
+      triangleData[triangleDataSize * i + 28] = tri.diffuse[0]
+      triangleData[triangleDataSize * i + 29] = tri.diffuse[1]
+      triangleData[triangleDataSize * i + 30] = tri.diffuse[2]
+      triangleData[triangleDataSize * i + 31] = 0.0 // Padding
+
+      triangleData[triangleDataSize * i + 32] = tri.specular[0]
+      triangleData[triangleDataSize * i + 33] = tri.specular[1]
+      triangleData[triangleDataSize * i + 34] = tri.specular[2]
+      triangleData[triangleDataSize * i + 35] = 0.0 // Padding
+
+      triangleData[triangleDataSize * i + 36] = tri.emission[0]
+      triangleData[triangleDataSize * i + 37] = tri.emission[1]
+      triangleData[triangleDataSize * i + 38] = tri.emission[2]
+      triangleData[triangleDataSize * i + 39] = tri.shininess
+
+      triangleData[triangleDataSize * i + 40] = tri.refraction
+      triangleData[triangleDataSize * i + 41] = tri.dissolve
+      triangleData[triangleDataSize * i + 42] = 0.0 // Padding
+      triangleData[triangleDataSize * i + 43] = 0.0 // Padding
+    }
+
+    this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.scene.triangles.length)
   }
 }

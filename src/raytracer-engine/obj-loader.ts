@@ -131,6 +131,12 @@ export class ObjLoader {
       tri.make_centroid()
       tri.diffuse = this.material.diffuse
       tri.specular = this.material.specular
+      tri.ambient = this.material.ambient
+      tri.emission = this.material.emission
+      tri.shininess = this.material.shininess
+      tri.refraction = this.material.refraction
+      tri.dissolve = this.material.dissolve
+
       this.triangles.push(tri)
     }
   }

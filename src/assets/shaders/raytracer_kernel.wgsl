@@ -45,13 +45,19 @@ struct SceneData {
 }
 
 struct Triangle {
-    corner_a: vec3<f32>,
-    normal_a: vec3<f32>,
-    corner_b: vec3<f32>,
-    normal_b: vec3<f32>,
-    corner_c: vec3<f32>,
-    normal_c: vec3<f32>,
-    diffuse: vec3<f32>,
+    corner_a: vec3f,
+    normal_a: vec3f,
+    corner_b: vec3f,
+    normal_b: vec3f,
+    corner_c: vec3f,
+    normal_c: vec3f,
+    ambient: vec3f,
+    diffuse: vec3f,
+    specular: vec3f,
+    emission: vec3f,
+    shininess: f32,
+    refraction: f32,
+    dissolve: f32,
 }
 
 struct ObjectData {
@@ -59,7 +65,13 @@ struct ObjectData {
 }
 
 struct RenderState {
+    ambient: vec3<f32>,
     diffuse: vec3<f32>,
+    specular: vec3<f32>,
+    emission: vec3<f32>,
+    shininess: f32,
+    refraction: f32,
+    dissolve: f32,
     t: f32,    // hit distance from ray origin to intersection point
     normal: vec3<f32>,
     hit: bool,
@@ -161,8 +173,8 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         // Specular with Fresnel effect
         let reflectDir = reflect(-lightDir, norm);
 
-        let spec = pow(max(dot(viewDir, reflectDir), 0.0), 35.0);
-        let specular = spec * light.color;
+        let spec = pow(max(dot(viewDir, reflectDir), 0.0), result.shininess);
+        let specular = spec * result.specular;
 
         var lightingColor = (ambient + diffuse + specular) * light.intensity;
 
@@ -288,6 +300,13 @@ fn trace_blas(
     blasRenderState.t = renderState.t;
     blasRenderState.normal = renderState.normal;
     blasRenderState.diffuse = renderState.diffuse;
+    blasRenderState.specular = renderState.specular;
+    blasRenderState.ambient = renderState.ambient;
+    blasRenderState.emission = renderState.emission;
+    blasRenderState.shininess = renderState.shininess;
+    blasRenderState.refraction = renderState.refraction;
+    blasRenderState.dissolve = renderState.dissolve;
+
     blasRenderState.hit = false;
 
     var blasNearestHit: f32 = nearestHit;
@@ -380,6 +399,13 @@ fn hit_triangle(
     var renderState: RenderState;
     renderState.hit = false;
     renderState.diffuse = oldRenderState.diffuse;
+    renderState.specular = oldRenderState.specular;
+    renderState.ambient = oldRenderState.ambient;
+    renderState.emission = oldRenderState.emission;
+    renderState.shininess = oldRenderState.shininess;
+    renderState.refraction = oldRenderState.refraction;
+    renderState.dissolve = oldRenderState.dissolve;
+
 
     // Berechnung der Richtungsvektoren des Dreiecks.
     let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
@@ -456,6 +482,13 @@ fn hit_triangle(
         // Baryzentrische Interpolation: Damit wir keine konstante normale über die gesamte fläche haben
         renderState.normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
         renderState.diffuse = tri.diffuse;
+        renderState.specular = tri.specular;
+        renderState.ambient = tri.ambient;
+        renderState.emission = tri.emission;
+        renderState.shininess = tri.shininess;
+        renderState.refraction = tri.refraction;
+        renderState.dissolve = tri.dissolve;
+
         renderState.t = t;
         renderState.hit = true;
         return renderState;

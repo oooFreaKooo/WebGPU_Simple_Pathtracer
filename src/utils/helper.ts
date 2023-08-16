@@ -183,6 +183,7 @@ export function updateAmbientLightIntensity(ambient: Float32Array, r: number, g:
   const intensity = parseFloat(document.querySelector<HTMLInputElement>("#ambient-light")!.value)
   ambient = new Float32Array([(r / 255) * intensity, (g / 255) * intensity, (b / 255) * intensity])
 }
+
 /* import { mat4, vec3 } from "gl-matrix"
 
 export const CheckWebGPU = () => {

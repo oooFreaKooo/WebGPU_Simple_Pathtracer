@@ -11,7 +11,6 @@ import { Material } from "./material"
 export class Scene {
   canvas: HTMLCanvasElement
   camera: Camera
-
   cameraControls: Controls
   light: Light
 
@@ -23,14 +22,9 @@ export class Scene {
   blasIndices: number[]
   blasDescriptions: blasDescription[]
   objectMeshes: ObjLoader[] = []
-  materials: Material[] = []
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
-    this.triangles = []
-    this.triangleIndices = []
-    this.nodes = []
-
     this.initialize()
   }
 
@@ -48,36 +42,54 @@ export class Scene {
     this.objectMeshes.push(objectMesh)
   }
 
-  update(frametime: number) {
-    //this.buildBVH()
-  }
-
   prepareBVH() {
-    // Iterate over all objectMeshes
+    this.triangles = []
+    console.log("Triangles:")
+
     this.objectMeshes.forEach((objectMesh) => {
       objectMesh.triangles.forEach((tri) => {
         this.triangles.push(tri)
+        console.log(tri.centroid)
+      })
+    })
+
+    this.triangleIndices = []
+    console.log("Triangle Indices:")
+
+    let triangleIndexOffset = 0 // Initialize the triangle index offset outside the loop
+
+    this.objectMeshes.forEach((objectMesh) => {
+      objectMesh.triangleIndices.forEach((index) => {
+        const adjustedIndex = index + triangleIndexOffset // Adjust the triangle index
+        this.triangleIndices.push(adjustedIndex)
+        console.log(adjustedIndex)
       })
 
-      objectMesh.triangleIndices.forEach((index) => {
-        this.triangleIndices.push(index)
-      })
+      triangleIndexOffset += objectMesh.triangles.length // Update the triangle index offset after processing the objectMesh
     })
 
     this.tlasNodesMax = 2 * this.objectMeshes.length - 1
 
-    const blasNodesUsed: number = this.objectMeshes.reduce((acc, objectMesh) => acc + objectMesh.nodesUsed, 0)
+    // Calculate the total number of nodes and initialize the this.nodes array
+    const totalNodes = this.tlasNodesMax + this.objectMeshes.reduce((acc, objectMesh) => acc + objectMesh.nodesUsed, 0)
+    this.nodes = new Array(totalNodes).fill(null).map(() => new Node())
 
-    const existingNodesLength: number = this.nodes.length
-    this.nodes.length += this.tlasNodesMax + blasNodesUsed - existingNodesLength
+    let nodeOffset = 0 // Initialize the node offset outside the loop
 
-    for (var i: number = existingNodesLength; i < this.nodes.length; i += 1) {
-      this.nodes[i] = new Node()
-      this.nodes[i].leftChild = 0
-      this.nodes[i].primitiveCount = 0
-      this.nodes[i].minCorner = [0, 0, 0]
-      this.nodes[i].maxCorner = [0, 0, 0]
-    }
+    this.objectMeshes.forEach((objectMesh) => {
+      const blasNodesUsed: number = objectMesh.nodesUsed
+
+      for (var i: number = 0; i < blasNodesUsed; i += 1) {
+        const adjustedNodeIndex = nodeOffset + i // Adjust the node index
+        this.nodes[adjustedNodeIndex].leftChild = 0
+        this.nodes[adjustedNodeIndex].primitiveCount = 0
+        this.nodes[adjustedNodeIndex].minCorner = [0, 0, 0]
+        this.nodes[adjustedNodeIndex].maxCorner = [0, 0, 0]
+        console.log("Reading node %d", adjustedNodeIndex)
+      }
+
+      nodeOffset += blasNodesUsed // Update the node offset after processing the objectMesh
+    })
   }
 
   buildBVH() {
@@ -85,6 +97,7 @@ export class Scene {
 
     this.blasDescriptions = new Array(this.objectMeshes.length)
     this.blasIndices = new Array(this.objectMeshes.length)
+
     for (var i: number = 0; i < this.objectMeshes.length; i++) {
       var description: blasDescription = new blasDescription(
         this.objectMeshes[i].minCorner,
@@ -96,6 +109,7 @@ export class Scene {
       this.blasDescriptions[i] = description
       this.blasIndices[i] = i
     }
+
     for (var i: number = 0; i < this.tlasNodesMax; i += 1) {
       this.nodes[i].leftChild = 0
       this.nodes[i].primitiveCount = 0
@@ -183,21 +197,21 @@ export class Scene {
   }
 
   finalizeBVH() {
-    let nodeOffset = this.tlasNodesMax
+    this.objectMeshes.forEach((objectMesh) => {
+      for (var i: number = 0; i < objectMesh.nodesUsed; i++) {
+        var nodeToUpload = objectMesh.nodes[i]
+        if (nodeToUpload.primitiveCount == 0) {
+          //Internal node: leftChild must be shifted
+          nodeToUpload.leftChild += this.tlasNodesMax
+        }
 
-    this.objectMeshes.forEach((mesh) => {
-      for (var i: number = 0; i < mesh.nodesUsed; i++) {
-        var nodeToUpload = mesh.nodes[i]
-        if (nodeToUpload.primitiveCount === 0) {
-          nodeToUpload.leftChild += nodeOffset
-        }
-        if (nodeOffset + i >= this.nodes.length) {
-          this.nodes.push(nodeToUpload)
-        } else {
-          this.nodes[nodeOffset + i] = nodeToUpload
-        }
+        //store node
+        this.nodes[this.tlasNodesMax + i] = nodeToUpload
       }
-      nodeOffset += mesh.nodesUsed
     })
+  }
+
+  update(frametime: number) {
+    //this.buildBVH()
   }
 }
