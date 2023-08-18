@@ -8,15 +8,17 @@ export class Material {
   shininess: number // Specular reflection exponent (Ns)
   refraction: number // Optical density/index of refraction (Ni)
   dissolve: number // Transparency (d)
+  smoothness: number
 
   constructor(
     diffuse: vec3 = [1.0, 1.0, 1.0],
     specular: vec3 = [1.0, 1.0, 1.0],
     shininess: number = 35,
-    ambient: vec3 = [0.2, 0.2, 0.2],
-    emmision: vec3 = [0, 0, 0],
-    refraction: number = 1.0,
-    dissolve: number = 1.0,
+    ambient: vec3 = [0.5, 0.5, 0.5],
+    emmision: vec3 = [1.0, 0, 0],
+    refraction: number = 0.5,
+    dissolve: number = 0.5,
+    smoothness: number = 0.5,
   ) {
     this.ambient = ambient
     this.diffuse = diffuse
@@ -25,5 +27,6 @@ export class Material {
     this.shininess = shininess
     this.refraction = refraction
     this.dissolve = dissolve
+    this.smoothness = smoothness
   }
 }

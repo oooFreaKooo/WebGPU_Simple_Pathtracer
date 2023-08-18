@@ -158,15 +158,15 @@
             value="1.0" />
         </div>
         <div class="slider-control">
-          <label for="ambient-color">Ambient Light Color</label>
-          <input id="ambient-color" type="color" value="#ffffff" />
-        </div>
-        <div class="slider-control">
           <label for="size">Light Size</label>
           <input id="size" type="range" min="0" max="10" step="0.1"
             value="0.1" />
         </div>
         <span>Material Properties</span>
+        <div class="slider-control">
+          <label for="ambient">Ambient Color</label>
+          <input id="ambient" type="color" value="#ffffff" />
+        </div>
         <div class="slider-control">
           <label for="diffuse">Diffuse Color</label>
           <input id="diffuse" type="color" value="#ffffff" />
@@ -181,9 +181,8 @@
             value="35" />
         </div>
         <div class="slider-control">
-          <label for="reflectivity">Reflectivity</label>
-          <input id="reflectivity" type="range" min="0" max="1" step="0.01"
-            value="0.0" />
+          <label for="emission">Emissive Color</label>
+          <input id="emission" type="color" value="#ffffff" />
         </div>
         <div class="slider-control">
           <label for="refraction">Refraction</label>
@@ -191,8 +190,13 @@
             value="0.0" />
         </div>
         <div class="slider-control">
-          <label for="transparency">Transparency</label>
-          <input id="transparency" type="range" min="0" max="1" step="0.01"
+          <label for="dissolve">Dissolve</label>
+          <input id="dissolve" type="range" min="0" max="1" step="0.01"
+            value="0.0" />
+        </div>
+        <div class="slider-control">
+          <label for="smoothness">Smoothness</label>
+          <input id="smoothness" type="range" min="0" max="1" step="0.01"
             value="0.0" />
         </div>
       </div>

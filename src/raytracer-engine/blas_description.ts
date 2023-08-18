@@ -1,4 +1,5 @@
 import { mat4, vec3 } from "gl-matrix"
+import { Material } from "./material"
 
 export class blasDescription {
   minCorner: vec3
@@ -6,6 +7,8 @@ export class blasDescription {
   center: vec3
   inverseModel: mat4 = mat4.create()
   rootNodeIndex: number
+  triangleIndices: number[]
+  materialProperties: Material
 
   constructor(minCorner: vec3, maxCorner: vec3, model: mat4) {
     this.minCorner = [999999, 999999, 999999]
@@ -34,11 +37,6 @@ export class blasDescription {
       (this.minCorner[1] + this.maxCorner[1]) / 2,
       (this.minCorner[2] + this.maxCorner[2]) / 2,
     ]
-    if (mat4.determinant(model) === 0) {
-      console.warn("The provided matrix is non-invertible. Using the identity matrix as a fallback.")
-      mat4.identity(this.inverseModel)
-    } else {
-      mat4.invert(this.inverseModel, model)
-    }
+    mat4.invert(this.inverseModel, model)
   }
 }

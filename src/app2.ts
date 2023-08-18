@@ -17,7 +17,7 @@ export class Application2 {
   async start() {
     const material1 = new Material(new Float32Array([1.0, 0.0, 0.0]), new Float32Array([0.0, 1.0, 0.0]))
     const material2 = new Material(new Float32Array([1.0, 1.0, 1.0]))
-    await this.scene.createObject("./src/assets/models/sphere.obj", material1, [0.0, 0.0, 0.0])
+    await this.scene.createObject("./src/assets/models/cube.obj", material1, [0.0, 0.0, 0.0])
     //await this.scene.createObject("./src/assets/models/cube.obj", material2, [15.0, 0.0, 0.0])
     this.scene.prepareBVH()
     this.scene.buildBVH()

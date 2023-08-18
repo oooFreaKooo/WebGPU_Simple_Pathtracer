@@ -129,13 +129,7 @@ export class ObjLoader {
       this.read_corner(vertex_descriptions[3 + i], tri)
 
       tri.make_centroid()
-      tri.diffuse = this.material.diffuse
-      tri.specular = this.material.specular
-      tri.ambient = this.material.ambient
-      tri.emission = this.material.emission
-      tri.shininess = this.material.shininess
-      tri.refraction = this.material.refraction
-      tri.dissolve = this.material.dissolve
+      tri.material = this.material
 
       this.triangles.push(tri)
     }
@@ -241,23 +235,5 @@ export class ObjLoader {
     this.updateBounds(rightChildIndex)
     this.subdivide(leftChildIndex)
     this.subdivide(rightChildIndex)
-  }
-  clear() {
-    // Clear vertex, texture, and normal data
-    this.v = []
-    this.vt = []
-    this.vn = []
-
-    // Clear triangles and related data
-    this.triangles = []
-    this.triangleIndices = []
-
-    // Reset nodes and related data
-    this.nodes = []
-    this.nodesUsed = 0
-
-    // Reset bounding box corners
-    this.minCorner = [999999, 999999, 999999]
-    this.maxCorner = [-999999, -999999, -999999]
   }
 }

@@ -1,7 +1,6 @@
 struct PointLight {
     position: vec3<f32>,
     color: vec3<f32>,
-    ambient: vec3<f32>,
     intensity: f32,
     size: f32,
 }
@@ -44,13 +43,7 @@ struct SceneData {
     maxBounces: f32,
 }
 
-struct Triangle {
-    corner_a: vec3f,
-    normal_a: vec3f,
-    corner_b: vec3f,
-    normal_b: vec3f,
-    corner_c: vec3f,
-    normal_c: vec3f,
+struct Material {
     ambient: vec3f,
     diffuse: vec3f,
     specular: vec3f,
@@ -58,6 +51,17 @@ struct Triangle {
     shininess: f32,
     refraction: f32,
     dissolve: f32,
+    smoothness: f32,
+}
+
+struct Triangle {
+    corner_a: vec3f,
+    normal_a: vec3f,
+    corner_b: vec3f,
+    normal_b: vec3f,
+    corner_c: vec3f,
+    normal_c: vec3f,
+    material: Material,
 }
 
 struct ObjectData {
@@ -65,13 +69,7 @@ struct ObjectData {
 }
 
 struct RenderState {
-    ambient: vec3<f32>,
-    diffuse: vec3<f32>,
-    specular: vec3<f32>,
-    emission: vec3<f32>,
-    shininess: f32,
-    refraction: f32,
-    dissolve: f32,
+    material: Material,
     t: f32,    // hit distance from ray origin to intersection point
     normal: vec3<f32>,
     hit: bool,
@@ -125,70 +123,75 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
 
     textureStore(color_buffer, screen_pos, vec4<f32 >(pixel_color, 1.0));
 }
-
 fn rayColor(ray: Ray) -> vec3<f32> {
     var color: vec3<f32> = vec3(1.0, 1.0, 1.0);
     var result: RenderState;
-    var world_ray: Ray;
-    let epsilon: f32 = 0.0001;
-
-    world_ray.origin = ray.origin;
-    world_ray.direction = ray.direction;
+    var world_ray: Ray = ray;
 
     let bounces: u32 = u32(scene.maxBounces);
     for (var bounce: u32 = 0u; bounce < bounces; bounce++) {
-
         result = trace_tlas(world_ray);
 
-        if !result.hit {
+        if result.hit {
+            let material: Material = result.material;
+            let hitPoint = world_ray.origin + result.t * world_ray.direction;
+            let norm = normalize(result.normal);
+            let viewDir = -world_ray.direction;
+
+            // Lighting calculations
+            let lightDir = normalize(light.position - hitPoint);
+
+            // Ambient
+            let ambient = material.ambient;
+
+            // Diffuse
+            let diff = max(dot(norm, lightDir), 0.0);
+            let diffuse = diff * material.diffuse;
+
+            // Specular with Fresnel effect
+            let reflectDir = reflect(-lightDir, norm);
+            let spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+            let specular = spec * material.specular;
+
+            // Emission
+            let emission = material.emission;
+
+            // Combine lighting with material color
+            color = color * (ambient + diffuse + specular + emission) * light.intensity;
+
+            // Refraction
+            let eta: f32 = 1.0 / material.refraction;
+            let cosThetaI: f32 = dot(norm, world_ray.direction);
+            let sin2ThetaI: f32 = max(0.0, 1.0 - cosThetaI * cosThetaI);
+            let sin2ThetaT: f32 = eta * eta * sin2ThetaI;
+
+            // Total internal reflection
+            if sin2ThetaT >= 1.0 {
+                world_ray.direction = reflect(world_ray.direction, norm);
+            } else {
+                let cosThetaT: f32 = sqrt(1.0 - sin2ThetaT);
+                world_ray.direction = eta * (-world_ray.direction) + (eta * cosThetaI - cosThetaT) * norm;
+            }
+
+
+            world_ray.origin = hitPoint;
+        } else {
             // Check for intersection with the infinite floor
             result = hit_floor(world_ray, -10.0); // Assuming the floor is at y=0.0
             if !result.hit {
-                color = color * textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz;
+                color *= textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz;
                 break;
             } else {
                 // If the ray hits the floor, set the color to the floor's material color
-                color = result.diffuse;
+                color *= result.material.diffuse;
                 break;
             }
         }
-        let hitPoint = world_ray.origin + result.t * world_ray.direction;
-        let norm = normalize(result.normal);
-        let viewDir = -world_ray.direction;
-
-        // Fresnel weighting for the reflected glow
-        let cosine = dot(viewDir, norm);
-        let fresnelGlow = pow(1.0 - cosine, 5.0);
-
-        // Lighting calculations
-        let lightDir = normalize(light.position - hitPoint);
-
-        // Ambient
-        let ambient = light.ambient;
-
-        // Diffuse
-        let diff = max(dot(norm, lightDir), 0.0);
-        let diffuse = diff * result.diffuse;
-
-        // Specular with Fresnel effect
-        let reflectDir = reflect(-lightDir, norm);
-
-        let spec = pow(max(dot(viewDir, reflectDir), 0.0), result.shininess);
-        let specular = spec * result.specular;
-
-        var lightingColor = (ambient + diffuse + specular) * light.intensity;
-
-        // Combine lighting with material color
-        color = color * lightingColor;
-
-
-        // Set up for next trace
-        world_ray.origin = hitPoint + epsilon * norm;
-        world_ray.direction = normalize(reflect(world_ray.direction, norm));
     }
+
     // Rays which reached terminal state and bounced indefinitely
     if result.hit && color.x == 1.0 && color.y == 1.0 && color.z == 1.0 {
-        color = result.diffuse;
+        color = result.material.diffuse;
     }
 
     return color;
@@ -204,7 +207,7 @@ fn calculateGlow(ray: Ray) -> vec3<f32> {
 
     if dotProduct > GLOW_THRESHOLD {
         let intensity = pow((dotProduct - GLOW_THRESHOLD) / GLOW_RANGE, GLOW_POWER) * distanceFactor;
-        return intensity * light.color * light.intensity * light.ambient;
+        return intensity * light.color * light.intensity;
     }
     return vec3<f32 >(0.0, 0.0, 0.0);
 }
@@ -299,13 +302,8 @@ fn trace_blas(
     var blasRenderState: RenderState;
     blasRenderState.t = renderState.t;
     blasRenderState.normal = renderState.normal;
-    blasRenderState.diffuse = renderState.diffuse;
-    blasRenderState.specular = renderState.specular;
-    blasRenderState.ambient = renderState.ambient;
-    blasRenderState.emission = renderState.emission;
-    blasRenderState.shininess = renderState.shininess;
-    blasRenderState.refraction = renderState.refraction;
-    blasRenderState.dissolve = renderState.dissolve;
+    blasRenderState.material = renderState.material;
+
 
     blasRenderState.hit = false;
 
@@ -398,13 +396,8 @@ fn hit_triangle(
     // Initialisierung des Render-Zustands.
     var renderState: RenderState;
     renderState.hit = false;
-    renderState.diffuse = oldRenderState.diffuse;
-    renderState.specular = oldRenderState.specular;
-    renderState.ambient = oldRenderState.ambient;
-    renderState.emission = oldRenderState.emission;
-    renderState.shininess = oldRenderState.shininess;
-    renderState.refraction = oldRenderState.refraction;
-    renderState.dissolve = oldRenderState.dissolve;
+    renderState.material = oldRenderState.material;
+
 
 
     // Berechnung der Richtungsvektoren des Dreiecks.
@@ -481,13 +474,8 @@ fn hit_triangle(
     if t > tMin && t < tMax {
         // Baryzentrische Interpolation: Damit wir keine konstante normale über die gesamte fläche haben
         renderState.normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
-        renderState.diffuse = tri.diffuse;
-        renderState.specular = tri.specular;
-        renderState.ambient = tri.ambient;
-        renderState.emission = tri.emission;
-        renderState.shininess = tri.shininess;
-        renderState.refraction = tri.refraction;
-        renderState.dissolve = tri.dissolve;
+        renderState.material = tri.material;
+
 
         renderState.t = t;
         renderState.hit = true;
@@ -517,7 +505,7 @@ fn hit_floor(ray: Ray, height: f32) -> RenderState {
         // Invert the y-component of the ray's direction to flip the sky texture
         let invertedDirection = vec3<f32>(ray.direction.x, -ray.direction.y, ray.direction.z);
         // Sample the sky texture using the inverted direction
-        renderState.diffuse = textureSampleLevel(skyTexture, skySampler, invertedDirection, 0.0).xyz;
+        renderState.material.diffuse = textureSampleLevel(skyTexture, skySampler, invertedDirection, 0.0).xyz;
 
         return renderState;
     }
@@ -547,4 +535,7 @@ fn hit_aabb(ray: Ray, node: Node) -> f32 {
     } else {
         return t_min;
     }
+}
+fn lerp(a: vec3<f32>, b: vec3<f32>, t: f32) -> vec3<f32> {
+    return a + t * (b - a);
 }

@@ -56,31 +56,30 @@ export class Scene {
     this.triangleIndices = []
     console.log("Triangle Indices:")
 
-    let triangleIndexOffset = 0 // Initialize the triangle index offset outside the loop
+    let triangleIndexOffset = 0
 
     this.objectMeshes.forEach((objectMesh) => {
       objectMesh.triangleIndices.forEach((index) => {
-        const adjustedIndex = index + triangleIndexOffset // Adjust the triangle index
+        const adjustedIndex = index + triangleIndexOffset
         this.triangleIndices.push(adjustedIndex)
         console.log(adjustedIndex)
       })
 
-      triangleIndexOffset += objectMesh.triangles.length // Update the triangle index offset after processing the objectMesh
+      triangleIndexOffset += objectMesh.triangles.length
     })
 
     this.tlasNodesMax = 2 * this.objectMeshes.length - 1
 
-    // Calculate the total number of nodes and initialize the this.nodes array
     const totalNodes = this.tlasNodesMax + this.objectMeshes.reduce((acc, objectMesh) => acc + objectMesh.nodesUsed, 0)
     this.nodes = new Array(totalNodes).fill(null).map(() => new Node())
 
-    let nodeOffset = 0 // Initialize the node offset outside the loop
+    let nodeOffset = 0
 
     this.objectMeshes.forEach((objectMesh) => {
       const blasNodesUsed: number = objectMesh.nodesUsed
 
       for (var i: number = 0; i < blasNodesUsed; i += 1) {
-        const adjustedNodeIndex = nodeOffset + i // Adjust the node index
+        const adjustedNodeIndex = nodeOffset + i
         this.nodes[adjustedNodeIndex].leftChild = 0
         this.nodes[adjustedNodeIndex].primitiveCount = 0
         this.nodes[adjustedNodeIndex].minCorner = [0, 0, 0]
@@ -88,7 +87,7 @@ export class Scene {
         console.log("Reading node %d", adjustedNodeIndex)
       }
 
-      nodeOffset += blasNodesUsed // Update the node offset after processing the objectMesh
+      nodeOffset += blasNodesUsed
     })
   }
 

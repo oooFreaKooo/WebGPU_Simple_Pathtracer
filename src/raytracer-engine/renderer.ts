@@ -417,19 +417,13 @@ export class Renderer {
       const rgb = hexToRgb(colorValue)
       this.scene.light.light_color = new Float32Array([rgb.r / 255, rgb.g / 255, rgb.b / 255])
     })
-    document.querySelector<HTMLInputElement>("#ambient-color")!.addEventListener("input", (event) => {
-      const colorValue = (event.target as HTMLInputElement).value
-      this.RGB = hexToRgb(colorValue)
-      this.scene.light.ambient = new Float32Array([this.RGB.r / 255, this.RGB.g / 255, this.RGB.b / 255])
-      updateAmbientLightIntensity(this.scene.light.ambient, this.RGB.r, this.RGB.g, this.RGB.b)
-    })
 
     this.scene.light.intensity = parseFloat(document.querySelector<HTMLInputElement>("#intensity")!.value)
     this.scene.light.size = parseFloat(document.querySelector<HTMLInputElement>("#size")!.value)
 
     // LIGHT
-    const { position, light_color, ambient, intensity, size } = this.scene.light
-    const lightData = new Float32Array([...position, 0.0, ...light_color, 0.0, ...ambient, intensity, size])
+    const { position, light_color, intensity, size } = this.scene.light
+    const lightData = new Float32Array([...position, 0.0, ...light_color, intensity, size])
     this.device.queue.writeBuffer(this.lightBuffer, 0, lightData)
 
     const blasDescriptionData: Float32Array = new Float32Array(20 * this.scene.blasDescriptions.length)
@@ -469,11 +463,20 @@ export class Renderer {
     uploadTimeLabel.innerText = (uploadEnd - uploadStart).toFixed(2).toString()
 
     // Get the color input elements
+    document.querySelector<HTMLInputElement>("#ambient")!.addEventListener("input", (event) => {
+      const colorValue = (event.target as HTMLInputElement).value
+      const rgb = hexToRgb(colorValue)
+      for (let triangle of this.scene.triangles) {
+        triangle.material.ambient = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
+      }
+      this.updateTriangleData()
+    })
+
     document.querySelector<HTMLInputElement>("#diffuse")!.addEventListener("input", (event) => {
       const colorValue = (event.target as HTMLInputElement).value
       const rgb = hexToRgb(colorValue)
       for (let triangle of this.scene.triangles) {
-        triangle.diffuse = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
+        triangle.material.diffuse = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
       }
       this.updateTriangleData()
     })
@@ -481,10 +484,50 @@ export class Renderer {
       const colorValue = (event.target as HTMLInputElement).value
       const rgb = hexToRgb(colorValue)
       for (let triangle of this.scene.triangles) {
-        triangle.specular = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
+        triangle.material.specular = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
       }
       this.updateTriangleData()
     })
+    document.querySelector<HTMLInputElement>("#emission")!.addEventListener("input", (event) => {
+      const colorValue = (event.target as HTMLInputElement).value
+      const rgb = hexToRgb(colorValue)
+      for (let triangle of this.scene.triangles) {
+        triangle.material.emission = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
+      }
+      this.updateTriangleData()
+    })
+    document.querySelector<HTMLInputElement>("#shininess")!.addEventListener("input", (event) => {
+      const value = parseFloat((event.target as HTMLInputElement).value)
+      for (let triangle of this.scene.triangles) {
+        triangle.material.shininess = value
+      }
+      this.updateTriangleData()
+    })
+
+    document.querySelector<HTMLInputElement>("#refraction")!.addEventListener("input", (event) => {
+      const value = parseFloat((event.target as HTMLInputElement).value)
+      for (let triangle of this.scene.triangles) {
+        triangle.material.refraction = value
+      }
+      this.updateTriangleData()
+    })
+
+    document.querySelector<HTMLInputElement>("#dissolve")!.addEventListener("input", (event) => {
+      const value = parseFloat((event.target as HTMLInputElement).value)
+      for (let triangle of this.scene.triangles) {
+        triangle.material.dissolve = value
+      }
+      this.updateTriangleData()
+    })
+
+    document.querySelector<HTMLInputElement>("#smoothness")!.addEventListener("input", (event) => {
+      const value = parseFloat((event.target as HTMLInputElement).value)
+      for (let triangle of this.scene.triangles) {
+        triangle.material.smoothness = value
+      }
+      this.updateTriangleData()
+    })
+
     if (this.loaded) {
       return
     }
@@ -598,29 +641,29 @@ export class Renderer {
         triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0
       }
 
-      triangleData[triangleDataSize * i + 24] = tri.ambient[0]
-      triangleData[triangleDataSize * i + 25] = tri.ambient[1]
-      triangleData[triangleDataSize * i + 26] = tri.ambient[2]
+      triangleData[triangleDataSize * i + 24] = tri.material.ambient[0]
+      triangleData[triangleDataSize * i + 25] = tri.material.ambient[1]
+      triangleData[triangleDataSize * i + 26] = tri.material.ambient[2]
       triangleData[triangleDataSize * i + 27] = 0.0 // Padding
 
-      triangleData[triangleDataSize * i + 28] = tri.diffuse[0]
-      triangleData[triangleDataSize * i + 29] = tri.diffuse[1]
-      triangleData[triangleDataSize * i + 30] = tri.diffuse[2]
+      triangleData[triangleDataSize * i + 28] = tri.material.diffuse[0]
+      triangleData[triangleDataSize * i + 29] = tri.material.diffuse[1]
+      triangleData[triangleDataSize * i + 30] = tri.material.diffuse[2]
       triangleData[triangleDataSize * i + 31] = 0.0 // Padding
 
-      triangleData[triangleDataSize * i + 32] = tri.specular[0]
-      triangleData[triangleDataSize * i + 33] = tri.specular[1]
-      triangleData[triangleDataSize * i + 34] = tri.specular[2]
+      triangleData[triangleDataSize * i + 32] = tri.material.specular[0]
+      triangleData[triangleDataSize * i + 33] = tri.material.specular[1]
+      triangleData[triangleDataSize * i + 34] = tri.material.specular[2]
       triangleData[triangleDataSize * i + 35] = 0.0 // Padding
 
-      triangleData[triangleDataSize * i + 36] = tri.emission[0]
-      triangleData[triangleDataSize * i + 37] = tri.emission[1]
-      triangleData[triangleDataSize * i + 38] = tri.emission[2]
-      triangleData[triangleDataSize * i + 39] = tri.shininess
+      triangleData[triangleDataSize * i + 36] = tri.material.emission[0]
+      triangleData[triangleDataSize * i + 37] = tri.material.emission[1]
+      triangleData[triangleDataSize * i + 38] = tri.material.emission[2]
+      triangleData[triangleDataSize * i + 39] = tri.material.shininess
 
-      triangleData[triangleDataSize * i + 40] = tri.refraction
-      triangleData[triangleDataSize * i + 41] = tri.dissolve
-      triangleData[triangleDataSize * i + 42] = 0.0 // Padding
+      triangleData[triangleDataSize * i + 40] = tri.material.refraction
+      triangleData[triangleDataSize * i + 41] = tri.material.dissolve
+      triangleData[triangleDataSize * i + 42] = tri.material.smoothness
       triangleData[triangleDataSize * i + 43] = 0.0 // Padding
     }
 
