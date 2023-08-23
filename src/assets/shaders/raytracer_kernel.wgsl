@@ -12,18 +12,10 @@ struct Node {
     primitiveCount: f32,
 }
 
-struct blasDescription {
-    inverseModel: mat4x4<f32>,
-    rootNodeIndex: vec4<f32>,
-}
-
 struct BVH {
     nodes: array<Node>,
 }
 
-struct blasDescriptions {
-    descriptions: array<blasDescription>,
-}
 
 struct ObjectIndices {
     primitiveIndices: array<f32>,
@@ -70,7 +62,7 @@ struct ObjectData {
 
 struct RenderState {
     material: Material,
-    t: f32,    // hit distance from ray origin to intersection point
+    t: f32,
     normal: vec3<f32>,
     hit: bool,
 }
@@ -80,12 +72,10 @@ struct RenderState {
 @group(0) @binding(1) var<uniform> scene : SceneData;
 @group(0) @binding(2) var<storage, read> objects : ObjectData;
 @group(0) @binding(3) var<storage, read> tree : BVH;
-@group(0) @binding(4) var<storage, read> blas : blasDescriptions;
-@group(0) @binding(5) var<storage, read> triangleLookup : ObjectIndices;
-@group(0) @binding(6) var<storage, read> blasLookup : ObjectIndices;
-@group(0) @binding(7) var skyTexture : texture_cube<f32>;
-@group(0) @binding(8) var skySampler : sampler;
-@group(0) @binding(9) var<uniform> light : PointLight;
+@group(0) @binding(4) var<storage, read> triangleLookup : ObjectIndices;
+@group(0) @binding(5) var skyTexture : texture_cube<f32>;
+@group(0) @binding(6) var skySampler : sampler;
+@group(0) @binding(7) var<uniform> light : PointLight;
 
 
 //Constants for glow effect
@@ -123,6 +113,9 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
 
     textureStore(color_buffer, screen_pos, vec4<f32 >(pixel_color, 1.0));
 }
+
+
+
 fn rayColor(ray: Ray) -> vec3<f32> {
     var color: vec3<f32> = vec3(1.0, 1.0, 1.0);
     var result: RenderState;
@@ -130,7 +123,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
 
     let bounces: u32 = u32(scene.maxBounces);
     for (var bounce: u32 = 0u; bounce < bounces; bounce++) {
-        result = trace_tlas(world_ray);
+        result = trace(world_ray);
 
         if result.hit {
             let material: Material = result.material;
@@ -148,47 +141,21 @@ fn rayColor(ray: Ray) -> vec3<f32> {
             let diff = max(dot(norm, lightDir), 0.0);
             let diffuse = diff * material.diffuse;
 
-            // Specular with Fresnel effect
+            // Specular
             let reflectDir = reflect(-lightDir, norm);
             let spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
             let specular = spec * material.specular;
 
-            // Emission
-            let emission = material.emission;
-
             // Combine lighting with material color
-            color = color * (ambient + diffuse + specular + emission) * light.intensity;
-
-            // Refraction
-            let eta: f32 = 1.0 / material.refraction;
-            let cosThetaI: f32 = dot(norm, world_ray.direction);
-            let sin2ThetaI: f32 = max(0.0, 1.0 - cosThetaI * cosThetaI);
-            let sin2ThetaT: f32 = eta * eta * sin2ThetaI;
-
-            // Total internal reflection
-            if sin2ThetaT >= 1.0 {
-                world_ray.direction = reflect(world_ray.direction, norm);
-            } else {
-                let cosThetaT: f32 = sqrt(1.0 - sin2ThetaT);
-                world_ray.direction = eta * (-world_ray.direction) + (eta * cosThetaI - cosThetaT) * norm;
-            }
-
+            color = color * (ambient + diffuse + specular) * light.intensity;
 
             world_ray.origin = hitPoint;
+            world_ray.direction = normalize(reflect(world_ray.direction, result.normal));
         } else {
-            // Check for intersection with the infinite floor
-            result = hit_floor(world_ray, -10.0); // Assuming the floor is at y=0.0
-            if !result.hit {
-                color *= textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz;
-                break;
-            } else {
-                // If the ray hits the floor, set the color to the floor's material color
-                color *= result.material.diffuse;
-                break;
-            }
+            color *= textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz;
+            break;
         }
     }
-
     // Rays which reached terminal state and bounced indefinitely
     if result.hit && color.x == 1.0 && color.y == 1.0 && color.z == 1.0 {
         color = result.material.diffuse;
@@ -197,6 +164,15 @@ fn rayColor(ray: Ray) -> vec3<f32> {
     return color;
 }
 
+fn randomHemisphereDirection(normal: vec3<f32>) -> vec3<f32> {
+    // In a real scenario, we'd use a genuine random number generator.
+    // Here, we'll use a simple trick to produce a pseudorandom direction.
+    let u = fract(sin(dot(normal, vec3(12.9898, 78.233, 56.234))) * 43758.5453);
+    let v = fract(sin(dot(normal, vec3(93.9898, 67.345, 12.367))) * 52758.5453);
+    let r = sqrt(1.0 - u * u);
+    let phi = 2.0 * 3.14159 * v;
+    return vec3(cos(phi) * r, u, sin(phi) * r);
+}
 
 fn calculateGlow(ray: Ray) -> vec3<f32> {
     let directionToLight = normalize(light.position - ray.origin);
@@ -212,7 +188,7 @@ fn calculateGlow(ray: Ray) -> vec3<f32> {
     return vec3<f32 >(0.0, 0.0, 0.0);
 }
 
-fn trace_tlas(ray: Ray) -> RenderState {
+fn trace(ray: Ray) -> RenderState {
 
     //Set up the Render State
     var renderState: RenderState;
@@ -262,9 +238,10 @@ fn trace_tlas(ray: Ray) -> RenderState {
         } else {
             for (var i: u32 = 0u; i < primitiveCount; i++) {
 
-                var newRenderState: RenderState = trace_blas(
+                var newRenderState: RenderState = hit_triangle(
                     ray,
-                    blas.descriptions[u32(blasLookup.primitiveIndices[i + contents])],
+                    objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])],
+                    0.001,
                     nearestHit,
                     renderState
                 );
@@ -285,103 +262,6 @@ fn trace_tlas(ray: Ray) -> RenderState {
     }
 
     return renderState;
-}
-
-fn trace_blas(
-    ray: Ray,
-    description: blasDescription,
-    nearestHit: f32,
-    renderState: RenderState
-) -> RenderState {
-
-    var object_ray: Ray;
-    object_ray.origin = (description.inverseModel * vec4<f32 >(ray.origin, 1.0)).xyz;
-    object_ray.direction = (description.inverseModel * vec4<f32 >(ray.direction, 0.0)).xyz;
-
-    //Set up the Render State
-    var blasRenderState: RenderState;
-    blasRenderState.t = renderState.t;
-    blasRenderState.normal = renderState.normal;
-    blasRenderState.material = renderState.material;
-
-
-    blasRenderState.hit = false;
-
-    var blasNearestHit: f32 = nearestHit;
-
-    //Set up for BVH Traversal
-    var node: Node = tree.nodes[u32(description.rootNodeIndex.x)];
-    var stack: array<Node, 20>;
-    var stackLocation: u32 = 0u;
-
-    while true {
-
-        var primitiveCount: u32 = u32(node.primitiveCount);
-        var contents: u32 = u32(node.leftChild);
-
-        if primitiveCount == 0u {
-            var child1: Node = tree.nodes[contents];
-            var child2: Node = tree.nodes[contents + 1u];
-
-            var distance1: f32 = hit_aabb(object_ray, child1);
-            var distance2: f32 = hit_aabb(object_ray, child2);
-            if distance1 > distance2 {
-                var tempDist: f32 = distance1;
-                distance1 = distance2;
-                distance2 = tempDist;
-
-                var tempChild: Node = child1;
-                child1 = child2;
-                child2 = tempChild;
-            }
-
-            if distance1 > blasNearestHit {
-                if stackLocation == 0u {
-                    break;
-                } else {
-                    stackLocation -= 1u;
-                    node = stack[stackLocation];
-                }
-            } else {
-                node = child1;
-                if distance2 < blasNearestHit {
-                    stack[stackLocation] = child2;
-                    stackLocation += 1u;
-                }
-            }
-        } else {
-            for (var i: u32 = 0u; i < primitiveCount; i++) {
-
-                var newRenderState: RenderState = hit_triangle(
-                    object_ray,
-                    objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])],
-                    0.001,
-                    blasNearestHit,
-                    blasRenderState
-                );
-
-                if newRenderState.hit && newRenderState.t < blasNearestHit {
-                    blasNearestHit = newRenderState.t;
-                    blasRenderState = newRenderState;
-                }
-            }
-
-            if stackLocation == 0u {
-                break;
-            } else {
-                stackLocation -= 1u;
-                node = stack[stackLocation];
-            }
-        }
-    }
-
-    if blasRenderState.hit {
-        blasRenderState.normal = normalize(
-            (transpose(description.inverseModel) * vec4(blasRenderState.normal, 0.0)).xyz
-        );
-    }
-
-    return blasRenderState;
 }
 
 // Funktion, die überprüft, ob ein Strahl ein Dreieck trifft.
@@ -484,35 +364,7 @@ fn hit_triangle(
 
     return renderState;
 }
-fn hit_floor(ray: Ray, height: f32) -> RenderState {
-    var renderState: RenderState;
-    renderState.hit = false;
-    // If ray is parallel to the floor, no hit
-    if abs(ray.direction.y) == 0.0001 {
-        return renderState;
-    }
 
-    // t wert berechnen für den schnittpunkt 
-    var t: f32 = (height - ray.origin.y) / ray.direction.y;
-
-    // Schauen ob t gültig ist
-    if t > 0.0 {
-        var hitPoint: vec3<f32> = ray.origin + t * ray.direction;
-
-        renderState.hit = true;
-        renderState.t = t;
-        renderState.normal = vec3<f32>(0.0, 1.0, 0.0);
-        // Invert the y-component of the ray's direction to flip the sky texture
-        let invertedDirection = vec3<f32>(ray.direction.x, -ray.direction.y, ray.direction.z);
-        // Sample the sky texture using the inverted direction
-        renderState.material.diffuse = textureSampleLevel(skyTexture, skySampler, invertedDirection, 0.0).xyz;
-
-        return renderState;
-    }
-
-
-    return renderState;
-}
 // Prüfe ob bounding box getroffen wurde
 fn hit_aabb(ray: Ray, node: Node) -> f32 {
     // Inverse Richtung des strahls berechnen um divisionen im code zu vermeiden (rechenzeit vebessern)

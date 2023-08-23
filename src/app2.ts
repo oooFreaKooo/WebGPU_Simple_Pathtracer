@@ -15,13 +15,12 @@ export class Application2 {
   }
 
   async start() {
-    const material1 = new Material(new Float32Array([1.0, 0.0, 0.0]), new Float32Array([0.0, 1.0, 0.0]))
-    const material2 = new Material(new Float32Array([1.0, 1.0, 1.0]))
+    const material1 = new Material({ ambient: [0.5, 0.5, 0.5], diffuse: [1.0, 0.0, 0.0] })
+    const material2 = new Material({ ambient: [0.5, 0.5, 0.5], diffuse: [0.0, 0.0, 1.0] })
     await this.scene.createObject("./src/assets/models/cube.obj", material1, [0.0, 0.0, 0.0])
-    //await this.scene.createObject("./src/assets/models/pyramid.obj", material2, [15.0, 0.0, 0.0])
-    this.scene.prepareBVH()
+    await this.scene.createObject("./src/assets/models/pyramid.obj", material2, [10.0, 0.0, 0.0])
+    await this.scene.createObject("./src/assets/models/ground.obj", material2, [0.0, -1.0, 0.0], [5.0, 0.0, 5.0])
     this.scene.buildBVH()
-    this.scene.finalizeBVH()
 
     await this.renderer.Initialize()
   }

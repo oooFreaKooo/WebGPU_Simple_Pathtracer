@@ -1,5 +1,16 @@
 import { vec3 } from "gl-matrix"
 
+interface MaterialOptions {
+  ambient?: vec3
+  diffuse?: vec3
+  specular?: vec3
+  emission?: vec3
+  shininess?: number
+  refraction?: number
+  dissolve?: number
+  smoothness?: number
+}
+
 export class Material {
   ambient: vec3 // Ambient reflectivity (Ka)
   diffuse: vec3 // Diffuse reflectivity (Kd)
@@ -10,23 +21,27 @@ export class Material {
   dissolve: number // Transparency (d)
   smoothness: number
 
-  constructor(
-    diffuse: vec3 = [1.0, 1.0, 1.0],
-    specular: vec3 = [1.0, 1.0, 1.0],
-    shininess: number = 35,
-    ambient: vec3 = [0.5, 0.5, 0.5],
-    emmision: vec3 = [1.0, 0, 0],
-    refraction: number = 0.5,
-    dissolve: number = 0.5,
-    smoothness: number = 0.5,
-  ) {
-    this.ambient = ambient
-    this.diffuse = diffuse
-    this.specular = specular
-    this.emission = emmision
-    this.shininess = shininess
-    this.refraction = refraction
-    this.dissolve = dissolve
-    this.smoothness = smoothness
+  constructor(options: MaterialOptions = {}) {
+    const defaults: MaterialOptions = {
+      ambient: [0.5, 0.5, 0.5],
+      diffuse: [1.0, 1.0, 1.0],
+      specular: [1.0, 1.0, 1.0],
+      emission: [1.0, 0, 0],
+      shininess: 35,
+      refraction: 0.5,
+      dissolve: 0.5,
+      smoothness: 0.5,
+    }
+
+    const finalOptions = { ...defaults, ...options }
+
+    this.ambient = finalOptions.ambient!
+    this.diffuse = finalOptions.diffuse!
+    this.specular = finalOptions.specular!
+    this.emission = finalOptions.emission!
+    this.shininess = finalOptions.shininess!
+    this.refraction = finalOptions.refraction!
+    this.dissolve = finalOptions.dissolve!
+    this.smoothness = finalOptions.smoothness!
   }
 }

@@ -2,7 +2,6 @@ import { Camera } from "./camera"
 import { vec3 } from "gl-matrix"
 import { Controls } from "./controls"
 import { Light } from "./light"
-import { blasDescription } from "./blas_description"
 import { ObjLoader } from "./obj-loader"
 import { Triangle } from "./triangle"
 import { Node } from "./node"
@@ -14,13 +13,11 @@ export class Scene {
   cameraControls: Controls
   light: Light
 
-  triangles: Triangle[]
-  triangleIndices: number[]
+  triangles: Triangle[] = []
+  triangleIndices: number[] = []
   nodes: Node[]
   nodesUsed: number = 0
   tlasNodesMax: number
-  blasIndices: number[]
-  blasDescriptions: blasDescription[]
   objectMeshes: ObjLoader[] = []
 
   constructor(canvas: HTMLCanvasElement) {
@@ -39,87 +36,31 @@ export class Scene {
     const objectMesh = new ObjLoader(material, position, scale, rotation)
     await objectMesh.initialize(modelPath)
 
+    objectMesh.triangles.forEach((tri) => {
+      this.triangles.push(tri)
+    })
+    objectMesh.triangleIndices.forEach((index) => {
+      this.triangleIndices.push(index)
+    })
+
     this.objectMeshes.push(objectMesh)
   }
 
-  prepareBVH() {
-    this.triangles = []
-    console.log("Triangles:")
-
-    this.objectMeshes.forEach((objectMesh) => {
-      objectMesh.triangles.forEach((tri) => {
-        this.triangles.push(tri)
-        console.log(tri.centroid)
-      })
-    })
-
-    this.triangleIndices = []
-    console.log("Triangle Indices:")
-
-    let triangleIndexOffset = 0
-
-    this.objectMeshes.forEach((objectMesh) => {
-      objectMesh.triangleIndices.forEach((index) => {
-        const adjustedIndex = index + triangleIndexOffset
-        this.triangleIndices.push(adjustedIndex)
-        console.log(adjustedIndex)
-      })
-
-      triangleIndexOffset += objectMesh.triangles.length
-    })
-
-    this.tlasNodesMax = 2 * this.objectMeshes.length - 1
-
-    const totalNodes = this.tlasNodesMax + this.objectMeshes.reduce((acc, objectMesh) => acc + objectMesh.nodesUsed, 0)
-    this.nodes = new Array(totalNodes).fill(null).map(() => new Node())
-
-    let nodeOffset = 0
-
-    this.objectMeshes.forEach((objectMesh) => {
-      const blasNodesUsed: number = objectMesh.nodesUsed
-
-      for (var i: number = 0; i < blasNodesUsed; i += 1) {
-        const adjustedNodeIndex = nodeOffset + i
-        this.nodes[adjustedNodeIndex].leftChild = 0
-        this.nodes[adjustedNodeIndex].primitiveCount = 0
-        this.nodes[adjustedNodeIndex].minCorner = [0, 0, 0]
-        this.nodes[adjustedNodeIndex].maxCorner = [0, 0, 0]
-        console.log("Reading node %d", adjustedNodeIndex)
-      }
-
-      nodeOffset += blasNodesUsed
-    })
-  }
-
   buildBVH() {
-    this.nodesUsed = 0
-
-    this.blasDescriptions = new Array(this.objectMeshes.length)
-    this.blasIndices = new Array(this.objectMeshes.length)
-
-    for (var i: number = 0; i < this.objectMeshes.length; i++) {
-      var description: blasDescription = new blasDescription(
-        this.objectMeshes[i].minCorner,
-        this.objectMeshes[i].maxCorner,
-        this.objectMeshes[i].model,
-      )
-      description.rootNodeIndex = this.tlasNodesMax
-
-      this.blasDescriptions[i] = description
-      this.blasIndices[i] = i
+    this.triangleIndices = new Array(this.triangles.length)
+    for (var i: number = 0; i < this.triangles.length; i += 1) {
+      this.triangleIndices[i] = i
     }
 
-    for (var i: number = 0; i < this.tlasNodesMax; i += 1) {
-      this.nodes[i].leftChild = 0
-      this.nodes[i].primitiveCount = 0
-      this.nodes[i].minCorner = [0, 0, 0]
-      this.nodes[i].maxCorner = [0, 0, 0]
+    this.nodes = new Array(2 * this.triangles.length - 1)
+    for (var i: number = 0; i < 2 * this.triangles.length - 1; i += 1) {
+      this.nodes[i] = new Node()
     }
 
     var root: Node = this.nodes[0]
     root.leftChild = 0
-    root.primitiveCount = this.blasDescriptions.length
-    this.nodesUsed += 1
+    root.primitiveCount = this.triangles.length
+    this.nodesUsed = 1
 
     this.updateBounds(0)
     this.subdivide(0)
@@ -131,9 +72,12 @@ export class Scene {
     node.maxCorner = [-999999, -999999, -999999]
 
     for (var i: number = 0; i < node.primitiveCount; i += 1) {
-      const description: blasDescription = this.blasDescriptions[this.blasIndices[node.leftChild + i]]
-      vec3.min(node.minCorner, node.minCorner, description.minCorner)
-      vec3.max(node.maxCorner, node.maxCorner, description.maxCorner)
+      const triangle: Triangle = this.triangles[this.triangleIndices[node.leftChild + i]]
+
+      triangle.corners.forEach((corner: vec3) => {
+        vec3.min(node.minCorner, node.minCorner, corner)
+        vec3.max(node.maxCorner, node.maxCorner, corner)
+      })
     }
   }
 
@@ -160,12 +104,12 @@ export class Scene {
     var j: number = i + node.primitiveCount - 1
 
     while (i <= j) {
-      if (this.blasDescriptions[this.blasIndices[i]].center[axis] < splitPosition) {
+      if (this.triangles[this.triangleIndices[i]].centroid[axis] < splitPosition) {
         i += 1
       } else {
-        var temp: number = this.blasIndices[i]
-        this.blasIndices[i] = this.blasIndices[j]
-        this.blasIndices[j] = temp
+        var temp: number = this.triangleIndices[i]
+        this.triangleIndices[i] = this.triangleIndices[j]
+        this.triangleIndices[j] = temp
         j -= 1
       }
     }
@@ -193,21 +137,6 @@ export class Scene {
     this.updateBounds(rightChildIndex)
     this.subdivide(leftChildIndex)
     this.subdivide(rightChildIndex)
-  }
-
-  finalizeBVH() {
-    this.objectMeshes.forEach((objectMesh) => {
-      for (var i: number = 0; i < objectMesh.nodesUsed; i++) {
-        var nodeToUpload = objectMesh.nodes[i]
-        if (nodeToUpload.primitiveCount == 0) {
-          //Internal node: leftChild must be shifted
-          nodeToUpload.leftChild += this.tlasNodesMax
-        }
-
-        //store node
-        this.nodes[this.tlasNodesMax + i] = nodeToUpload
-      }
-    })
   }
 
   update(frametime: number) {

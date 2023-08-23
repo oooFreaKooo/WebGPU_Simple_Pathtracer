@@ -20,6 +20,7 @@ export class ObjLoader {
 
   material: Material
   model: mat4
+  inverseModel: mat4
   position: vec3
   rotation: vec3
   scale: vec3
@@ -38,6 +39,7 @@ export class ObjLoader {
     this.position = position
     this.rotation = rotation
     this.scale = scale
+    this.inverseModel = mat4.create()
     this.calculate_transform()
   }
 
@@ -55,6 +57,7 @@ export class ObjLoader {
     mat4.rotateZ(this.model, this.model, deg2Rad(this.rotation[2]))
     mat4.rotateX(this.model, this.model, deg2Rad(this.rotation[0]))
     mat4.scale(this.model, this.model, this.scale)
+    mat4.invert(this.inverseModel, this.model)
   }
 
   async initialize(url: string) {
@@ -67,8 +70,6 @@ export class ObjLoader {
     this.nodes = []
     this.nodesUsed = 0
     this.triangleIndices = []
-
-    this.buildBVH()
   }
 
   async readFile(url: string) {
@@ -93,7 +94,10 @@ export class ObjLoader {
   read_vertex_data(line: string) {
     const components = line.split(" ")
     // ["v", "x", "y", "z"]
-    const new_vertex: vec3 = [Number(components[1]).valueOf(), Number(components[2]).valueOf(), Number(components[3]).valueOf()]
+    let new_vertex: vec3 = [Number(components[1]).valueOf(), Number(components[2]).valueOf(), Number(components[3]).valueOf()]
+
+    // Transform the vertex using the model matrix
+    new_vertex = vec3.transformMat4(new_vertex, new_vertex, this.model)
 
     this.v.push(new_vertex)
 
@@ -142,98 +146,5 @@ export class ObjLoader {
     const vn = this.vn[Number(v_vt_vn[2]).valueOf() - 1]
     tri.corners.push(v)
     tri.normals.push(vn)
-  }
-
-  buildBVH() {
-    this.triangleIndices = new Array(this.triangles.length)
-    for (var i: number = 0; i < this.triangles.length; i += 1) {
-      this.triangleIndices[i] = i
-    }
-
-    this.nodes = new Array(2 * this.triangles.length - 1)
-    for (var i: number = 0; i < 2 * this.triangles.length - 1; i += 1) {
-      this.nodes[i] = new Node()
-    }
-
-    var root: Node = this.nodes[0]
-    root.leftChild = 0
-    root.primitiveCount = this.triangles.length
-    this.nodesUsed = 1
-
-    this.updateBounds(0)
-    this.subdivide(0)
-  }
-
-  updateBounds(nodeIndex: number) {
-    var node: Node = this.nodes[nodeIndex]
-    node.minCorner = [999999, 999999, 999999]
-    node.maxCorner = [-999999, -999999, -999999]
-
-    for (var i: number = 0; i < node.primitiveCount; i += 1) {
-      const triangle: Triangle = this.triangles[this.triangleIndices[node.leftChild + i]]
-
-      triangle.corners.forEach((corner: vec3) => {
-        vec3.min(node.minCorner, node.minCorner, corner)
-        vec3.max(node.maxCorner, node.maxCorner, corner)
-      })
-    }
-  }
-
-  subdivide(nodeIndex: number) {
-    var node: Node = this.nodes[nodeIndex]
-
-    if (node.primitiveCount < 2) {
-      return
-    }
-
-    var extent: vec3 = [0, 0, 0]
-    vec3.subtract(extent, node.maxCorner, node.minCorner)
-    var axis: number = 0
-    if (extent[1] > extent[axis]) {
-      axis = 1
-    }
-    if (extent[2] > extent[axis]) {
-      axis = 2
-    }
-
-    const splitPosition: number = node.minCorner[axis] + extent[axis] / 2
-
-    var i: number = node.leftChild
-    var j: number = i + node.primitiveCount - 1
-
-    while (i <= j) {
-      if (this.triangles[this.triangleIndices[i]].centroid[axis] < splitPosition) {
-        i += 1
-      } else {
-        var temp: number = this.triangleIndices[i]
-        this.triangleIndices[i] = this.triangleIndices[j]
-        this.triangleIndices[j] = temp
-        j -= 1
-      }
-    }
-
-    var leftCount: number = i - node.leftChild
-    if (leftCount == 0 || leftCount == node.primitiveCount) {
-      return
-    }
-
-    const leftChildIndex: number = this.nodesUsed
-    this.nodesUsed += 1
-    const rightChildIndex: number = this.nodesUsed
-    this.nodesUsed += 1
-
-    this.nodes[leftChildIndex].leftChild = node.leftChild
-    this.nodes[leftChildIndex].primitiveCount = leftCount
-
-    this.nodes[rightChildIndex].leftChild = i
-    this.nodes[rightChildIndex].primitiveCount = node.primitiveCount - leftCount
-
-    node.leftChild = leftChildIndex
-    node.primitiveCount = 0
-
-    this.updateBounds(leftChildIndex)
-    this.updateBounds(rightChildIndex)
-    this.subdivide(leftChildIndex)
-    this.subdivide(rightChildIndex)
   }
 }

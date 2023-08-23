@@ -20,9 +20,7 @@ export class Renderer {
   sceneParameters: GPUBuffer
   triangleBuffer: GPUBuffer
   nodeBuffer: GPUBuffer
-  blasDescriptionBuffer: GPUBuffer
   triangleIndexBuffer: GPUBuffer
-  blasIndexBuffer: GPUBuffer
   sky_texture: CubeMapMaterial
   lightBuffer: GPUBuffer
 
@@ -125,33 +123,17 @@ export class Renderer {
         {
           binding: 5,
           visibility: GPUShaderStage.COMPUTE,
-          buffer: {
-            type: "read-only-storage",
-            hasDynamicOffset: false,
-          },
-        },
-        {
-          binding: 6,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {
-            type: "read-only-storage",
-            hasDynamicOffset: false,
-          },
-        },
-        {
-          binding: 7,
-          visibility: GPUShaderStage.COMPUTE,
           texture: {
             viewDimension: "cube",
           },
         },
         {
-          binding: 8,
+          binding: 6,
           visibility: GPUShaderStage.COMPUTE,
           sampler: {},
         },
         {
-          binding: 9,
+          binding: 7,
           visibility: GPUShaderStage.COMPUTE,
           buffer: {
             type: "uniform",
@@ -216,23 +198,11 @@ export class Renderer {
     }
     this.nodeBuffer = this.device.createBuffer(nodeBufferDescriptor)
 
-    const blasDescriptionBufferDescriptor: GPUBufferDescriptor = {
-      size: 80 * this.scene.blasDescriptions.length,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.blasDescriptionBuffer = this.device.createBuffer(blasDescriptionBufferDescriptor)
-
     const triangleIndexBufferDescriptor: GPUBufferDescriptor = {
       size: 4 * this.scene.triangles.length,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     }
     this.triangleIndexBuffer = this.device.createBuffer(triangleIndexBufferDescriptor)
-
-    const blasIndexBufferDescriptor: GPUBufferDescriptor = {
-      size: 4 * this.scene.blasIndices.length,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.blasIndexBuffer = this.device.createBuffer(blasIndexBufferDescriptor)
 
     const urls = [
       "./src/assets/textures/skybox/right3.png",
@@ -283,31 +253,19 @@ export class Renderer {
         {
           binding: 4,
           resource: {
-            buffer: this.blasDescriptionBuffer,
-          },
-        },
-        {
-          binding: 5,
-          resource: {
             buffer: this.triangleIndexBuffer,
           },
         },
         {
-          binding: 6,
-          resource: {
-            buffer: this.blasIndexBuffer,
-          },
-        },
-        {
-          binding: 7,
+          binding: 5,
           resource: this.sky_texture.view,
         },
         {
-          binding: 8,
+          binding: 6,
           resource: this.sky_texture.sampler,
         },
         {
-          binding: 9,
+          binding: 7,
           resource: {
             buffer: this.lightBuffer,
           },
@@ -426,24 +384,6 @@ export class Renderer {
     const lightData = new Float32Array([...position, 0.0, ...light_color, intensity, size])
     this.device.queue.writeBuffer(this.lightBuffer, 0, lightData)
 
-    const blasDescriptionData: Float32Array = new Float32Array(20 * this.scene.blasDescriptions.length)
-    for (let i = 0; i < this.scene.blasDescriptions.length; i++) {
-      for (let j = 0; j < 16; j++) {
-        blasDescriptionData[20 * i + j] = <number>this.scene.blasDescriptions[i].inverseModel.at(j)
-      }
-      blasDescriptionData[20 * i + 16] = this.scene.blasDescriptions[i].rootNodeIndex
-      blasDescriptionData[20 * i + 17] = this.scene.blasDescriptions[i].rootNodeIndex
-      blasDescriptionData[20 * i + 18] = this.scene.blasDescriptions[i].rootNodeIndex
-      blasDescriptionData[20 * i + 19] = this.scene.blasDescriptions[i].rootNodeIndex
-    }
-    this.device.queue.writeBuffer(this.blasDescriptionBuffer, 0, blasDescriptionData, 0, 20 * this.scene.blasDescriptions.length)
-
-    const blasIndexData: Float32Array = new Float32Array(this.scene.blasIndices.length)
-    for (let i = 0; i < this.scene.blasIndices.length; i++) {
-      blasIndexData[i] = this.scene.blasIndices[i]
-    }
-    this.device.queue.writeBuffer(this.blasIndexBuffer, 0, blasIndexData, 0, this.scene.blasIndices.length)
-
     //Write the tlas nodes
     var nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
     for (let i = 0; i < this.scene.nodesUsed; i++) {
@@ -471,24 +411,6 @@ export class Renderer {
     this.loaded = true
 
     this.updateTriangleData()
-
-    //Write blas data
-    this.scene.objectMeshes.forEach((objectMesh) => {
-      var nodeData_b = new Float32Array(8 * objectMesh.nodesUsed)
-      for (let i = 0; i < objectMesh.nodesUsed; i++) {
-        let baseIndex: number = this.scene.tlasNodesMax + i
-        nodeData_b[8 * i] = this.scene.nodes[baseIndex].minCorner[0]
-        nodeData_b[8 * i + 1] = this.scene.nodes[baseIndex].minCorner[1]
-        nodeData_b[8 * i + 2] = this.scene.nodes[baseIndex].minCorner[2]
-        nodeData_b[8 * i + 3] = this.scene.nodes[baseIndex].leftChild
-        nodeData_b[8 * i + 4] = this.scene.nodes[baseIndex].maxCorner[0]
-        nodeData_b[8 * i + 5] = this.scene.nodes[baseIndex].maxCorner[1]
-        nodeData_b[8 * i + 6] = this.scene.nodes[baseIndex].maxCorner[2]
-        nodeData_b[8 * i + 7] = this.scene.nodes[baseIndex].primitiveCount
-      }
-      let bufferOffset: number = 32 * this.scene.tlasNodesMax
-      this.device.queue.writeBuffer(this.nodeBuffer, bufferOffset, nodeData_b, 0, 8 * objectMesh.nodesUsed)
-    })
 
     const triangleIndexData: Float32Array = new Float32Array(this.scene.triangles.length)
     for (let i = 0; i < this.scene.triangles.length; i++) {
