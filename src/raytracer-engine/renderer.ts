@@ -2,7 +2,7 @@ import { CubeMapMaterial } from "./cube_material"
 import raytracer_kernel from "../assets/shaders//raytracer_kernel.wgsl"
 import screen_shader from "../assets/shaders/screen_shader.wgsl"
 import { Scene } from "./scene"
-import { hexToRgb, updateAmbientLightIntensity } from "../utils/helper"
+import { addEventListeners, hexToRgb, updateAmbientLightIntensity } from "../utils/helper"
 
 export class Renderer {
   canvas: HTMLCanvasElement
@@ -463,70 +463,7 @@ export class Renderer {
     uploadTimeLabel.innerText = (uploadEnd - uploadStart).toFixed(2).toString()
 
     // Get the color input elements
-    document.querySelector<HTMLInputElement>("#ambient")!.addEventListener("input", (event) => {
-      const colorValue = (event.target as HTMLInputElement).value
-      const rgb = hexToRgb(colorValue)
-      for (let triangle of this.scene.triangles) {
-        triangle.material.ambient = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
-      }
-      this.updateTriangleData()
-    })
-
-    document.querySelector<HTMLInputElement>("#diffuse")!.addEventListener("input", (event) => {
-      const colorValue = (event.target as HTMLInputElement).value
-      const rgb = hexToRgb(colorValue)
-      for (let triangle of this.scene.triangles) {
-        triangle.material.diffuse = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
-      }
-      this.updateTriangleData()
-    })
-    document.querySelector<HTMLInputElement>("#specular")!.addEventListener("input", (event) => {
-      const colorValue = (event.target as HTMLInputElement).value
-      const rgb = hexToRgb(colorValue)
-      for (let triangle of this.scene.triangles) {
-        triangle.material.specular = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
-      }
-      this.updateTriangleData()
-    })
-    document.querySelector<HTMLInputElement>("#emission")!.addEventListener("input", (event) => {
-      const colorValue = (event.target as HTMLInputElement).value
-      const rgb = hexToRgb(colorValue)
-      for (let triangle of this.scene.triangles) {
-        triangle.material.emission = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
-      }
-      this.updateTriangleData()
-    })
-    document.querySelector<HTMLInputElement>("#shininess")!.addEventListener("input", (event) => {
-      const value = parseFloat((event.target as HTMLInputElement).value)
-      for (let triangle of this.scene.triangles) {
-        triangle.material.shininess = value
-      }
-      this.updateTriangleData()
-    })
-
-    document.querySelector<HTMLInputElement>("#refraction")!.addEventListener("input", (event) => {
-      const value = parseFloat((event.target as HTMLInputElement).value)
-      for (let triangle of this.scene.triangles) {
-        triangle.material.refraction = value
-      }
-      this.updateTriangleData()
-    })
-
-    document.querySelector<HTMLInputElement>("#dissolve")!.addEventListener("input", (event) => {
-      const value = parseFloat((event.target as HTMLInputElement).value)
-      for (let triangle of this.scene.triangles) {
-        triangle.material.dissolve = value
-      }
-      this.updateTriangleData()
-    })
-
-    document.querySelector<HTMLInputElement>("#smoothness")!.addEventListener("input", (event) => {
-      const value = parseFloat((event.target as HTMLInputElement).value)
-      for (let triangle of this.scene.triangles) {
-        triangle.material.smoothness = value
-      }
-      this.updateTriangleData()
-    })
+    addEventListeners(this)
 
     if (this.loaded) {
       return
