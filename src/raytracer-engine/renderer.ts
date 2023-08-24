@@ -38,6 +38,7 @@ export class Renderer {
   loaded: boolean
   animationFrameId?: number
   RGB: { r: number; g: number; b: number } = { r: 255, g: 255, b: 255 }
+  accumulationCount: number = 0
 
   constructor(canvas: HTMLCanvasElement, scene: Scene) {
     this.canvas = canvas
@@ -180,14 +181,14 @@ export class Renderer {
     this.sampler = this.device.createSampler(samplerDescriptor)
 
     const parameterBufferDescriptor: GPUBufferDescriptor = {
-      size: 18 * 6,
+      size: 18 * 6 + 4 + 4,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     }
     this.sceneParameters = this.device.createBuffer(parameterBufferDescriptor)
 
     //console.log("Scene has %d triangles", this.scene.triangles.length)
     const triangleBufferDescriptor: GPUBufferDescriptor = {
-      size: 176 * this.scene.triangles.length,
+      size: 160 * this.scene.triangles.length,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     }
     this.triangleBuffer = this.device.createBuffer(triangleBufferDescriptor)
@@ -219,7 +220,7 @@ export class Renderer {
     //await this.sky_texture.initialize(this.device, "./src/assets/textures/skybox/skybox2.png")
 
     this.lightBuffer = this.device.createBuffer({
-      size: 64,
+      size: 68,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })
   }
@@ -335,6 +336,7 @@ export class Renderer {
 
   prepareScene() {
     const uploadStart = performance.now()
+    const maxBounces: number = 4
 
     const sceneData = {
       cameraPos: this.scene.camera.position,
@@ -342,8 +344,14 @@ export class Renderer {
       cameraRight: this.scene.camera.right,
       cameraUp: this.scene.camera.up,
       fov: this.scene.camera.fov,
+      time: performance.now(),
     }
-    const maxBounces: number = 4
+
+    if (this.scene.camera.cameraIsMoving) {
+      this.accumulationCount = 0
+      this.scene.camera.cameraIsMoving = false
+    }
+
     this.device.queue.writeBuffer(
       this.sceneParameters,
       0,
@@ -365,9 +373,11 @@ export class Renderer {
         sceneData.cameraUp[2],
         sceneData.fov,
         maxBounces,
+        sceneData.time,
+        this.accumulationCount,
       ]),
       0,
-      17,
+      19,
     )
     // LIGHT
     document.querySelector<HTMLInputElement>("#light-color")!.addEventListener("input", (event) => {
@@ -380,8 +390,8 @@ export class Renderer {
     this.scene.light.size = parseFloat(document.querySelector<HTMLInputElement>("#size")!.value)
 
     // LIGHT
-    const { position, light_color, intensity, size } = this.scene.light
-    const lightData = new Float32Array([...position, 0.0, ...light_color, intensity, size])
+    const { position, light_color, intensity, size, reach } = this.scene.light
+    const lightData = new Float32Array([...position, 0.0, ...light_color, intensity, size, reach])
     this.device.queue.writeBuffer(this.lightBuffer, 0, lightData)
 
     //Write the tlas nodes
@@ -420,7 +430,7 @@ export class Renderer {
   }
   render = () => {
     const start: number = performance.now()
-
+    this.accumulationCount++
     this.scene.update(this.frametime)
 
     this.prepareScene()
@@ -483,7 +493,7 @@ export class Renderer {
   }
 
   updateTriangleData() {
-    const triangleDataSize = 44 // Adjusted size
+    const triangleDataSize = 40 // Adjusted size
 
     const triangleData: Float32Array = new Float32Array(triangleDataSize * this.scene.triangles.length)
     for (let i = 0; i < this.scene.triangles.length; i++) {
@@ -500,30 +510,25 @@ export class Renderer {
         triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0
       }
 
-      triangleData[triangleDataSize * i + 24] = tri.material.ambient[0]
-      triangleData[triangleDataSize * i + 25] = tri.material.ambient[1]
-      triangleData[triangleDataSize * i + 26] = tri.material.ambient[2]
+      triangleData[triangleDataSize * i + 24] = tri.material.albedo[0]
+      triangleData[triangleDataSize * i + 25] = tri.material.albedo[1]
+      triangleData[triangleDataSize * i + 26] = tri.material.albedo[2]
       triangleData[triangleDataSize * i + 27] = 0.0 // Padding
 
-      triangleData[triangleDataSize * i + 28] = tri.material.diffuse[0]
-      triangleData[triangleDataSize * i + 29] = tri.material.diffuse[1]
-      triangleData[triangleDataSize * i + 30] = tri.material.diffuse[2]
+      triangleData[triangleDataSize * i + 28] = tri.material.specular[0]
+      triangleData[triangleDataSize * i + 29] = tri.material.specular[1]
+      triangleData[triangleDataSize * i + 30] = tri.material.specular[2]
       triangleData[triangleDataSize * i + 31] = 0.0 // Padding
 
-      triangleData[triangleDataSize * i + 32] = tri.material.specular[0]
-      triangleData[triangleDataSize * i + 33] = tri.material.specular[1]
-      triangleData[triangleDataSize * i + 34] = tri.material.specular[2]
-      triangleData[triangleDataSize * i + 35] = 0.0 // Padding
+      triangleData[triangleDataSize * i + 32] = tri.material.emission[0]
+      triangleData[triangleDataSize * i + 33] = tri.material.emission[1]
+      triangleData[triangleDataSize * i + 34] = tri.material.emission[2]
+      triangleData[triangleDataSize * i + 35] = tri.material.emissionStrength
 
-      triangleData[triangleDataSize * i + 36] = tri.material.emission[0]
-      triangleData[triangleDataSize * i + 37] = tri.material.emission[1]
-      triangleData[triangleDataSize * i + 38] = tri.material.emission[2]
-      triangleData[triangleDataSize * i + 39] = tri.material.shininess
-
-      triangleData[triangleDataSize * i + 40] = tri.material.refraction
-      triangleData[triangleDataSize * i + 41] = tri.material.dissolve
-      triangleData[triangleDataSize * i + 42] = tri.material.smoothness
-      triangleData[triangleDataSize * i + 43] = 0.0 // Padding
+      triangleData[triangleDataSize * i + 36] = tri.material.roughness
+      triangleData[triangleDataSize * i + 37] = tri.material.specularExponent
+      triangleData[triangleDataSize * i + 38] = tri.material.specularHighlight
+      triangleData[triangleDataSize * i + 39] = 0.0 // Padding
     }
 
     this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.scene.triangles.length)

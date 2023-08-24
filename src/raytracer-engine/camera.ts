@@ -9,6 +9,7 @@ export class Camera {
   forwards: Float32Array
   right: Float32Array
   up: Float32Array
+  cameraIsMoving: boolean = false
 
   constructor(position: number[], fovDegrees = 120.0) {
     this.position = new Float32Array(position)
@@ -33,5 +34,6 @@ export class Camera {
     this.up = new Float32Array([0.0, 0.0, 0.0])
     vec3.cross(this.up, this.right, this.forwards)
     vec3.normalize(this.up, this.up)
+    this.cameraIsMoving = true
   }
 }

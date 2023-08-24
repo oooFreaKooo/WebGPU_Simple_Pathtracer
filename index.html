@@ -164,44 +164,40 @@
         </div>
         <span>Material Properties</span>
         <div class="slider-control">
-          <label for="ambient">Ambient Color</label>
-          <input id="ambient" type="color" value="#ffffff" />
-        </div>
-        <div class="slider-control">
-          <label for="diffuse">Diffuse Color</label>
-          <input id="diffuse" type="color" value="#ffffff" />
+          <label for="albedo">Albedo Color</label>
+          <input id="albedo" type="color" value="#ffffff" />
         </div>
         <div class="slider-control">
           <label for="specular">Specular Color</label>
           <input id="specular" type="color" value="#ffffff" />
         </div>
         <div class="slider-control">
-          <label for="shininess">Shininess</label>
-          <input id="shininess" type="range" min="0" max="250" step="0.1"
-            value="35" />
-        </div>
-        <div class="slider-control">
           <label for="emission">Emissive Color</label>
           <input id="emission" type="color" value="#ffffff" />
         </div>
         <div class="slider-control">
-          <label for="refraction">Refraction</label>
-          <input id="refraction" type="range" min="0" max="1" step="0.01"
+          <label for="emissionStrength">Emission Strength</label>
+          <input id="emissionStrength" type="range" min="0" max="1" step="0.01"
+            value="35" />
+        </div>
+        <div class="slider-control">
+          <label for="roughness">Roughness</label>
+          <input id="roughness" type="range" min="0" max="1" step="0.01"
             value="0.0" />
         </div>
         <div class="slider-control">
-          <label for="dissolve">Dissolve</label>
-          <input id="dissolve" type="range" min="0" max="1" step="0.01"
+          <label for="specularExponent">Specular Exponent</label>
+          <input id="specularExponent" type="range" min="1.0" max="500"
+            step="1.0"
             value="0.0" />
         </div>
         <div class="slider-control">
-          <label for="smoothness">Smoothness</label>
-          <input id="smoothness" type="range" min="0" max="1" step="0.01"
+          <label for="specularHighlight">Specular Highlight</label>
+          <input id="specularHighlight" type="range" min="0" max="1" step="0.01"
             value="0.0" />
         </div>
       </div>
     </div>
-
     <div class="time-container">
       <div class="time-item">
         <h3>Upload Time:</h3>

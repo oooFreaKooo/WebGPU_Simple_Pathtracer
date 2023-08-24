@@ -2,7 +2,8 @@ struct PointLight {
     position: vec3<f32>,
     color: vec3<f32>,
     intensity: f32,
-    size: f32,
+    radius: f32,
+    reach: f32,
 }
 
 struct Node {
@@ -33,17 +34,18 @@ struct SceneData {
     cameraUp: vec3<f32>,
     cameraFOV: f32,
     maxBounces: f32,
+    time: f32,
+
 }
 
 struct Material {
-    ambient: vec3f,
-    diffuse: vec3f,
+    albedo: vec3f,
     specular: vec3f,
     emission: vec3f,
-    shininess: f32,
-    refraction: f32,
-    dissolve: f32,
-    smoothness: f32,
+    emissionStrength: f32,
+    roughness: f32,
+    specularExponent: f32,
+    specularHighlight: f32,
 }
 
 struct Triangle {
@@ -60,10 +62,11 @@ struct ObjectData {
     triangles: array<Triangle>,
 }
 
-struct RenderState {
+struct SurfacePoint {
     material: Material,
+    position: vec3f,
     t: f32,
-    normal: vec3<f32>,
+    normal: vec3f,
     hit: bool,
 }
 
@@ -76,8 +79,11 @@ struct RenderState {
 @group(0) @binding(5) var skyTexture : texture_cube<f32>;
 @group(0) @binding(6) var skySampler : sampler;
 @group(0) @binding(7) var<uniform> light : PointLight;
+@group(0) @binding(8) var accumulation_buffer : texture_storage_2d<rgba32float, write>;
+@group(0) @binding(9) var<uniform> accumulationCount : u32;
 
-
+const EPSILON : f32 = 1e-5;
+const SHADOW_RESOLUTION: f32 = 1.0;
 //Constants for glow effect
 const GLOW_THRESHOLD : f32 = 0.78;
 const GLOW_RANGE : f32 = 0.2;
@@ -88,8 +94,8 @@ const LIGH_SAMPLES: u32 = 16u;
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
 
-    let screen_size: vec2<i32> = vec2<i32 >(textureDimensions(color_buffer));
-    let screen_pos: vec2<i32> = vec2<i32 >(i32(GlobalInvocationID.x), i32(GlobalInvocationID.y));
+    let screen_size: vec2i = vec2<i32 >(textureDimensions(color_buffer));
+    let screen_pos: vec2i = vec2<i32 >(i32(GlobalInvocationID.x), i32(GlobalInvocationID.y));
 
     let aspect_ratio: f32 = f32(screen_size.x) / f32(screen_size.y);
     let fov: f32 = scene.cameraFOV;
@@ -99,80 +105,148 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     let vertical_coefficient: f32 = tanHalfFOV * (f32(screen_pos.y) - f32(screen_size.y) / 2.0) / (f32(screen_size.y) * aspect_ratio);
 
 
-    let forwards: vec3<f32> = scene.cameraForwards;
-    let right: vec3<f32> = scene.cameraRight;
-    let up: vec3<f32> = scene.cameraUp;
+    let forwards: vec3f = scene.cameraForwards;
+    let right: vec3f = scene.cameraRight;
+    let up: vec3f = scene.cameraUp;
 
     var myRay: Ray;
     myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
     myRay.origin = scene.cameraPos;
-
-    var pixel_color: vec3<f32> = rayColor(myRay);
+    var seed: f32 = scene.time;
+    var pixel_color: vec3f = rayColor(myRay, seed);
 
     pixel_color += calculateGlow(myRay);
 
-    textureStore(color_buffer, screen_pos, vec4<f32 >(pixel_color, 1.0));
+    textureStore(color_buffer, screen_pos, vec4<f32>(pixel_color, 1.0));
 }
 
+fn rayColor(cameraRay: Ray, seed: f32) -> vec3f {
+    var colorResult: vec3f = vec3(0.0, 0.0, 0.0);
+    var ray = cameraRay;
 
+    var energy = vec3(1.0, 1.0, 1.0);
 
-fn rayColor(ray: Ray) -> vec3<f32> {
-    var color: vec3<f32> = vec3(1.0, 1.0, 1.0);
-    var result: RenderState;
-    var world_ray: Ray = ray;
+    for (var bounce: u32 = 0u; bounce < u32(scene.maxBounces); bounce++) {
+        let hitPoint = trace(ray);
 
-    let bounces: u32 = u32(scene.maxBounces);
-    for (var bounce: u32 = 0u; bounce < bounces; bounce++) {
-        result = trace(world_ray);
+        if hitPoint.hit {
+            // Part one: Hit object's emission
+            colorResult += energy * hitPoint.material.emission * hitPoint.material.emissionStrength;
 
-        if result.hit {
-            let material: Material = result.material;
-            let hitPoint = world_ray.origin + result.t * world_ray.direction;
-            let norm = normalize(result.normal);
-            let viewDir = -world_ray.direction;
+            // Part two: Direct light (received directly from light sources)
+            colorResult += energy * computeDirectIllumination(hitPoint, ray.origin, seed);
 
-            // Lighting calculations
-            let lightDir = normalize(light.position - hitPoint);
+            // Part three: Indirect light (other objects + skybox)
+            var specChance: f32 = dot(hitPoint.material.specular, vec3<f32>(1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0));
+            var diffChance: f32 = dot(hitPoint.material.albedo, vec3<f32>(1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0));
 
-            // Ambient
-            let ambient = material.ambient;
+            var sum: f32 = specChance + diffChance;
+            specChance /= sum;
+            diffChance /= sum;
 
-            // Diffuse
-            let diff = max(dot(norm, lightDir), 0.0);
-            let diffuse = diff * material.diffuse;
+            // Roulette-select the ray's path
+            var roulette: f32 = random(hitPoint.position.zx + vec2<f32>(hitPoint.position.y, hitPoint.position.y) + vec2<f32>(seed, scene.maxBounces));
 
-            // Specular
-            let reflectDir = reflect(-lightDir, norm);
-            let spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
-            let specular = spec * material.specular;
+            if roulette < specChance {
+                // Specular reflection
+                var smoothness: f32 = 1.0 - hitPoint.material.roughness;
+                var alpha: f32 = pow(1000.0, smoothness * smoothness);
 
-            // Combine lighting with material color
-            color = color * (ambient + diffuse + specular) * light.intensity;
-
-            world_ray.origin = hitPoint;
-            world_ray.direction = normalize(reflect(world_ray.direction, result.normal));
+                if smoothness == 1.0 {
+                    ray.direction = reflect(ray.direction, hitPoint.normal);
+                } else {
+                    ray.direction = sampleHemisphere(reflect(ray.direction, hitPoint.normal), alpha, hitPoint.position.zx + vec2<f32>(hitPoint.position.y, hitPoint.position.y) + vec2<f32>(seed, scene.maxBounces));
+                }
+                ray.origin = hitPoint.position + ray.direction * EPSILON;
+                var f: f32 = (alpha + 2.0) / (alpha + 1.0);
+                energy *= hitPoint.material.specular * clamp(dot(hitPoint.normal, ray.direction) * f, 0.0, 1.0);
+            } else if diffChance > 0.0 && roulette < specChance + diffChance {
+                // Diffuse reflection
+                ray.origin = hitPoint.position + hitPoint.normal * EPSILON;
+                ray.direction = sampleHemisphere(hitPoint.normal, 1.0, hitPoint.position.zx + vec2<f32>(hitPoint.position.y, hitPoint.position.y) + vec2<f32>(seed, scene.maxBounces));
+                energy *= hitPoint.material.albedo * clamp(dot(hitPoint.normal, ray.direction), 0.0, 1.0);
+            } else {
+                // This means both the hit material's albedo and specular are totally black, so there won't be anymore light. We can stop here.
+                break;
+            }
         } else {
-            color *= textureSampleLevel(skyTexture, skySampler, world_ray.direction, 0.0).xyz;
+            // The ray didn't hit anything, so we add the sky's color and we're done
+            colorResult += energy * textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz;
             break;
         }
     }
-    // Rays which reached terminal state and bounced indefinitely
-    if result.hit && color.x == 1.0 && color.y == 1.0 && color.z == 1.0 {
-        color = result.material.diffuse;
+
+    return colorResult;
+}
+
+fn computeDirectIllumination(surfacePoint: SurfacePoint, observerPos: vec3<f32>, seed: f32) -> vec3<f32> {
+    var point = surfacePoint;
+
+    var directIllumination: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+
+    let lightDistance: f32 = length(light.position - point.position);
+    if lightDistance > light.reach {
+        return vec3<f32>(0.0, 0.0, 0.0);
     }
 
-    return color;
+    let diffuse: f32 = clamp(dot(point.normal, normalize(light.position - point.position)), 0.0, 1.0);
+
+    if diffuse > EPSILON || point.material.roughness < 1.0 {
+        var shadowRays: i32 = i32(SHADOW_RESOLUTION * light.radius * light.radius / (lightDistance * lightDistance) + 1.0);
+        var shadowRayHits: i32 = 0;
+        var lightDir: vec3<f32>;
+        for (var i: i32 = 0; i < shadowRays; i = i + 1) {
+            let lightSurfacePoint: vec3<f32> = light.position + normalize(vec3<f32>(random(vec2<f32>(f32(i) + seed, 1.0) + point.position.xy), random(vec2<f32>(f32(i) + seed, 2.0) + point.position.yz), random(vec2<f32>(f32(i) + seed, 3.0) + point.position.xz))) * light.radius;
+            lightDir = normalize(lightSurfacePoint - point.position);
+            let rayOrigin: vec3<f32> = point.position + lightDir * EPSILON * 2.0;
+            let maxRayLength: f32 = length(lightSurfacePoint - rayOrigin);
+            let shadowRay: Ray = Ray(rayOrigin, lightDir);
+            var SR_hit: SurfacePoint;
+            if trace(shadowRay).hit {
+                if length(SR_hit.position - rayOrigin) < maxRayLength {
+                    shadowRayHits = shadowRayHits + 1;
+                }
+            }
+        }
+
+        let attenuation: f32 = lightDistance * lightDistance;
+        directIllumination = directIllumination + light.color * light.intensity * diffuse * point.material.albedo * (1.0 - f32(shadowRayHits) / f32(shadowRays)) / attenuation;
+
+        lightDir = normalize(point.position - light.position);
+        let reflectedLightDir: vec3<f32> = reflect(lightDir, point.normal);
+        let cameraDir: vec3<f32> = normalize(observerPos - point.position);
+        directIllumination = directIllumination + point.material.specularHighlight * light.color * (light.intensity / (lightDistance * lightDistance)) * pow(max(dot(cameraDir, reflectedLightDir), 0.0), 1.0 / max(point.material.specularExponent, EPSILON));
+    }
+    return directIllumination;
+}
+fn random(seed: vec2<f32>) -> f32 {
+    return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-fn randomHemisphereDirection(normal: vec3<f32>) -> vec3<f32> {
-    // In a real scenario, we'd use a genuine random number generator.
-    // Here, we'll use a simple trick to produce a pseudorandom direction.
-    let u = fract(sin(dot(normal, vec3(12.9898, 78.233, 56.234))) * 43758.5453);
-    let v = fract(sin(dot(normal, vec3(93.9898, 67.345, 12.367))) * 52758.5453);
-    let r = sqrt(1.0 - u * u);
-    let phi = 2.0 * 3.14159 * v;
-    return vec3(cos(phi) * r, u, sin(phi) * r);
+fn sampleHemisphere(normal: vec3<f32>, alpha: f32, seed: vec2<f32>) -> vec3<f32> {
+    // Sample the hemisphere, where alpha determines the kind of the sampling
+    let cosTheta: f32 = pow(random(seed), 1.0 / (alpha + 1.0));
+    let sinTheta: f32 = sqrt(1.0 - cosTheta * cosTheta);
+    let phi: f32 = 2.0 * 3.14159265358979323846 * random(seed.yx); // Used value for PI
+    let tangentSpaceDir: vec3<f32> = vec3<f32>(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+
+    // Transform direction to world space
+    return getTangentSpace(normal) * tangentSpaceDir;
 }
+
+fn getTangentSpace(normal: vec3<f32>) -> mat3x3<f32> {
+    // Choose a helper vector for the cross product
+    var helper: vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
+    if abs(normal.x) > 0.99 {
+        helper = vec3<f32>(0.0, 0.0, 1.0);
+    }
+
+    // Generate vectors
+    let tangent: vec3<f32> = normalize(cross(normal, helper));
+    let binormal: vec3<f32> = normalize(cross(normal, tangent));
+    return mat3x3<f32>(tangent, binormal, normal);
+}
+
 
 fn calculateGlow(ray: Ray) -> vec3<f32> {
     let directionToLight = normalize(light.position - ray.origin);
@@ -188,11 +262,11 @@ fn calculateGlow(ray: Ray) -> vec3<f32> {
     return vec3<f32 >(0.0, 0.0, 0.0);
 }
 
-fn trace(ray: Ray) -> RenderState {
+fn trace(ray: Ray) -> SurfacePoint {
 
     //Set up the Render State
-    var renderState: RenderState;
-    renderState.hit = false;
+    var surfacePoint: SurfacePoint;
+    surfacePoint.hit = false;
     var nearestHit: f32 = 9999.0;
 
     //Set up for BVH Traversal
@@ -238,17 +312,17 @@ fn trace(ray: Ray) -> RenderState {
         } else {
             for (var i: u32 = 0u; i < primitiveCount; i++) {
 
-                var newRenderState: RenderState = hit_triangle(
+                var newSurfacePoint: SurfacePoint = hit_triangle(
                     ray,
                     objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])],
                     0.001,
                     nearestHit,
-                    renderState
+                    surfacePoint,
                 );
 
-                if newRenderState.hit && newRenderState.t < nearestHit {
-                    nearestHit = newRenderState.t;
-                    renderState = newRenderState;
+                if newSurfacePoint.hit && newSurfacePoint.t < nearestHit {
+                    nearestHit = newSurfacePoint.t;
+                    surfacePoint = newSurfacePoint;
                 }
             }
 
@@ -261,7 +335,7 @@ fn trace(ray: Ray) -> RenderState {
         }
     }
 
-    return renderState;
+    return surfacePoint;
 }
 
 // Funktion, die überprüft, ob ein Strahl ein Dreieck trifft.
@@ -270,13 +344,13 @@ fn hit_triangle(
     tri: Triangle,
     tMin: f32,
     tMax: f32,
-    oldRenderState: RenderState
-) -> RenderState {
+    oldSurfacePoint: SurfacePoint
+) -> SurfacePoint {
 
     // Initialisierung des Render-Zustands.
-    var renderState: RenderState;
-    renderState.hit = false;
-    renderState.material = oldRenderState.material;
+    var surfacePoint: SurfacePoint;
+    surfacePoint.hit = false;
+    surfacePoint.material = oldSurfacePoint.material;
 
 
 
@@ -291,13 +365,13 @@ fn hit_triangle(
     var ray_dot_tri: f32 = dot(ray.direction, n);
 
     // Überprüfung, ob der Strahl von der Rückseite des Dreiecks kommt (Backface Culling).
-    if ray_dot_tri > 0.0 {
-        return renderState;
-    }
+    //if ray_dot_tri > 0.0 {
+    //    return renderState;
+    //}
 
     // Parallel zum Dreieck? Absoluter wert nahe zu 0. (Dreieck wird tangential berührt)
     if abs(ray_dot_tri) < 0.00001 {
-        return renderState;
+        return surfacePoint;
     }
 
     // Systemmatrix für die Berechnung der baryzentrischen Koordinaten.
@@ -313,7 +387,7 @@ fn hit_triangle(
 
     // Matrix ist nahezu singulär. Also nicht invertierbar.
     if abs(denominator) < 0.00001 {
-        return renderState;
+        return surfacePoint;
     }
 
     // Cramersche Regel: Lösung eines lin. Gleichungssystems Ax = b ist gegeben durch xi = det(Ai) / det(A).
@@ -335,11 +409,11 @@ fn hit_triangle(
     // Überprüfung, ob u und v ausserhalb des dreiecks liegt. u + v + w = 1 
     // Wenn u ausserhalb des dreicks ist, dann ist sein Wert entweder kleiner 0 oder größer 1
     if u < 0.0 || u > 1.0 {
-        return renderState;
+        return surfacePoint;
     }
     // Das selbe mit v, aber wir prüfen ob beide Werte addiert größer 1 ergeben, weil dadurch ist w automatisch kleiner 0
     if v < 0.0 || u + v > 1.0 {
-        return renderState;
+        return surfacePoint;
     }
 
     // t wird berechnet um den Abstand vom ray Ursprung zur Ebene des Dreiecks herauszufinden
@@ -353,16 +427,15 @@ fn hit_triangle(
     // Prüfen ob t im gültigen Bereich liegt
     if t > tMin && t < tMax {
         // Baryzentrische Interpolation: Damit wir keine konstante normale über die gesamte fläche haben
-        renderState.normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
-        renderState.material = tri.material;
-
-
-        renderState.t = t;
-        renderState.hit = true;
-        return renderState;
+        surfacePoint.normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
+        surfacePoint.material = tri.material;
+        surfacePoint.t = t;
+        surfacePoint.position = ray.origin + t * ray.direction;
+        surfacePoint.hit = true;
+        return surfacePoint;
     }
 
-    return renderState;
+    return surfacePoint;
 }
 
 // Prüfe ob bounding box getroffen wurde

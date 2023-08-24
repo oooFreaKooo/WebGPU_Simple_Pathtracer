@@ -186,20 +186,11 @@ export function updateAmbientLightIntensity(ambient: Float32Array, r: number, g:
 }
 
 export function addEventListeners(instance: Renderer) {
-  document.querySelector<HTMLInputElement>("#ambient")!.addEventListener("input", (event) => {
+  document.querySelector<HTMLInputElement>("#albedo")!.addEventListener("input", (event) => {
     const colorValue = (event.target as HTMLInputElement).value
     const rgb = hexToRgb(colorValue)
     for (let triangle of instance.scene.triangles) {
-      triangle.material.ambient = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
-    }
-    instance.updateTriangleData()
-  })
-
-  document.querySelector<HTMLInputElement>("#diffuse")!.addEventListener("input", (event) => {
-    const colorValue = (event.target as HTMLInputElement).value
-    const rgb = hexToRgb(colorValue)
-    for (let triangle of instance.scene.triangles) {
-      triangle.material.diffuse = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
+      triangle.material.albedo = [rgb.r / 255, rgb.g / 255, rgb.b / 255]
     }
     instance.updateTriangleData()
   })
@@ -222,38 +213,39 @@ export function addEventListeners(instance: Renderer) {
     instance.updateTriangleData()
   })
 
-  document.querySelector<HTMLInputElement>("#shininess")!.addEventListener("input", (event) => {
+  document.querySelector<HTMLInputElement>("#emissionStrength")!.addEventListener("input", (event) => {
     const value = parseFloat((event.target as HTMLInputElement).value)
     for (let triangle of instance.scene.triangles) {
-      triangle.material.shininess = value
+      triangle.material.emissionStrength = value
     }
     instance.updateTriangleData()
   })
 
-  document.querySelector<HTMLInputElement>("#refraction")!.addEventListener("input", (event) => {
+  document.querySelector<HTMLInputElement>("#roughness")!.addEventListener("input", (event) => {
     const value = parseFloat((event.target as HTMLInputElement).value)
     for (let triangle of instance.scene.triangles) {
-      triangle.material.refraction = value
+      triangle.material.roughness = value
     }
     instance.updateTriangleData()
   })
 
-  document.querySelector<HTMLInputElement>("#dissolve")!.addEventListener("input", (event) => {
+  document.querySelector<HTMLInputElement>("#specularExponent")!.addEventListener("input", (event) => {
     const value = parseFloat((event.target as HTMLInputElement).value)
     for (let triangle of instance.scene.triangles) {
-      triangle.material.dissolve = value
+      triangle.material.specularExponent = value
     }
     instance.updateTriangleData()
   })
 
-  document.querySelector<HTMLInputElement>("#smoothness")!.addEventListener("input", (event) => {
+  document.querySelector<HTMLInputElement>("#specularHighlight")!.addEventListener("input", (event) => {
     const value = parseFloat((event.target as HTMLInputElement).value)
     for (let triangle of instance.scene.triangles) {
-      triangle.material.smoothness = value
+      triangle.material.specularHighlight = value
     }
     instance.updateTriangleData()
   })
 }
+
 /* import { mat4, vec3 } from "gl-matrix"
 
 export const CheckWebGPU = () => {
