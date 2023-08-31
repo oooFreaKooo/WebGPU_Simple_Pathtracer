@@ -36,4 +36,8 @@ export class Camera {
     vec3.normalize(this.up, this.up)
     this.cameraIsMoving = true
   }
+
+  hasChanged(newPosition: Float32Array, newTheta: number, newPhi: number): boolean {
+    return !vec3.equals(this.position, newPosition) || this.theta !== newTheta || this.phi !== newPhi
+  }
 }

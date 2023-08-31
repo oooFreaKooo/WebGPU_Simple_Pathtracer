@@ -122,27 +122,34 @@ export class Controls {
     }
   }
   rotate_camera(dX: number, dY: number) {
-    this.camera.theta += dX
-    this.camera.phi += dY
-    // Restrict the vertical rotation to prevent flipping
-    this.camera.phi = Math.max(-85, Math.min(85, this.camera.phi))
+    const newTheta = this.camera.theta + dX
+    const newPhi = Math.max(-85, Math.min(85, this.camera.phi + dY))
 
-    this.camera.recalculate_vectors()
+    if (this.camera.hasChanged(this.camera.position, newTheta, newPhi)) {
+      this.camera.theta = newTheta
+      this.camera.phi = newPhi
+      this.camera.recalculate_vectors()
+    }
   }
 
   movePlayer(forwards_amount: number, right_amount: number, up_amount: number, forward: vec3) {
-    this.camera.position[0] += forward[0] * forwards_amount
-    this.camera.position[1] += forward[1] * forwards_amount
-    this.camera.position[2] += forward[2] * forwards_amount
+    const newPosition = new Float32Array(this.camera.position)
 
-    this.camera.position[0] += this.camera.right[0] * right_amount
-    this.camera.position[1] += this.camera.right[1] * right_amount
-    this.camera.position[2] += this.camera.right[2] * right_amount
+    newPosition[0] += forward[0] * forwards_amount
+    newPosition[1] += forward[1] * forwards_amount
+    newPosition[2] += forward[2] * forwards_amount
 
-    this.camera.position[0] += this.camera.up[0] * up_amount
-    this.camera.position[1] += this.camera.up[1] * up_amount
-    this.camera.position[2] += this.camera.up[2] * up_amount
+    newPosition[0] += this.camera.right[0] * right_amount
+    newPosition[1] += this.camera.right[1] * right_amount
+    newPosition[2] += this.camera.right[2] * right_amount
 
-    this.camera.recalculate_vectors()
+    newPosition[0] += this.camera.up[0] * up_amount
+    newPosition[1] += this.camera.up[1] * up_amount
+    newPosition[2] += this.camera.up[2] * up_amount
+
+    if (this.camera.hasChanged(newPosition, this.camera.theta, this.camera.phi)) {
+      this.camera.position = newPosition
+      this.camera.recalculate_vectors()
+    }
   }
 }

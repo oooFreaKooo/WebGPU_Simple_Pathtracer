@@ -35,7 +35,6 @@ struct SceneData {
     cameraFOV: f32,
     maxBounces: f32,
     time: f32,
-
 }
 
 struct Material {
@@ -79,8 +78,8 @@ struct SurfacePoint {
 @group(0) @binding(5) var skyTexture : texture_cube<f32>;
 @group(0) @binding(6) var skySampler : sampler;
 @group(0) @binding(7) var<uniform> light : PointLight;
-@group(0) @binding(8) var accumulation_buffer : texture_storage_2d<rgba32float, write>;
-@group(0) @binding(9) var<uniform> accumulationCount : u32;
+@group(0) @binding(8) var accumulation_buffer : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(9) var<uniform> frameCount: i32;
 
 const EPSILON : f32 = 1e-5;
 const SHADOW_RESOLUTION: f32 = 1.0;
@@ -112,7 +111,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     var myRay: Ray;
     myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
     myRay.origin = scene.cameraPos;
-    var seed: f32 = scene.time;
+    var seed: f32 = scene.time / 25236.3;
     var pixel_color: vec3f = rayColor(myRay, seed);
 
     pixel_color += calculateGlow(myRay);

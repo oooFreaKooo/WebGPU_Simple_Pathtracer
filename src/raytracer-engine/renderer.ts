@@ -16,6 +16,8 @@ export class Renderer {
   //Assets
   color_buffer: GPUTexture
   color_buffer_view: GPUTextureView
+  accumulation_buffer: GPUTexture
+  accumulation_buffer_view: GPUTextureView
   sampler: GPUSampler
   sceneParameters: GPUBuffer
   triangleBuffer: GPUBuffer
@@ -23,6 +25,7 @@ export class Renderer {
   triangleIndexBuffer: GPUBuffer
   sky_texture: CubeMapMaterial
   lightBuffer: GPUBuffer
+  frameCountBuffer: GPUBuffer
 
   // Pipeline objects
   ray_tracing_pipeline: GPUComputePipeline
@@ -140,6 +143,22 @@ export class Renderer {
             type: "uniform",
           },
         },
+        {
+          binding: 8,
+          visibility: GPUShaderStage.COMPUTE,
+          storageTexture: {
+            access: "write-only",
+            format: "rgba8unorm",
+            viewDimension: "2d",
+          },
+        },
+        {
+          binding: 9,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {
+            type: "uniform",
+          },
+        },
       ],
     })
 
@@ -155,6 +174,16 @@ export class Renderer {
           visibility: GPUShaderStage.FRAGMENT,
           texture: {},
         },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: {},
+        },
+        {
+          binding: 3,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: {},
+        },
       ],
     })
   }
@@ -166,9 +195,20 @@ export class Renderer {
         height: this.canvas.height,
       },
       format: "rgba8unorm",
-      usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+      usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
     })
     this.color_buffer_view = this.color_buffer.createView()
+
+    this.accumulation_buffer = this.device.createTexture({
+      size: {
+        width: this.canvas.width,
+        height: this.canvas.height,
+      },
+      format: "rgba8unorm",
+      usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    })
+
+    this.accumulation_buffer_view = this.accumulation_buffer.createView()
 
     const samplerDescriptor: GPUSamplerDescriptor = {
       addressModeU: "repeat",
@@ -223,6 +263,10 @@ export class Renderer {
       size: 68,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })
+    this.frameCountBuffer = this.device.createBuffer({
+      size: 4,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    })
   }
 
   async makeBindGroups() {
@@ -271,6 +315,16 @@ export class Renderer {
             buffer: this.lightBuffer,
           },
         },
+        {
+          binding: 8,
+          resource: this.accumulation_buffer_view,
+        },
+        {
+          binding: 9,
+          resource: {
+            buffer: this.frameCountBuffer,
+          },
+        },
       ],
     })
 
@@ -284,6 +338,16 @@ export class Renderer {
         {
           binding: 1,
           resource: this.color_buffer_view,
+        },
+        {
+          binding: 2,
+          resource: this.accumulation_buffer_view,
+        },
+        {
+          binding: 3,
+          resource: {
+            buffer: this.frameCountBuffer,
+          },
         },
       ],
     })
@@ -347,10 +411,7 @@ export class Renderer {
       time: performance.now(),
     }
 
-    if (this.scene.camera.cameraIsMoving) {
-      this.accumulationCount = 0
-      this.scene.camera.cameraIsMoving = false
-    }
+    this.device.queue.writeBuffer(this.frameCountBuffer, 0, new Float32Array([this.accumulationCount]))
 
     this.device.queue.writeBuffer(
       this.sceneParameters,
@@ -374,10 +435,9 @@ export class Renderer {
         sceneData.fov,
         maxBounces,
         sceneData.time,
-        this.accumulationCount,
       ]),
       0,
-      19,
+      18,
     )
     // LIGHT
     document.querySelector<HTMLInputElement>("#light-color")!.addEventListener("input", (event) => {
@@ -431,11 +491,27 @@ export class Renderer {
   render = () => {
     const start: number = performance.now()
     this.accumulationCount++
+    if (this.scene.camera.cameraIsMoving) {
+      this.accumulationCount = 0
+      this.scene.camera.cameraIsMoving = false
+    }
+
+    console.log("accumulationCount: " + this.accumulationCount)
     this.scene.update(this.frametime)
 
     this.prepareScene()
 
     const commandEncoder: GPUCommandEncoder = this.device.createCommandEncoder()
+
+    commandEncoder.copyTextureToTexture(
+      { texture: this.color_buffer },
+      { texture: this.accumulation_buffer },
+      {
+        width: this.canvas.width,
+        height: this.canvas.height,
+        depthOrArrayLayers: 1,
+      },
+    )
 
     const ray_trace_pass: GPUComputePassEncoder = commandEncoder.beginComputePass()
     ray_trace_pass.setPipeline(this.ray_tracing_pipeline)
@@ -450,7 +526,7 @@ export class Renderer {
         {
           view: textureView,
           clearValue: { r: 0.5, g: 0.0, b: 0.25, a: 1.0 },
-          loadOp: "clear",
+          loadOp: "load",
           storeOp: "store",
         },
       ],
