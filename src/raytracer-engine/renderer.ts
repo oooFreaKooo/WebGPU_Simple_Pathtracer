@@ -58,8 +58,6 @@ export class Renderer {
   async Initialize() {
     await this.setupDevice()
 
-    await this.makeBindGroupLayouts()
-
     await this.createAssets()
 
     await this.makeBindGroups()
@@ -85,105 +83,6 @@ export class Renderer {
       device: this.device,
       format: this.format,
       alphaMode: "opaque",
-    })
-  }
-
-  async makeBindGroupLayouts() {
-    this.ray_tracing_bind_group_layout = this.device.createBindGroupLayout({
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.COMPUTE,
-          storageTexture: {
-            access: "write-only",
-            format: this.format,
-            viewDimension: "2d",
-          },
-        },
-        {
-          binding: 1,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {
-            type: "uniform",
-          },
-        },
-        {
-          binding: 2,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {
-            type: "read-only-storage",
-            hasDynamicOffset: false,
-          },
-        },
-        {
-          binding: 3,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {
-            type: "read-only-storage",
-            hasDynamicOffset: false,
-          },
-        },
-        {
-          binding: 4,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {
-            type: "read-only-storage",
-            hasDynamicOffset: false,
-          },
-        },
-        {
-          binding: 5,
-          visibility: GPUShaderStage.COMPUTE,
-          texture: {
-            viewDimension: "cube",
-          },
-        },
-        {
-          binding: 6,
-          visibility: GPUShaderStage.COMPUTE,
-          sampler: {},
-        },
-        {
-          binding: 7,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {
-            type: "uniform",
-          },
-        },
-      ],
-    })
-
-    this.screen_bind_group_layout = this.device.createBindGroupLayout({
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.FRAGMENT,
-          sampler: {},
-        },
-        {
-          binding: 1,
-          visibility: GPUShaderStage.FRAGMENT,
-          texture: {},
-        },
-        {
-          binding: 2,
-          visibility: GPUShaderStage.FRAGMENT,
-          buffer: {},
-        },
-        {
-          binding: 3,
-          visibility: GPUShaderStage.FRAGMENT,
-          texture: { sampleType: "unfilterable-float", viewDimension: "2d" },
-        },
-        {
-          binding: 4,
-          visibility: GPUShaderStage.FRAGMENT,
-          storageTexture: {
-            access: "write-only",
-            format: this.format,
-          },
-        },
-      ],
     })
   }
 
@@ -280,8 +179,32 @@ export class Renderer {
   }
 
   async makeBindGroups() {
+    this.bindGroupEntries = [
+      { binding: 0, resource: this.sampler },
+      { binding: 1, resource: this.color_buffer.createView() },
+      {
+        binding: 2,
+        resource: {
+          buffer: this.frameCountBuffer,
+        },
+      },
+      // Updated each frame because we need to ping pong the accumulation buffers
+      { binding: 3, resource: null },
+      { binding: 4, resource: null },
+    ]
+  }
+
+  async makePipelines() {
+    this.ray_tracing_pipeline = this.device.createComputePipeline({
+      layout: "auto",
+
+      compute: {
+        module: this.device.createShaderModule({ code: raytracer_kernel }),
+        entryPoint: "main",
+      },
+    })
     this.ray_tracing_bind_group = this.device.createBindGroup({
-      layout: this.ray_tracing_bind_group_layout,
+      layout: this.ray_tracing_pipeline.getBindGroupLayout(0),
       entries: [
         {
           binding: 0,
@@ -327,41 +250,9 @@ export class Renderer {
         },
       ],
     })
-    this.bindGroupEntries = [
-      { binding: 0, resource: this.sampler },
-      { binding: 1, resource: this.color_buffer.createView() },
-      {
-        binding: 2,
-        resource: {
-          buffer: this.frameCountBuffer,
-        },
-      },
-      // Updated each frame because we need to ping pong the accumulation buffers
-      { binding: 3, resource: null },
-      { binding: 4, resource: null },
-    ]
-  }
-
-  async makePipelines() {
-    const ray_tracing_pipeline_layout = this.device.createPipelineLayout({
-      bindGroupLayouts: [this.ray_tracing_bind_group_layout],
-    })
-
-    this.ray_tracing_pipeline = this.device.createComputePipeline({
-      layout: ray_tracing_pipeline_layout,
-
-      compute: {
-        module: this.device.createShaderModule({ code: raytracer_kernel }),
-        entryPoint: "main",
-      },
-    })
-
-    const screen_pipeline_layout = this.device.createPipelineLayout({
-      bindGroupLayouts: [this.screen_bind_group_layout],
-    })
 
     this.screen_pipeline = this.device.createRenderPipeline({
-      layout: screen_pipeline_layout,
+      layout: "auto",
 
       vertex: {
         module: this.device.createShaderModule({
@@ -489,7 +380,7 @@ export class Renderer {
     this.bindGroupEntries[4].resource = this.accumBufferViews[(this.accumulationCount + 1) % 2]
 
     this.screen_bind_group = this.device.createBindGroup({
-      layout: this.screen_bind_group_layout,
+      layout: this.screen_pipeline.getBindGroupLayout(0),
       entries: this.bindGroupEntries as GPUBindGroupEntry[],
     })
 
