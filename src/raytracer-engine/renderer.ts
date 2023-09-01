@@ -2,7 +2,7 @@ import { CubeMapMaterial } from "./cube_material"
 import raytracer_kernel from "../assets/shaders//raytracer_kernel.wgsl"
 import screen_shader from "../assets/shaders/screen_shader.wgsl"
 import { Scene } from "./scene"
-import { addEventListeners, hexToRgb, updateAmbientLightIntensity } from "../utils/helper"
+import { addEventListeners, hexToRgb } from "../utils/helper"
 
 export class Renderer {
   canvas: HTMLCanvasElement
@@ -15,9 +15,8 @@ export class Renderer {
 
   //Assets
   color_buffer: GPUTexture
-  color_buffer_view: GPUTextureView
-  accumulation_buffer: GPUTexture
-  accumulation_buffer_view: GPUTextureView
+  accum_buffer_in: GPUTexture
+  accum_buffer_out: GPUTexture
   sampler: GPUSampler
   sceneParameters: GPUBuffer
   triangleBuffer: GPUBuffer
@@ -35,6 +34,8 @@ export class Renderer {
   screen_bind_group_layout: GPUBindGroupLayout
   screen_bind_group: GPUBindGroup
 
+  accumBufferViews: GPUTextureView[]
+
   // Scene to render
   scene: Scene
   frametime: number
@@ -42,6 +43,12 @@ export class Renderer {
   animationFrameId?: number
   RGB: { r: number; g: number; b: number } = { r: 255, g: 255, b: 255 }
   accumulationCount: number = 0
+  bindGroupEntries: (
+    | { binding: number; resource: GPUSampler }
+    | { binding: number; resource: GPUTextureView }
+    | { binding: number; resource: { buffer: GPUBuffer } }
+    | { binding: number; resource: null }
+  )[]
 
   constructor(canvas: HTMLCanvasElement, scene: Scene) {
     this.canvas = canvas
@@ -73,7 +80,7 @@ export class Renderer {
     this.device = <GPUDevice>await this.adapter?.requestDevice()
     //context: similar to vulkan instance (or OpenGL context)
     this.context = <GPUCanvasContext>this.canvas.getContext("webgpu")
-    this.format = "bgra8unorm"
+    this.format = "rgba16float"
     this.context.configure({
       device: this.device,
       format: this.format,
@@ -89,7 +96,7 @@ export class Renderer {
           visibility: GPUShaderStage.COMPUTE,
           storageTexture: {
             access: "write-only",
-            format: "rgba8unorm",
+            format: this.format,
             viewDimension: "2d",
           },
         },
@@ -143,22 +150,6 @@ export class Renderer {
             type: "uniform",
           },
         },
-        {
-          binding: 8,
-          visibility: GPUShaderStage.COMPUTE,
-          storageTexture: {
-            access: "write-only",
-            format: "rgba8unorm",
-            viewDimension: "2d",
-          },
-        },
-        {
-          binding: 9,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: {
-            type: "uniform",
-          },
-        },
       ],
     })
 
@@ -177,12 +168,20 @@ export class Renderer {
         {
           binding: 2,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: {},
+          buffer: {},
         },
         {
           binding: 3,
           visibility: GPUShaderStage.FRAGMENT,
-          buffer: {},
+          texture: { sampleType: "unfilterable-float", viewDimension: "2d" },
+        },
+        {
+          binding: 4,
+          visibility: GPUShaderStage.FRAGMENT,
+          storageTexture: {
+            access: "write-only",
+            format: this.format,
+          },
         },
       ],
     })
@@ -194,21 +193,32 @@ export class Renderer {
         width: this.canvas.width,
         height: this.canvas.height,
       },
-      format: "rgba8unorm",
-      usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+      format: this.format,
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
     })
-    this.color_buffer_view = this.color_buffer.createView()
+    // We need to ping-pong the accumulation buffers because read-write storage textures are
+    // missing and we can't have the same texture bound as both a read texture and storage
+    // texture
+    var accumBuffers = [
+      this.device.createTexture({
+        size: {
+          width: this.canvas.width,
+          height: this.canvas.height,
+        },
+        format: this.format,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+      }),
+      this.device.createTexture({
+        size: {
+          width: this.canvas.width,
+          height: this.canvas.height,
+        },
+        format: this.format,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+      }),
+    ]
 
-    this.accumulation_buffer = this.device.createTexture({
-      size: {
-        width: this.canvas.width,
-        height: this.canvas.height,
-      },
-      format: "rgba8unorm",
-      usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-    })
-
-    this.accumulation_buffer_view = this.accumulation_buffer.createView()
+    this.accumBufferViews = [accumBuffers[0].createView(), accumBuffers[1].createView()]
 
     const samplerDescriptor: GPUSamplerDescriptor = {
       addressModeU: "repeat",
@@ -275,7 +285,7 @@ export class Renderer {
       entries: [
         {
           binding: 0,
-          resource: this.color_buffer_view,
+          resource: this.color_buffer.createView(),
         },
         {
           binding: 1,
@@ -315,42 +325,21 @@ export class Renderer {
             buffer: this.lightBuffer,
           },
         },
-        {
-          binding: 8,
-          resource: this.accumulation_buffer_view,
-        },
-        {
-          binding: 9,
-          resource: {
-            buffer: this.frameCountBuffer,
-          },
-        },
       ],
     })
-
-    this.screen_bind_group = this.device.createBindGroup({
-      layout: this.screen_bind_group_layout,
-      entries: [
-        {
-          binding: 0,
-          resource: this.sampler,
+    this.bindGroupEntries = [
+      { binding: 0, resource: this.sampler },
+      { binding: 1, resource: this.color_buffer.createView() },
+      {
+        binding: 2,
+        resource: {
+          buffer: this.frameCountBuffer,
         },
-        {
-          binding: 1,
-          resource: this.color_buffer_view,
-        },
-        {
-          binding: 2,
-          resource: this.accumulation_buffer_view,
-        },
-        {
-          binding: 3,
-          resource: {
-            buffer: this.frameCountBuffer,
-          },
-        },
-      ],
-    })
+      },
+      // Updated each frame because we need to ping pong the accumulation buffers
+      { binding: 3, resource: null },
+      { binding: 4, resource: null },
+    ]
   }
 
   async makePipelines() {
@@ -388,7 +377,7 @@ export class Renderer {
         entryPoint: "frag_main",
         targets: [
           {
-            format: "bgra8unorm",
+            format: this.format,
           },
         ],
       },
@@ -488,39 +477,36 @@ export class Renderer {
     }
     this.device.queue.writeBuffer(this.triangleIndexBuffer, 0, triangleIndexData, 0, this.scene.triangles.length)
   }
+
   render = () => {
     const start: number = performance.now()
-    this.accumulationCount++
     if (this.scene.camera.cameraIsMoving) {
       this.accumulationCount = 0
       this.scene.camera.cameraIsMoving = false
     }
 
-    console.log("accumulationCount: " + this.accumulationCount)
-    this.scene.update(this.frametime)
+    this.bindGroupEntries[3].resource = this.accumBufferViews[this.accumulationCount % 2]
+    this.bindGroupEntries[4].resource = this.accumBufferViews[(this.accumulationCount + 1) % 2]
 
-    this.prepareScene()
+    this.screen_bind_group = this.device.createBindGroup({
+      layout: this.screen_bind_group_layout,
+      entries: this.bindGroupEntries as GPUBindGroupEntry[],
+    })
 
     const commandEncoder: GPUCommandEncoder = this.device.createCommandEncoder()
 
-    commandEncoder.copyTextureToTexture(
-      { texture: this.color_buffer },
-      { texture: this.accumulation_buffer },
-      {
-        width: this.canvas.width,
-        height: this.canvas.height,
-        depthOrArrayLayers: 1,
-      },
-    )
+    this.scene.update(this.frametime)
+    this.prepareScene()
 
+    // Raytracing
     const ray_trace_pass: GPUComputePassEncoder = commandEncoder.beginComputePass()
     ray_trace_pass.setPipeline(this.ray_tracing_pipeline)
     ray_trace_pass.setBindGroup(0, this.ray_tracing_bind_group)
     ray_trace_pass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1)
     ray_trace_pass.end()
 
+    // Display the denoised result
     const textureView: GPUTextureView = this.context.getCurrentTexture().createView()
-
     const renderpass: GPURenderPassEncoder = commandEncoder.beginRenderPass({
       colorAttachments: [
         {
@@ -531,11 +517,9 @@ export class Renderer {
         },
       ],
     })
-
     renderpass.setPipeline(this.screen_pipeline)
     renderpass.setBindGroup(0, this.screen_bind_group)
     renderpass.draw(6, 1, 0, 0)
-
     renderpass.end()
 
     this.device.queue.submit([commandEncoder.finish()])
@@ -557,7 +541,7 @@ export class Renderer {
         renderTimeLabel.innerText = this.frametime.toFixed(2).toString()
       }
     })
-
+    this.accumulationCount++
     requestAnimationFrame(this.render)
   }
 

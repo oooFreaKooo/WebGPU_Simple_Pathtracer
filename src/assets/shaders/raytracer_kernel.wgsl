@@ -70,7 +70,7 @@ struct SurfacePoint {
 }
 
 
-@group(0) @binding(0) var color_buffer : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(0) var color_buffer : texture_storage_2d<rgba16float, write>;
 @group(0) @binding(1) var<uniform> scene : SceneData;
 @group(0) @binding(2) var<storage, read> objects : ObjectData;
 @group(0) @binding(3) var<storage, read> tree : BVH;
@@ -78,8 +78,6 @@ struct SurfacePoint {
 @group(0) @binding(5) var skyTexture : texture_cube<f32>;
 @group(0) @binding(6) var skySampler : sampler;
 @group(0) @binding(7) var<uniform> light : PointLight;
-@group(0) @binding(8) var accumulation_buffer : texture_storage_2d<rgba8unorm, write>;
-@group(0) @binding(9) var<uniform> frameCount: i32;
 
 const EPSILON : f32 = 1e-5;
 const SHADOW_RESOLUTION: f32 = 1.0;
