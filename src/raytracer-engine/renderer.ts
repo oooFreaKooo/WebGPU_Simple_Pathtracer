@@ -2,7 +2,7 @@ import { CubeMapMaterial } from "./cube_material"
 import raytracer_kernel from "../assets/shaders//raytracer_kernel.wgsl"
 import screen_shader from "../assets/shaders/screen_shader.wgsl"
 import { Scene } from "./scene"
-import { addEventListeners, hexToRgb } from "../utils/helper"
+import { addEventListeners, hexToRgb, linearToSRGB } from "../utils/helper"
 
 export class Renderer {
   canvas: HTMLCanvasElement
@@ -25,6 +25,7 @@ export class Renderer {
   sky_texture: CubeMapMaterial
   lightBuffer: GPUBuffer
   frameCountBuffer: GPUBuffer
+  viewParamsBuffer: GPUBuffer
 
   // Pipeline objects
   ray_tracing_pipeline: GPUComputePipeline
@@ -66,7 +67,7 @@ export class Renderer {
 
     this.frametime = 16
     this.loaded = false
-    this.render()
+    await this.renderLoop()
   }
 
   async setupDevice() {
@@ -81,12 +82,14 @@ export class Renderer {
     this.format = "rgba16float"
     this.context.configure({
       device: this.device,
-      format: this.format,
-      alphaMode: "opaque",
+      format: "bgra8unorm",
+      alphaMode: "premultiplied",
     })
   }
 
   async createAssets() {
+    console.log(this.canvas.width)
+    console.log(this.canvas.height)
     this.color_buffer = this.device.createTexture({
       size: {
         width: this.canvas.width,
@@ -100,18 +103,12 @@ export class Renderer {
     // texture
     var accumBuffers = [
       this.device.createTexture({
-        size: {
-          width: this.canvas.width,
-          height: this.canvas.height,
-        },
+        size: [this.canvas.width, this.canvas.height, 1],
         format: this.format,
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
       }),
       this.device.createTexture({
-        size: {
-          width: this.canvas.width,
-          height: this.canvas.height,
-        },
+        size: [this.canvas.width, this.canvas.height, 1],
         format: this.format,
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
       }),
@@ -172,9 +169,11 @@ export class Renderer {
       size: 68,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })
+    this.viewParamsBuffer = this.device.createBuffer({ size: 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST })
     this.frameCountBuffer = this.device.createBuffer({
       size: 4,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+      mappedAtCreation: false,
     })
   }
 
@@ -182,12 +181,7 @@ export class Renderer {
     this.bindGroupEntries = [
       { binding: 0, resource: this.sampler },
       { binding: 1, resource: this.color_buffer.createView() },
-      {
-        binding: 2,
-        resource: {
-          buffer: this.frameCountBuffer,
-        },
-      },
+      { binding: 2, resource: { buffer: this.viewParamsBuffer } },
       // Updated each frame because we need to ping pong the accumulation buffers
       { binding: 3, resource: null },
       { binding: 4, resource: null },
@@ -268,7 +262,7 @@ export class Renderer {
         entryPoint: "frag_main",
         targets: [
           {
-            format: this.format,
+            format: "bgra8unorm",
           },
         ],
       },
@@ -290,8 +284,6 @@ export class Renderer {
       fov: this.scene.camera.fov,
       time: performance.now(),
     }
-
-    this.device.queue.writeBuffer(this.frameCountBuffer, 0, new Float32Array([this.accumulationCount]))
 
     this.device.queue.writeBuffer(
       this.sceneParameters,
@@ -369,71 +361,93 @@ export class Renderer {
     this.device.queue.writeBuffer(this.triangleIndexBuffer, 0, triangleIndexData, 0, this.scene.triangles.length)
   }
 
-  render = () => {
-    const start: number = performance.now()
-    if (this.scene.camera.cameraIsMoving) {
-      this.accumulationCount = 0
-      this.scene.camera.cameraIsMoving = false
-    }
-
-    this.bindGroupEntries[3].resource = this.accumBufferViews[this.accumulationCount % 2]
-    this.bindGroupEntries[4].resource = this.accumBufferViews[(this.accumulationCount + 1) % 2]
-
-    this.screen_bind_group = this.device.createBindGroup({
-      layout: this.screen_pipeline.getBindGroupLayout(0),
-      entries: this.bindGroupEntries as GPUBindGroupEntry[],
-    })
-
-    const commandEncoder: GPUCommandEncoder = this.device.createCommandEncoder()
-
-    this.scene.update(this.frametime)
-    this.prepareScene()
-
-    // Raytracing
-    const ray_trace_pass: GPUComputePassEncoder = commandEncoder.beginComputePass()
-    ray_trace_pass.setPipeline(this.ray_tracing_pipeline)
-    ray_trace_pass.setBindGroup(0, this.ray_tracing_bind_group)
-    ray_trace_pass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1)
-    ray_trace_pass.end()
-
-    // Display the denoised result
-    const textureView: GPUTextureView = this.context.getCurrentTexture().createView()
-    const renderpass: GPURenderPassEncoder = commandEncoder.beginRenderPass({
+  async renderLoop() {
+    var clearColor = linearToSRGB(0.1)
+    var renderPassDesc = {
       colorAttachments: [
         {
-          view: textureView,
-          clearValue: { r: 0.5, g: 0.0, b: 0.25, a: 1.0 },
-          loadOp: "load",
-          storeOp: "store",
+          view: this.context.getCurrentTexture().createView(),
+          loadOp: "clear" as GPULoadOp,
+          storeOp: "store" as GPUStoreOp,
+          clearValue: [clearColor, clearColor, clearColor, 1],
         },
       ],
-    })
-    renderpass.setPipeline(this.screen_pipeline)
-    renderpass.setBindGroup(0, this.screen_bind_group)
-    renderpass.draw(6, 1, 0, 0)
-    renderpass.end()
+    }
+    while (true) {
+      const start: number = performance.now()
+      await this.animationFrame()
+      this.scene.update(this.frametime)
+      this.prepareScene()
 
-    this.device.queue.submit([commandEncoder.finish()])
-
-    this.device.queue.onSubmittedWorkDone().then(() => {
-      const end: number = performance.now()
-      this.frametime = end - start
-
-      // Calculate FPS (frame-time) and update the label
-      const frameTimeLabel: HTMLElement = <HTMLElement>document.getElementById("frame-time")
-      if (frameTimeLabel) {
-        const fps: number = 1000 / this.frametime
-        frameTimeLabel.innerText = fps.toFixed(2).toString()
+      if (this.scene.camera.cameraIsMoving) {
+        this.accumulationCount = 0
+        this.scene.camera.cameraIsMoving = false
       }
 
-      // Update the "render-time" label
-      const renderTimeLabel: HTMLElement = <HTMLElement>document.getElementById("render-time")
-      if (renderTimeLabel) {
-        renderTimeLabel.innerText = this.frametime.toFixed(2).toString()
+      const commandEncoder: GPUCommandEncoder = this.device.createCommandEncoder()
+
+      // Raytracing
+      const ray_trace_pass: GPUComputePassEncoder = commandEncoder.beginComputePass()
+      ray_trace_pass.setPipeline(this.ray_tracing_pipeline)
+      ray_trace_pass.setBindGroup(0, this.ray_tracing_bind_group)
+      ray_trace_pass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1)
+      ray_trace_pass.end()
+
+      {
+        await this.frameCountBuffer.mapAsync(GPUMapMode.WRITE)
+        var map = this.frameCountBuffer.getMappedRange()
+        var u32map = new Uint32Array(map)
+        u32map.set([this.accumulationCount], 0)
+        this.frameCountBuffer.unmap()
       }
+
+      this.bindGroupEntries[3].resource = this.accumBufferViews[this.accumulationCount % 2]
+      this.bindGroupEntries[4].resource = this.accumBufferViews[(this.accumulationCount + 1) % 2]
+
+      const bindGroup = this.device.createBindGroup({
+        layout: this.screen_pipeline.getBindGroupLayout(0),
+        entries: this.bindGroupEntries as GPUBindGroupEntry[],
+      })
+
+      commandEncoder.copyBufferToBuffer(this.frameCountBuffer, 0, this.viewParamsBuffer, 0, 4)
+      // Display the denoised result
+      renderPassDesc.colorAttachments[0].view = this.context.getCurrentTexture().createView()
+      var renderpass = commandEncoder.beginRenderPass(renderPassDesc)
+      renderpass.setPipeline(this.screen_pipeline)
+      renderpass.setBindGroup(0, bindGroup)
+      renderpass.draw(6, 1, 0, 0)
+      renderpass.end()
+
+      this.device.queue.submit([commandEncoder.finish()])
+
+      this.device.queue.onSubmittedWorkDone().then(() => {
+        const end: number = performance.now()
+        this.frametime = end - start
+
+        // Calculate FPS (frame-time) and update the label
+        const frameTimeLabel: HTMLElement = <HTMLElement>document.getElementById("frame-time")
+        if (frameTimeLabel) {
+          const fps: number = 1000 / this.frametime
+          frameTimeLabel.innerText = fps.toFixed(2).toString()
+        }
+
+        // Update the "render-time" label
+        const renderTimeLabel: HTMLElement = <HTMLElement>document.getElementById("render-time")
+        if (renderTimeLabel) {
+          renderTimeLabel.innerText = this.frametime.toFixed(2).toString()
+        }
+      })
+
+      this.accumulationCount++
+    }
+  }
+
+  animationFrame() {
+    return new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => {
+        resolve()
+      })
     })
-    this.accumulationCount++
-    requestAnimationFrame(this.render)
   }
 
   cleanup() {

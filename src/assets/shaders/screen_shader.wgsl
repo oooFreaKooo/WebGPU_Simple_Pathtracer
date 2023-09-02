@@ -1,30 +1,31 @@
+struct ViewParams {
+    frameCount: u32,
+};
+
 @group(0) @binding(0) var screen_sampler : sampler;
 @group(0) @binding(1) var color_buffer : texture_2d<f32>;
-@group(0) @binding(2) var<uniform> frameCount : u32;
+@group(0) @binding(2) var<uniform> params: ViewParams;
 @group(0) @binding(3) var accum_buffer_in: texture_2d<f32>;
 @group(0) @binding(4) var accum_buffer_out: texture_storage_2d<rgba16float, write>;
 
 @fragment
 fn frag_main(@location(0) TexCoord: vec2<f32>) -> @location(0) vec4<f32> {
-
-    let screen_pos: vec2i = vec2<i32 >(i32(TexCoord.x), i32(TexCoord.y));
+    let screen_pos: vec2i = vec2<i32>(i32(TexCoord.x * 2560.0), i32(TexCoord.y * 1284.0));
 
     var color = textureSample(color_buffer, screen_sampler, TexCoord);
 
     var accum_color = vec4(0.0);
-    if frameCount > 0u {
+
+    if params.frameCount > 0u {
         accum_color = textureLoad(accum_buffer_in, screen_pos, 0);
     }
     accum_color += color;
 
     textureStore(accum_buffer_out, screen_pos, accum_color);
 
-    // Safe division
-    if frameCount + 1u > 0u {
-        color = accum_color / f32(frameCount + 1u);
-    } else {
-        color = accum_color;
-    }
+
+    color = accum_color / f32(params.frameCount + 1u);
+
 
     // sRGB-mapping
     color.r = linear_to_srgb(color.r);
