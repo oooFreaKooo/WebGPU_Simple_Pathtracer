@@ -23,7 +23,6 @@ export class Renderer {
   nodeBuffer: GPUBuffer
   triangleIndexBuffer: GPUBuffer
   sky_texture: CubeMapMaterial
-  lightBuffer: GPUBuffer
   frameCountBuffer: GPUBuffer
   viewParamsBuffer: GPUBuffer
 
@@ -165,10 +164,6 @@ export class Renderer {
 
     //await this.sky_texture.initialize(this.device, "./src/assets/textures/skybox/skybox2.png")
 
-    this.lightBuffer = this.device.createBuffer({
-      size: 68,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    })
     this.viewParamsBuffer = this.device.createBuffer({ size: 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST })
     this.frameCountBuffer = this.device.createBuffer({
       size: 4,
@@ -235,12 +230,6 @@ export class Renderer {
         {
           binding: 6,
           resource: this.sky_texture.sampler,
-        },
-        {
-          binding: 7,
-          resource: {
-            buffer: this.lightBuffer,
-          },
         },
       ],
     })
@@ -311,20 +300,6 @@ export class Renderer {
       0,
       18,
     )
-    // LIGHT
-    document.querySelector<HTMLInputElement>("#light-color")!.addEventListener("input", (event) => {
-      const colorValue = (event.target as HTMLInputElement).value
-      const rgb = hexToRgb(colorValue)
-      this.scene.light.light_color = new Float32Array([rgb.r / 255, rgb.g / 255, rgb.b / 255])
-    })
-
-    this.scene.light.intensity = parseFloat(document.querySelector<HTMLInputElement>("#intensity")!.value)
-    this.scene.light.size = parseFloat(document.querySelector<HTMLInputElement>("#size")!.value)
-
-    // LIGHT
-    const { position, light_color, intensity, size, reach } = this.scene.light
-    const lightData = new Float32Array([...position, 0.0, ...light_color, intensity, size, reach])
-    this.device.queue.writeBuffer(this.lightBuffer, 0, lightData)
 
     //Write the tlas nodes
     var nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
@@ -390,7 +365,7 @@ export class Renderer {
       const ray_trace_pass: GPUComputePassEncoder = commandEncoder.beginComputePass()
       ray_trace_pass.setPipeline(this.ray_tracing_pipeline)
       ray_trace_pass.setBindGroup(0, this.ray_tracing_bind_group)
-      ray_trace_pass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1)
+      ray_trace_pass.dispatchWorkgroups(this.canvas.width / 16, this.canvas.height / 16, 1)
       ray_trace_pass.end()
 
       {

@@ -1,7 +1,6 @@
 import { Camera } from "./camera"
 import { vec3 } from "gl-matrix"
 import { Controls } from "./controls"
-import { Light } from "./light"
 import { ObjLoader } from "./obj-loader"
 import { Triangle } from "./triangle"
 import { Node } from "./node"
@@ -11,7 +10,6 @@ export class Scene {
   canvas: HTMLCanvasElement
   camera: Camera
   cameraControls: Controls
-  light: Light
 
   triangles: Triangle[] = []
   triangleIndices: number[] = []
@@ -26,8 +24,6 @@ export class Scene {
   }
 
   initialize() {
-    this.light = new Light(new Float32Array([150.0, 75.0, 0.0]))
-
     this.camera = new Camera([0, 5, -15])
     this.cameraControls = new Controls(this.canvas, this.camera)
   }

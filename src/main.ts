@@ -1,9 +1,6 @@
-import { Application1 } from "./app1"
-import { Application2 } from "./app2"
+import { Application } from "./app"
 
-let currentApp: Application1 | Application2 | undefined
-
-async function mainFunc(selectedApp: string) {
+async function mainFunc() {
   // Check for an existing canvas and remove it if present
   const existingCanvas = document.querySelector("canvas")
   if (existingCanvas) {
@@ -13,10 +10,6 @@ async function mainFunc(selectedApp: string) {
   const canvas = document.createElement("canvas")
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
-
-  if (currentApp && currentApp.stop) {
-    currentApp.stop()
-  }
 
   // Get the .time-container div
   const timeContainer = document.querySelector(".time-container")
@@ -28,29 +21,8 @@ async function mainFunc(selectedApp: string) {
     document.body.appendChild(canvas)
   }
 
-  if (selectedApp === "app1") {
-    const app1 = new Application1(canvas)
-    await app1.start()
-    currentApp = app1
-  } else if (selectedApp === "app2") {
-    const app2 = new Application2(canvas)
-    await app2.start()
-    currentApp = app2
-  }
+  const app = new Application(canvas)
+  await app.start()
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  const appChoiceContainer = document.getElementById("appChoiceContainer")
-
-  if (appChoiceContainer) {
-    appChoiceContainer.addEventListener("change", (event) => {
-      const target = event.target as HTMLInputElement
-      if (target && target.name === "appChoice") {
-        mainFunc(target.value)
-      }
-    })
-
-    // Call mainFunc with the default value "app1" to load it by default
-    mainFunc("app2")
-  }
-})
+mainFunc()
