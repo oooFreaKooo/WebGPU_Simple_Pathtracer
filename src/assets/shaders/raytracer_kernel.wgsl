@@ -76,7 +76,7 @@ struct SurfacePoint {
 const EPSILON : f32 = 1e-5;
 const PI : f32 = 3.14159265358979323846;
 const AVGVEC: vec3f = vec3(0.333333333);
-const ENERGY_THRESHOLD: f32 = 0.001;
+const ENERGY_THRESHOLD: f32 = 0.01;
 
 
 fn trace(camRay: Ray, seed: f32) -> vec3f {
@@ -88,7 +88,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let hit = traverse(ray);
         let continueProb = max(energy.x, max(energy.y, energy.z));
 
-        if bounce > 3u && random(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce))) > continueProb {
+        if bounce > 3u {
             break;
         }
 
@@ -131,7 +131,7 @@ fn scatterRay(ray: Ray, hit: SurfacePoint, seed: f32, bounce: u32, energy: vec3f
         newRay.direction = vec3(0.0, 0.0, 0.0);
     }
 
-    newRay.origin = hit.position + ray.direction * EPSILON;
+    newRay.origin = hit.position + newRay.direction * EPSILON;
     return RayEnergy(newRay, energyFactor);
 }
 

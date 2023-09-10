@@ -44,10 +44,6 @@ export class ObjLoader {
   }
 
   update(rate: number) {
-    this.rotation[2] += rate * 0.5
-    if (this.rotation[2] > 360) {
-      this.rotation[2] -= 360
-    }
     this.calculate_transform()
   }
 
@@ -55,6 +51,7 @@ export class ObjLoader {
     this.model = mat4.create()
     mat4.translate(this.model, this.model, this.position)
     mat4.rotateZ(this.model, this.model, deg2Rad(this.rotation[2]))
+    mat4.rotateY(this.model, this.model, deg2Rad(this.rotation[1]))
     mat4.rotateX(this.model, this.model, deg2Rad(this.rotation[0]))
     mat4.scale(this.model, this.model, this.scale)
     mat4.invert(this.inverseModel, this.model)

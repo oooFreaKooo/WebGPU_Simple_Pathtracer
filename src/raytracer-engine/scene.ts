@@ -30,7 +30,7 @@ export class Scene {
   }
 
   initialize() {
-    this.camera = new Camera([0, 5, -15])
+    this.camera = new Camera([0, 2.5, -10])
     this.cameraControls = new Controls(this.canvas, this.camera)
   }
 
