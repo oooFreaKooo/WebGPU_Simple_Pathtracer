@@ -18,7 +18,10 @@ struct Ray {
     direction: vec3<f32>,
     origin: vec3<f32>,
 }
-
+struct RayEnergy {
+    ray: Ray,
+    energy: vec3f
+};
 struct SceneData {
     cameraPos: vec3<f32>,
     cameraForwards: vec3<f32>,
@@ -73,58 +76,35 @@ struct SurfacePoint {
 const EPSILON : f32 = 1e-5;
 const PI : f32 = 3.14159265358979323846;
 const AVGVEC: vec3f = vec3(0.333333333);
-const ENERGY_THRESHOLD: f32 = 0.01;
+const ENERGY_THRESHOLD: f32 = 0.001;
 
-fn rayColor(camRay: Ray, seed: f32) -> vec3f {
+
+fn trace(camRay: Ray, seed: f32) -> vec3f {
     var color: vec3f = vec3(0.0, 0.0, 0.0);
     var ray = camRay;
     var energy = vec3(1.0, 1.0, 1.0);
 
-
     for (var bounce: u32 = 0u; bounce < u32(scene.maxBounces); bounce++) {
-        let hit = trace(ray);
+        let hit = traverse(ray);
+        let continueProb = max(energy.x, max(energy.y, energy.z));
 
-        if u32(scene.maxBounces) > 3u {
-            let continueProb = max(energy.x, max(energy.y, energy.z));
-            if random(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce))) > continueProb {
-                break;
-            }
-            energy /= continueProb;
+        if bounce > 3u && random(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce))) > continueProb {
+            break;
         }
 
+        energy /= continueProb;
+
         if hit.hit {
-            color += energy * hit.material.emission * hit.material.emissionStrength * 10.0;
-            let material = hit.material;
-            let prob = getProbabilities(material); // prob.x = diffuse probability, prob.y = specular probability
-            let randVal = random(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
+            color += energy * hit.material.emission * hit.material.emissionStrength * 5.0;
+            let result = scatterRay(ray, hit, seed, bounce, energy);
+            ray = result.ray;
+            energy *= result.energy;
 
-
-
-            if randVal < prob.y {
-                let smoothness = 1.0 - hit.material.roughness;
-                let alpha = pow(1000.0, smoothness * smoothness);
-                if smoothness == 1.0 {
-                    ray.direction = reflect(ray.direction, hit.normal);
-                } else {
-                    ray.direction = sampleSphere(reflect(ray.direction, hit.normal), alpha, hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
-                }
-                ray.origin = hit.position + ray.direction * EPSILON;
-                let f = (alpha + 2.0) / (alpha + 1.0);
-                energy *= hit.material.specular * clamp(dot(hit.normal, ray.direction) * f, 0.0, 1.0);
-            } else if prob.x > 0.0 && randVal < (prob.y + prob.x) {
-                ray.origin = hit.position + hit.normal * EPSILON;
-                ray.direction = sampleSphere(hit.normal, 1.0, hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
-                energy *= hit.material.albedo * clamp(dot(hit.normal, ray.direction), 0.0, 1.0);
-            } else {
-                break;
-            }
-                        // Early termination check
             if length(energy) < ENERGY_THRESHOLD {
                 break;
             }
         } else {
-            var textureSky = textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz;
-            color += energy * textureSky;
+            color += energy * vec3(0.0);
             break;
         }
     }
@@ -132,28 +112,62 @@ fn rayColor(camRay: Ray, seed: f32) -> vec3f {
     return color;
 }
 
+
+fn scatterRay(ray: Ray, hit: SurfacePoint, seed: f32, bounce: u32, energy: vec3f) -> RayEnergy {
+    var newRay = ray;
+    var energyFactor = energy;
+    let material = hit.material;
+    let prob = getProbabilities(material);
+    let randVal = random(vec2(seed, f32(bounce)));
+
+    if randVal < prob.y {
+        // Specular reflection
+        newRay.direction = getSpecularDirection(ray, hit, seed, bounce);
+    } else if prob.x > 0.0 && randVal < (prob.y + prob.x) {
+        // Diffuse reflection
+        newRay.direction = getDiffuseDirection(hit, seed, bounce);
+        energyFactor = hit.material.albedo * clamp(dot(hit.normal, newRay.direction), 0.0, 1.0);
+    } else {
+        newRay.direction = vec3(0.0, 0.0, 0.0);
+    }
+
+    newRay.origin = hit.position + ray.direction * EPSILON;
+    return RayEnergy(newRay, energyFactor);
+}
+
+
+fn getSpecularDirection(ray: Ray, hit: SurfacePoint, seed: f32, bounce: u32) -> vec3f {
+    let smoothness = 1.0 - hit.material.roughness;
+    let alpha = pow(1000.0, smoothness * smoothness);
+    if smoothness == 1.0 {
+        return reflect(ray.direction, hit.normal);
+    } else {
+        return sampleSphere(reflect(ray.direction, hit.normal), alpha, hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
+    }
+}
+
+fn getDiffuseDirection(hit: SurfacePoint, seed: f32, bounce: u32) -> vec3f {
+    return sampleSphere(hit.normal, 1.0, hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
+}
+
 fn random(seed: vec2<f32>) -> f32 {
     return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-fn sampleSphere(normal: vec3<f32>, alpha: f32, seed: vec2<f32>) -> vec3<f32> {
-    // Sample the full sphere, where alpha determines the kind of the sampling
-    let cosTheta: f32 = 2.0 * random(seed) - 1.0; // Range from -1 to 1
-    let sinTheta: f32 = sqrt(1.0 - cosTheta * cosTheta);
-    let phi: f32 = 2.0 * 3.14159265358979323846 * random(seed.yx); // Used value for PI
-    let tangentSpaceDir: vec3<f32> = vec3<f32>(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 
-    // Transform direction to world space around the normal
+fn sampleSphere(normal: vec3<f32>, alpha: f32, seed: vec2<f32>) -> vec3<f32> {
+    let cosTheta: f32 = 2.0 * random(seed) - 1.0;
+    let sinTheta: f32 = sqrt(1.0 - cosTheta * cosTheta);
+    let phi: f32 = 2.0 * PI * random(seed.yx);
+    let tangentSpaceDir: vec3<f32> = vec3<f32>(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
     return getTangentSpace(normal) * tangentSpaceDir;
 }
 
 fn getTangentSpace(normal: vec3<f32>) -> mat3x3<f32> {
-    // Choose a helper vector for the cross product
     var helper: vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
     if abs(normal.x) > 0.99 {
         helper = vec3<f32>(0.0, 0.0, 1.0);
     }
-    // Generate vectors
     let tangent: vec3<f32> = normalize(cross(normal, helper));
     let binormal: vec3<f32> = normalize(cross(normal, tangent));
     return mat3x3<f32>(tangent, binormal, normal);
@@ -168,7 +182,8 @@ fn getProbabilities(material: Material) -> vec2<f32> {
 
 
 
-fn trace(ray: Ray) -> SurfacePoint {
+fn traverse(ray: Ray) -> SurfacePoint {
+
 
     //Set up the Render State
     var surfacePoint: SurfacePoint;
@@ -177,7 +192,7 @@ fn trace(ray: Ray) -> SurfacePoint {
 
     //Set up for BVH Traversal
     var node: Node = tree.nodes[0];
-    var stack: array<Node, 20>;
+    var stack: array<Node, 64>;
     var stackLocation: u32 = 0u;
 
     while true {
@@ -319,7 +334,6 @@ fn hit_aabb(ray: Ray, node: Node) -> f32 {
     }
 }
 
-
 @compute @workgroup_size(16, 16, 1)
 fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
 
@@ -341,8 +355,9 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     var myRay: Ray;
     myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
     myRay.origin = scene.cameraPos;
+    var textureSky = textureSampleLevel(skyTexture, skySampler, myRay.direction, 0.0).xyz;
     var seed: f32 = scene.time / 25236.3;
-    var pixel_color: vec3f = rayColor(myRay, seed);
+    var pixel_color: vec3f = trace(myRay, seed);
 
     textureStore(color_buffer, screen_pos, vec4<f32>(pixel_color, 1.0));
 }
