@@ -33,16 +33,16 @@ export class Renderer {
   screen_pipeline: GPURenderPipeline
   screen_bind_group_layout: GPUBindGroupLayout
   screen_bind_group: GPUBindGroup
-
   accumBufferViews: GPUTextureView[]
 
   // Scene to render
   scene: Scene
   frametime: number
   loaded: boolean
-  animationFrameId?: number
-  RGB: { r: number; g: number; b: number } = { r: 255, g: 255, b: 255 }
+  maxBounces: number = 4
   accumulationCount: number = 0
+  samples: number = 1
+
   bindGroupEntries: (
     | { binding: number; resource: GPUSampler }
     | { binding: number; resource: GPUTextureView }
@@ -87,8 +87,6 @@ export class Renderer {
   }
 
   async createAssets() {
-    console.log(this.canvas.width)
-    console.log(this.canvas.height)
     this.color_buffer = this.device.createTexture({
       size: {
         width: this.canvas.width,
@@ -126,12 +124,11 @@ export class Renderer {
     this.sampler = this.device.createSampler(samplerDescriptor)
 
     const parameterBufferDescriptor: GPUBufferDescriptor = {
-      size: 18 * 6 + 4 + 4,
+      size: 18 * 6 + 4 + 4 + 4,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     }
     this.sceneParameters = this.device.createBuffer(parameterBufferDescriptor)
 
-    //console.log("Scene has %d triangles", this.scene.triangles.length)
     const triangleBufferDescriptor: GPUBufferDescriptor = {
       size: 160 * this.scene.triangles.length,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
@@ -262,46 +259,35 @@ export class Renderer {
   }
 
   prepareScene() {
-    const uploadStart = performance.now()
-    const maxBounces: number = 4
-
-    const sceneData = {
-      cameraPos: this.scene.camera.position,
-      cameraForwards: this.scene.camera.forwards,
-      cameraRight: this.scene.camera.right,
-      cameraUp: this.scene.camera.up,
-      fov: this.scene.camera.fov,
-      time: performance.now(),
+    const bouncesElement = document.getElementById("bounces")
+    if (bouncesElement) {
+      bouncesElement.addEventListener("input", (event) => {
+        this.maxBounces = parseFloat((<HTMLInputElement>event.target).value)
+        this.updateSceneParameters()
+      })
     }
 
-    this.device.queue.writeBuffer(
-      this.sceneParameters,
-      0,
-      new Float32Array([
-        sceneData.cameraPos[0],
-        sceneData.cameraPos[1],
-        sceneData.cameraPos[2],
-        0.0,
-        sceneData.cameraForwards[0],
-        sceneData.cameraForwards[1],
-        sceneData.cameraForwards[2],
-        0.0,
-        sceneData.cameraRight[0],
-        sceneData.cameraRight[1],
-        sceneData.cameraRight[2],
-        0.0,
-        sceneData.cameraUp[0],
-        sceneData.cameraUp[1],
-        sceneData.cameraUp[2],
-        sceneData.fov,
-        maxBounces,
-        sceneData.time,
-      ]),
-      0,
-      18,
-    )
+    const samplesElement = document.getElementById("samples")
+    if (samplesElement) {
+      samplesElement.addEventListener("input", (event) => {
+        this.samples = parseFloat((<HTMLInputElement>event.target).value)
+        this.updateSceneParameters()
+      })
+    }
 
-    //Write the tlas nodes
+    this.updateSceneParameters()
+
+    addEventListeners(this)
+
+    if (this.loaded) {
+      return
+    }
+    this.loaded = true
+
+    this.updateTriangleData()
+    const uploadTimeLabel: HTMLElement = <HTMLElement>document.getElementById("triangles")
+    uploadTimeLabel.innerText = this.scene.triangles.length.toFixed(2).toString()
+
     var nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
     for (let i = 0; i < this.scene.nodesUsed; i++) {
       nodeData_a[8 * i] = this.scene.nodes[i].minCorner[0]
@@ -314,20 +300,6 @@ export class Renderer {
       nodeData_a[8 * i + 7] = this.scene.nodes[i].primitiveCount
     }
     this.device.queue.writeBuffer(this.nodeBuffer, 0, nodeData_a, 0, 8 * this.scene.nodesUsed)
-
-    const uploadEnd = performance.now()
-    const uploadTimeLabel: HTMLElement = <HTMLElement>document.getElementById("upload-time")
-    uploadTimeLabel.innerText = (uploadEnd - uploadStart).toFixed(2).toString()
-
-    // Get the color input elements
-    addEventListeners(this)
-
-    if (this.loaded) {
-      return
-    }
-    this.loaded = true
-
-    this.updateTriangleData()
 
     const triangleIndexData: Float32Array = new Float32Array(this.scene.triangles.length)
     for (let i = 0; i < this.scene.triangles.length; i++) {
@@ -425,13 +397,6 @@ export class Renderer {
     })
   }
 
-  cleanup() {
-    if (this.animationFrameId !== undefined) {
-      cancelAnimationFrame(this.animationFrameId)
-      this.animationFrameId = undefined
-    }
-  }
-
   updateTriangleData() {
     const triangleDataSize = 40 // Adjusted size
 
@@ -465,12 +430,52 @@ export class Renderer {
       triangleData[triangleDataSize * i + 34] = tri.material.emission[2]
       triangleData[triangleDataSize * i + 35] = tri.material.emissionStrength
 
-      triangleData[triangleDataSize * i + 36] = tri.material.roughness
-      triangleData[triangleDataSize * i + 37] = tri.material.specularExponent
-      triangleData[triangleDataSize * i + 38] = tri.material.specularHighlight
+      triangleData[triangleDataSize * i + 36] = tri.material.smoothness
+      triangleData[triangleDataSize * i + 37] = 0.0 // Padding
+      triangleData[triangleDataSize * i + 38] = 0.0 // Padding
       triangleData[triangleDataSize * i + 39] = 0.0 // Padding
     }
 
     this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.scene.triangles.length)
+  }
+  updateSceneParameters() {
+    const sceneData = {
+      cameraPos: this.scene.camera.position,
+      cameraForwards: this.scene.camera.forwards,
+      cameraRight: this.scene.camera.right,
+      cameraUp: this.scene.camera.up,
+      fov: this.scene.camera.fov,
+      maxBounces: this.maxBounces,
+      time: performance.now(),
+      samples: this.samples,
+    }
+
+    this.device.queue.writeBuffer(
+      this.sceneParameters,
+      0,
+      new Float32Array([
+        sceneData.cameraPos[0],
+        sceneData.cameraPos[1],
+        sceneData.cameraPos[2],
+        0.0,
+        sceneData.cameraForwards[0],
+        sceneData.cameraForwards[1],
+        sceneData.cameraForwards[2],
+        0.0,
+        sceneData.cameraRight[0],
+        sceneData.cameraRight[1],
+        sceneData.cameraRight[2],
+        0.0,
+        sceneData.cameraUp[0],
+        sceneData.cameraUp[1],
+        sceneData.cameraUp[2],
+        sceneData.fov,
+        sceneData.maxBounces,
+        sceneData.time,
+        sceneData.samples,
+      ]),
+      0,
+      19,
+    )
   }
 }

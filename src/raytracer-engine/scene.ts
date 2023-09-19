@@ -4,8 +4,8 @@ import { Controls } from "./controls"
 import { ObjLoader } from "./obj-loader"
 import { Triangle } from "./triangle"
 import { Node } from "./node"
-import { Material } from "./material"
 import { Bin } from "./bin"
+import { ObjectProperties } from "../utils/helper"
 
 // Constants for SAH
 const C_traversal = 1.0
@@ -18,6 +18,7 @@ export class Scene {
   cameraControls: Controls
 
   triangles: Triangle[] = []
+
   triangleIndices: number[] = []
   nodes: Node[]
   nodesUsed: number = 0
@@ -34,18 +35,26 @@ export class Scene {
     this.cameraControls = new Controls(this.canvas, this.camera)
   }
 
-  async createObject(modelPath: string, material: Material, position: vec3 = [0, 0, 0], scale: vec3 = [1, 1, 1], rotation: vec3 = [0, 0, 0]) {
-    const objectMesh = new ObjLoader(material, position, scale, rotation)
-    await objectMesh.initialize(modelPath)
+  async createObjects(objects: ObjectProperties[]) {
+    for (let i = 0; i < objects.length; i++) {
+      const obj = objects[i]
+      const { modelPath, material, position = [0, 0, 0], scale = [1, 1, 1], rotation = [0, 0, 0] } = obj
 
-    objectMesh.triangles.forEach((tri) => {
-      this.triangles.push(tri)
-    })
-    objectMesh.triangleIndices.forEach((index) => {
-      this.triangleIndices.push(index)
-    })
+      const objectMesh = new ObjLoader(material, position, scale, rotation, i)
 
-    this.objectMeshes.push(objectMesh)
+      await objectMesh.initialize(modelPath)
+
+      objectMesh.triangles.forEach((tri) => {
+        this.triangles.push(tri)
+      })
+      objectMesh.triangleIndices.forEach((index) => {
+        this.triangleIndices.push(index)
+      })
+
+      objectMesh.objectID = i
+
+      this.objectMeshes.push(objectMesh)
+    }
   }
 
   buildBVH() {

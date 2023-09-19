@@ -1,6 +1,5 @@
 import { vec3, vec2, mat4 } from "gl-matrix"
 import { Triangle } from "./triangle"
-import { Node } from "./node"
 import { Material } from "./material"
 import { deg2Rad } from "./math"
 
@@ -9,11 +8,9 @@ export class ObjLoader {
   vt: vec2[]
   vn: vec3[]
 
+  objectID: number
   triangles: Triangle[]
-
   triangleIndices: number[]
-  nodes: Node[]
-  nodesUsed: number
 
   minCorner: vec3
   maxCorner: vec3
@@ -25,13 +22,14 @@ export class ObjLoader {
   rotation: vec3
   scale: vec3
 
-  constructor(material: Material, position: vec3, scale: vec3, rotation: vec3) {
+  constructor(material: Material, position: vec3, scale: vec3, rotation: vec3, objectID: number) {
     this.material = material
     this.v = []
     this.vt = []
     this.vn = []
-
+    this.objectID = objectID
     this.triangles = []
+    this.triangleIndices = []
 
     this.minCorner = [999999, 999999, 999999]
     this.maxCorner = [-999999, -999999, -999999]
@@ -63,10 +61,6 @@ export class ObjLoader {
     this.v = []
     this.vt = []
     this.vn = []
-
-    this.nodes = []
-    this.nodesUsed = 0
-    this.triangleIndices = []
   }
 
   async readFile(url: string) {
@@ -133,7 +127,9 @@ export class ObjLoader {
       tri.material = this.material
 
       this.triangles.push(tri)
+      this.triangleIndices.push(this.triangles.length - 1)
     }
+    console.log(this.triangleIndices)
   }
 
   read_corner(vertex_description: string, tri: Triangle) {
