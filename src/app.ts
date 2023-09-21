@@ -20,9 +20,9 @@ export class Application {
     const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
     const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
     const blueMaterial = new Material({ albedo: [0.53, 0.81, 0.98] })
-    const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 0.995 })
-    const glowMaterial1 = new Material({ albedo: [1.0, 1.0, 1.0], emission: [0.8, 0.7, 0.3], emissionStrength: 0.5 })
-    const glowMaterial2 = new Material({ albedo: [1.0, 1.0, 1.0], emission: [1.0, 0.8, 0.6], emissionStrength: 0.5 })
+    const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 0.85, specularChance: 1.0 })
+    const mirrorMaterial2 = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 1.0, specularChance: 0.02 })
+    const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emission: [1.0, 0.8, 0.6], emissionStrength: 1.0 })
     const objectsToLoad: ObjectProperties[] = [
       // Ground
       {
@@ -82,15 +82,23 @@ export class Application {
       // Pyramid
       {
         modelPath: "./src/assets/models/pyramid.obj",
-        material: glowMaterial2,
+        material: glowMaterial,
         position: [1.0, 0.0, -1.0],
         scale: [1.0, 1.0, 1.0],
         rotation: [0.0, 28.0, 0.0],
       },
-      // Lampe
+      // Monkey
+      /*       {
+        modelPath: "./src/assets/models/sphere.obj",
+        material: mirrorMaterial,
+        position: [0.0, 1.5, 0.0],
+        scale: [0.75, 0.75, 0.75],
+        rotation: [0.0, 180.0, 0.0],
+      }, */
+      // Lamp
       {
         modelPath: "./src/assets/models/cube.obj",
-        material: glowMaterial2,
+        material: blueMaterial,
         position: [0.0, 4.99, 0.0],
         scale: [0.75, 0.01, 0.75],
       },

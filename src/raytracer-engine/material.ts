@@ -6,6 +6,7 @@ interface MaterialOptions {
   emission?: vec3
   emissionStrength?: number
   smoothness?: number
+  specularChance?: number
 }
 
 export class Material {
@@ -14,25 +15,25 @@ export class Material {
   emission: vec3
   emissionStrength: number
   smoothness: number
-  specularExponent: number
-  specularHighlight: number
+  specularChance: number
 
   constructor(options: MaterialOptions = {}) {
     const defaults: MaterialOptions = {
-      albedo: [0.8, 0.8, 0.8],
-      specular: [0.5, 0.5, 0.5],
+      albedo: [1.0, 1.0, 1.0],
+      specular: [1.0, 1.0, 1.0],
       emission: [0.0, 0.0, 0.0],
       emissionStrength: 0.0,
       smoothness: 0.0,
+      specularChance: 0.0,
     }
 
     const finalOptions = { ...defaults, ...options }
 
     this.albedo = finalOptions.albedo!
     this.specular = finalOptions.specular!
-    this.specular = finalOptions.specular!
     this.emission = finalOptions.emission!
     this.emissionStrength = finalOptions.emissionStrength!
     this.smoothness = finalOptions.smoothness!
+    this.specularChance = finalOptions.specularChance!
   }
 }

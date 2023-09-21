@@ -37,7 +37,7 @@ export class Renderer {
 
   // Scene to render
   scene: Scene
-  frametime: number
+  frametime: number = 0
   loaded: boolean
   maxBounces: number = 4
   accumulationCount: number = 0
@@ -64,7 +64,6 @@ export class Renderer {
 
     await this.makePipelines()
 
-    this.frametime = 16
     this.loaded = false
     await this.renderLoop()
   }
@@ -81,7 +80,7 @@ export class Renderer {
     this.format = "rgba16float"
     this.context.configure({
       device: this.device,
-      format: "bgra8unorm",
+      format: this.format,
       alphaMode: "premultiplied",
     })
   }
@@ -96,8 +95,7 @@ export class Renderer {
       usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
     })
     // We need to ping-pong the accumulation buffers because read-write storage textures are
-    // missing and we can't have the same texture bound as both a read texture and storage
-    // texture
+    // missing and we can't have the same texture bound as both a read texture and storage texture
     var accumBuffers = [
       this.device.createTexture({
         size: [this.canvas.width, this.canvas.height, 1],
@@ -158,8 +156,6 @@ export class Renderer {
 
     this.sky_texture = new CubeMapMaterial()
     await this.sky_texture.initialize(this.device, urls)
-
-    //await this.sky_texture.initialize(this.device, "./src/assets/textures/skybox/skybox2.png")
 
     this.viewParamsBuffer = this.device.createBuffer({ size: 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST })
     this.frameCountBuffer = this.device.createBuffer({
@@ -248,7 +244,7 @@ export class Renderer {
         entryPoint: "frag_main",
         targets: [
           {
-            format: "bgra8unorm",
+            format: this.format,
           },
         ],
       },
@@ -431,7 +427,7 @@ export class Renderer {
       triangleData[triangleDataSize * i + 35] = tri.material.emissionStrength
 
       triangleData[triangleDataSize * i + 36] = tri.material.smoothness
-      triangleData[triangleDataSize * i + 37] = 0.0 // Padding
+      triangleData[triangleDataSize * i + 37] = tri.material.specularChance
       triangleData[triangleDataSize * i + 38] = 0.0 // Padding
       triangleData[triangleDataSize * i + 39] = 0.0 // Padding
     }

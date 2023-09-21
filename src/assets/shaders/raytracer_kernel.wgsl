@@ -36,6 +36,7 @@ struct Material {
     emission: vec3f,
     emissionStrength: f32,
     smoothness: f32,
+    specularProbability: f32,
 }
 
 struct Triangle {
@@ -60,10 +61,7 @@ struct SurfacePoint {
     hit: bool,
 }
 
-struct NodeDistance {
-    node: Node,
-    distance: f32,
-}
+
 @group(0) @binding(0) var color_buffer : texture_storage_2d<rgba16float, write>;
 @group(0) @binding(1) var<uniform> scene : SceneData;
 @group(0) @binding(2) var<storage, read> objects : ObjectData;
@@ -74,131 +72,136 @@ struct NodeDistance {
 
 const EPSILON : f32 = 1e-5;
 const PI : f32 = 3.14159265358979323846;
-const AVGVEC: vec3f = vec3(0.333333333);
-const MAX_ENERGY: f32 = 20.0;
 
 
 fn trace(camRay: Ray, seed: f32) -> vec3f {
-    var color: vec3f = vec3(0.0, 0.0, 0.0);
     var ray = camRay;
+    var color: vec3f = vec3(0.0, 0.0, 0.0);
     var energy = vec3(1.0, 1.0, 1.0);
-    var newSeed = vec2(0.0);
 
     for (var bounce: u32 = 0u; bounce < u32(scene.maxBounces); bounce++) {
         let hit = traverse(ray);
 
-        if hit.hit {
-            let material = hit.material;
-            newSeed = vec2(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
-            // Indirect lighting
-            ray.origin = hit.position;
-            let diffuseDir = randomDirection(hit.normal, newSeed);
-            let specularDir = reflect(ray.direction, hit.normal);
-            ray.direction = mix(diffuseDir, specularDir, material.smoothness);
-
-            let cosTheta = max(dot(ray.direction, hit.normal), 0.0);
-            let pdf = cosTheta / PI;
-
-            energy *= clamp(energy * material.albedo / pdf, 0.0, MAX_ENERGY);
-            let emittedLight = material.emission * material.emissionStrength;
-            color += emittedLight * energy;
-            energy *= material.albedo / pdf;
-
-            let p = max(energy.r, max(energy.g, energy.b));
-            if random(newSeed) >= p {
-                break;
-            }
-            energy *= 1.0 / p;
-        } else {
+        if !hit.hit {
             break;
         }
+
+        let material = hit.material;
+        let newSeed = vec2(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
+        ray.origin = hit.position;
+        // Diffuse und spiegelnde Richtung
+        // https://github.com/SebLague/Ray-Tracing/blob/main/Assets/Scripts/Shaders/RayTracing.shader
+        let diffuseDir = randomDirection(hit.normal, newSeed);
+        let specularDir = reflect(ray.direction, hit.normal);
+
+        let isSpecular = random(newSeed) < material.specularProbability;
+
+        if isSpecular {
+            ray.direction = mix(diffuseDir, specularDir, material.smoothness);
+        } else {
+            ray.direction = diffuseDir;
+        }
+        // TODO: Importance Sampling : https://computergraphics.stackexchange.com/questions/4979/what-is-importance-sampling
+        // Importance Sampling
+        let pdf = dot(hit.normal, ray.direction) / PI; // Probability Density Function
+        if pdf < 0.001 {
+            break;
+        }
+        energy *= material.albedo / pdf;
+
+
+        color += material.emission * material.emissionStrength * energy;
+
+        // Russisches roulette: Wahrscheinlichkeit, dass der Strahl weiterhin Energie hat
+        // https://www.cs.princeton.edu/courses/archive/fall06/cos526/lectures/montecarlo2.pdf
+        let p = max(energy.r, max(energy.g, energy.b)); // Hoher p wert: Pfad wird fortgesetzt
+        if random(newSeed) >= p { 
+            break;
+        }
+        energy *= 1.0 / p;
     }
 
     return color;
 }
 
-fn clamp(v: vec3f, minVal: f32, maxVal: f32) -> vec3f {
-    return vec3(max(minVal, min(v.x, maxVal)), max(minVal, min(v.y, maxVal)), max(minVal, min(v.z, maxVal)));
-}
 
+// https://my.eng.utah.edu/~cs6965/slides/pathtrace.pdf
 fn randomDirection(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f32> {
     let u = random(seed);
     let v = random(vec2(seed.y, seed.x + 1.0));
-    let theta = 2.0 * 3.14159265359 * u;
-    let phi = asin(sqrt(v));
 
+    // Sphärische Koordinaten mit kosinus gewichtung (wahrscheinlichkeit dass vektor zur normale zeigt ist höher wegen sqrt v)
+    let theta = 2.0 * PI * u; // Azimutwinkel: horizontale richtung zwischen 0 und 2pi
+    let phi = asin(sqrt(v)); // vertikale richtung -pi/2 und pi/2. phi nah an 0 heißt vektor ist nah an horizontaler ebene
+    
+    // Kartesische Koordinaten: Vektor der in eine Zufällige richtung im Raum zeigt
     let x = cos(theta) * sin(phi);
     let y = sin(theta) * sin(phi);
     let z = cos(phi);
 
-    // Construct an orthonormal basis around the normal
+    // Achse aussuchen mit dem kleinsten wert der normale
     var up: vec3<f32>;
-    if abs(normal.y) < 0.99 {
+    if abs(normal.x) < abs(normal.y) && abs(normal.x) < abs(normal.z) {
+        up = vec3(1.0, 0.0, 0.0);
+    } else if abs(normal.y) < abs(normal.z) {
         up = vec3(0.0, 1.0, 0.0);
     } else {
-        up = vec3(1.0, 0.0, 0.0);
+        up = vec3(0.0, 0.0, 1.0);
     }
+    // Orthonormalbasis: Wir erstellen zwei vektoren die senkrecht zur normale stehen (kreuzprodukt)
     let tangent = normalize(cross(up, normal));
     let bitangent = cross(normal, tangent);
 
-    // Transform the random direction from spherical coordinates to Cartesian coordinates
+    // Basisvektoren werden mit den karthesischen koordinaten kombiniert
     let dir = tangent * x + bitangent * y + normal * z;
     return normalize(dir);
 }
 
+// Zahl zwischen 0 und 1
+// https://thebookofshaders.com/10/
 fn random(seed: vec2<f32>) -> f32 {
     return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
 
+
 fn traverse(ray: Ray) -> SurfacePoint {
-    // Set up the Render State
     var surfacePoint: SurfacePoint;
     surfacePoint.hit = false;
     var nearestHit: f32 = 9999.0;
 
-    // Set up for BVH Traversal
     var currentNode: Node = tree.nodes[0];
     var stack: array<Node, 20>;
     var stackLocation: u32 = 0u;
 
     while true {
-        var primitiveCount: u32 = u32(currentNode.primitiveCount);
-        var contents: u32 = u32(currentNode.leftChild);
+        let primitiveCount: u32 = u32(currentNode.primitiveCount);
+        let contents: u32 = u32(currentNode.leftChild);
 
         if primitiveCount == 0u {
-            var child1: Node = tree.nodes[contents];
-            var child2: Node = tree.nodes[contents + 1u];
+            let child1: Node = tree.nodes[contents];
+            let child2: Node = tree.nodes[contents + 1u];
 
             var distance1: f32 = hit_aabb(ray, child1);
             var distance2: f32 = hit_aabb(ray, child2);
 
-            var nodeDist1: NodeDistance;
-            nodeDist1.node = child1;
-            nodeDist1.distance = distance1;
-
-            var nodeDist2: NodeDistance;
-            nodeDist2.node = child2;
-            nodeDist2.distance = distance2;
-
-            if nodeDist1.distance > nodeDist2.distance {
-                var temp: NodeDistance = nodeDist1;
-                nodeDist1 = nodeDist2;
-                nodeDist2 = temp;
+            if distance1 > distance2 {
+                let temp: f32 = distance1;
+                distance1 = distance2;
+                distance2 = temp;
             }
 
-            if nodeDist1.distance > nearestHit {
-            } else {
-                currentNode = nodeDist1.node;
-                if nodeDist2.distance < nearestHit {
-                    stack[stackLocation] = nodeDist2.node;
+            if distance1 <= nearestHit {
+                currentNode = child1;
+                if distance2 < nearestHit {
+                    stack[stackLocation] = child2;
                     stackLocation += 1u;
                 }
                 continue;
             }
         } else {
             for (var i: u32 = 0u; i < primitiveCount; i++) {
-                var newSurfacePoint: SurfacePoint = hit_triangle(
+                let newSurfacePoint: SurfacePoint = hit_triangle(
                     ray,
                     objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])],
                     0.001,
@@ -212,16 +215,18 @@ fn traverse(ray: Ray) -> SurfacePoint {
                 }
             }
         }
+
         if stackLocation == 0u {
             break;
-        } else {
-            stackLocation -= 1u;
-            currentNode = stack[stackLocation];
         }
+
+        stackLocation -= 1u;
+        currentNode = stack[stackLocation];
     }
 
     return surfacePoint;
 }
+
 
 
 
@@ -239,7 +244,7 @@ fn hit_triangle(
 
     let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
     let edge_ac: vec3<f32> = tri.corner_c - tri.corner_a;
-    //Normal of the triangle
+    //Normale
     var n: vec3<f32> = normalize(cross(edge_ab, edge_ac));
     var ray_dot_tri: f32 = dot(ray.direction, n);
     //backface culling
@@ -310,37 +315,33 @@ fn hit_aabb(ray: Ray, node: Node) -> f32 {
 
 @compute @workgroup_size(16, 16, 1)
 fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
-
     let screen_size: vec2i = vec2<i32 >(textureDimensions(color_buffer));
     let screen_pos: vec2i = vec2<i32 >(i32(GlobalInvocationID.x), i32(GlobalInvocationID.y));
 
     let aspect_ratio: f32 = f32(screen_size.x) / f32(screen_size.y);
     let fov: f32 = scene.cameraFOV;
     let tanHalfFOV: f32 = tan(fov * 0.5);
+    let halfScreenSize: vec2<f32> = vec2<f32>(screen_size) * 0.5;
 
     let forwards: vec3f = scene.cameraForwards;
     let right: vec3f = scene.cameraRight;
     let up: vec3f = scene.cameraUp;
 
-    let num_samples: u32 = u32(scene.samples); // Number of rays per pixel
+    let num_samples: u32 = u32(scene.samples);
     var accumulated_color: vec3f = vec3(0.0);
-
     var seed: f32 = scene.time / 25236.3;
 
-
     for (var i: u32 = 0u; i < num_samples; i++) {
-        // Jitter the screen position for anti-aliasing
-        let jitter_x: f32 = (random(vec2<f32>(seed, f32(i))) - 0.5) / f32(screen_size.x);
-        let jitter_y: f32 = (random(vec2<f32>(f32(i), seed)) - 0.5) / f32(screen_size.y);
-
-        let horizontal_coefficient: f32 = tanHalfFOV * ((f32(screen_pos.x) + jitter_x) - f32(screen_size.x) / 2.0) / f32(screen_size.x);
-        let vertical_coefficient: f32 = tanHalfFOV * ((f32(screen_pos.y) + jitter_y) - f32(screen_size.y) / 2.0) / (f32(screen_size.y) * aspect_ratio);
+        let jitter: vec2<f32> = (random(vec2<f32>(seed, f32(i))) - 0.5) / vec2<f32>(screen_size);
+        let screen_jittered: vec2<f32> = vec2<f32>(screen_pos) + jitter - halfScreenSize;
+        let horizontal_coefficient: f32 = tanHalfFOV * screen_jittered.x / f32(screen_size.x);
+        let vertical_coefficient: f32 = tanHalfFOV * screen_jittered.y / (f32(screen_size.y) * aspect_ratio);
 
         var myRay: Ray;
         myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
         myRay.origin = scene.cameraPos;
-        var textureSky = textureSampleLevel(skyTexture, skySampler, myRay.direction, 0.0).xyz;
         accumulated_color += trace(myRay, seed + f32(i));
+        var textureSky = textureSampleLevel(skyTexture, skySampler, myRay.direction, 0.0).xyz;
     }
 
     var pixel_color: vec3f = accumulated_color / f32(num_samples);

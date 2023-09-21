@@ -1,5 +1,5 @@
 import { vec3 } from "gl-matrix"
-import { deg2Rad } from "./math"
+import { Deg2Rad } from "../utils/helper"
 
 export class Camera {
   position: Float32Array
@@ -15,16 +15,16 @@ export class Camera {
     this.position = new Float32Array(position)
     this.theta = 0.0
     this.phi = 0.0
-    this.fov = deg2Rad(fovDegrees)
+    this.fov = Deg2Rad(fovDegrees)
 
     this.recalculate_vectors()
   }
 
   recalculate_vectors() {
     this.forwards = new Float32Array([
-      Math.cos(deg2Rad(this.phi)) * Math.sin(deg2Rad(this.theta)),
-      Math.sin(deg2Rad(this.phi)),
-      Math.cos(deg2Rad(this.phi)) * Math.cos(deg2Rad(this.theta)),
+      Math.cos(Deg2Rad(this.phi)) * Math.sin(Deg2Rad(this.theta)),
+      Math.sin(Deg2Rad(this.phi)),
+      Math.cos(Deg2Rad(this.phi)) * Math.cos(Deg2Rad(this.theta)),
     ])
 
     this.right = new Float32Array([0.0, 0.0, 0.0])

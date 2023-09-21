@@ -11,6 +11,8 @@ import { ObjectProperties } from "../utils/helper"
 const C_traversal = 1.0
 const C_intersection = 1.0
 const numBins = 16
+const MAX_VALUE = 999999
+const MIN_VALUE = -999999
 
 export class Scene {
   canvas: HTMLCanvasElement
@@ -36,39 +38,28 @@ export class Scene {
   }
 
   async createObjects(objects: ObjectProperties[]) {
-    for (let i = 0; i < objects.length; i++) {
-      const obj = objects[i]
+    for (const obj of objects) {
       const { modelPath, material, position = [0, 0, 0], scale = [1, 1, 1], rotation = [0, 0, 0] } = obj
 
-      const objectMesh = new ObjLoader(material, position, scale, rotation, i)
+      const objectMesh = new ObjLoader(material, position, scale, rotation, objects.indexOf(obj))
 
       await objectMesh.initialize(modelPath)
 
-      objectMesh.triangles.forEach((tri) => {
-        this.triangles.push(tri)
-      })
-      objectMesh.triangleIndices.forEach((index) => {
-        this.triangleIndices.push(index)
-      })
+      this.triangles.push(...objectMesh.triangles)
+      this.triangleIndices.push(...objectMesh.triangleIndices)
 
-      objectMesh.objectID = i
+      objectMesh.objectID = objects.indexOf(obj)
 
       this.objectMeshes.push(objectMesh)
     }
   }
 
   buildBVH() {
-    this.triangleIndices = new Array(this.triangles.length)
-    for (var i: number = 0; i < this.triangles.length; i += 1) {
-      this.triangleIndices[i] = i
-    }
+    this.triangleIndices = Array.from({ length: this.triangles.length }, (_, i) => i)
 
-    this.nodes = new Array(2 * this.triangles.length - 1)
-    for (var i: number = 0; i < 2 * this.triangles.length - 1; i += 1) {
-      this.nodes[i] = new Node()
-    }
+    this.nodes = Array.from({ length: 2 * this.triangles.length - 1 }, () => new Node())
 
-    var root: Node = this.nodes[0]
+    const root = this.nodes[0]
     root.leftChild = 0
     root.primitiveCount = this.triangles.length
     this.nodesUsed = 1
@@ -78,54 +69,43 @@ export class Scene {
   }
 
   updateBounds(nodeIndex: number) {
-    var node: Node = this.nodes[nodeIndex]
-    node.minCorner = [999999, 999999, 999999]
-    node.maxCorner = [-999999, -999999, -999999]
+    const node = this.nodes[nodeIndex]
+    node.minCorner = [MAX_VALUE, MAX_VALUE, MAX_VALUE]
+    node.maxCorner = [MIN_VALUE, MIN_VALUE, MIN_VALUE]
 
-    for (var i: number = 0; i < node.primitiveCount; i += 1) {
-      const triangle: Triangle = this.triangles[this.triangleIndices[node.leftChild + i]]
+    for (let i = 0; i < node.primitiveCount; i++) {
+      const triangle = this.triangles[this.triangleIndices[node.leftChild + i]]
 
-      triangle.corners.forEach((corner: vec3) => {
+      triangle.corners.forEach((corner) => {
         vec3.min(node.minCorner, node.minCorner, corner)
         vec3.max(node.maxCorner, node.maxCorner, corner)
       })
     }
   }
   subdivide(nodeIndex: number) {
-    var node: Node = this.nodes[nodeIndex]
+    const node = this.nodes[nodeIndex]
 
-    if (node.primitiveCount <= 2) {
-      return
-    }
+    if (node.primitiveCount <= 2) return
 
-    var extent: vec3 = [0, 0, 0]
-    vec3.subtract(extent, node.maxCorner, node.minCorner)
-    var axis: number = 0
-    if (extent[1] > extent[axis]) {
-      axis = 1
-    }
-    if (extent[2] > extent[axis]) {
-      axis = 2
-    }
+    const extent: vec3 = vec3.subtract(vec3.create(), node.maxCorner, node.minCorner)
+    const axis = extent[0] > extent[1] ? (extent[2] > extent[0] ? 2 : 0) : extent[2] > extent[1] ? 2 : 1
 
-    var bins: Bin[] = new Array(numBins)
-    for (let i = 0; i < numBins; i++) {
-      bins[i] = new Bin()
-    }
+    const bins: Bin[] = Array.from({ length: numBins }, () => new Bin())
 
     for (let i = 0; i < node.primitiveCount; i++) {
-      const triangle: Triangle = this.triangles[this.triangleIndices[node.leftChild + i]]
-      const binIndex: number = Math.min(numBins - 1, Math.floor(((triangle.centroid[axis] - node.minCorner[axis]) / extent[axis]) * numBins))
+      const triangle = this.triangles[this.triangleIndices[node.leftChild + i]]
+      const binIndex = Math.min(numBins - 1, Math.floor(((triangle.centroid[axis] - node.minCorner[axis]) / extent[axis]) * numBins))
 
       bins[binIndex].addTriangle(triangle)
     }
 
-    var totalArea = bins.reduce((sum, bin) => sum + bin.surfaceArea(), 0)
-    var bestCost = C_intersection * node.primitiveCount
-    var bestSplit = -1
-    var leftCount = 0
-    var leftArea = 0
-    var rightArea = totalArea
+    const totalArea = bins.reduce((sum, bin) => sum + bin.surfaceArea(), 0)
+    let bestCost = C_intersection * node.primitiveCount
+    let bestSplit = -1
+    let leftCount = 0
+    let leftArea = 0
+    let rightArea = totalArea
+
     for (let i = 0; i < numBins - 1; i++) {
       leftCount += bins[i].count
       leftArea += bins[i].surfaceArea()
@@ -140,17 +120,14 @@ export class Scene {
       }
     }
 
-    if (bestSplit === -1) {
-      return
-    }
+    if (bestSplit === -1) return
 
-    // Partition triangles based on the best split
     const splitValue = node.minCorner[axis] + (extent[axis] * (bestSplit + 1)) / numBins
-    var mid = node.leftChild
-    var end = node.leftChild + node.primitiveCount - 1
+    let mid = node.leftChild
+    let end = node.leftChild + node.primitiveCount - 1
 
     while (mid <= end) {
-      const triangle: Triangle = this.triangles[this.triangleIndices[mid]]
+      const triangle = this.triangles[this.triangleIndices[mid]]
       if (triangle.centroid[axis] < splitValue) {
         mid++
       } else {
@@ -159,17 +136,10 @@ export class Scene {
       }
     }
 
-    // Create child nodes
-    const leftChildIndex: number = this.nodesUsed++
-    const rightChildIndex: number = this.nodesUsed++
+    const [leftChildIndex, rightChildIndex] = [this.nodesUsed++, this.nodesUsed++]
 
-    if (!this.nodes[leftChildIndex]) {
-      this.nodes[leftChildIndex] = new Node()
-    }
-
-    if (!this.nodes[rightChildIndex]) {
-      this.nodes[rightChildIndex] = new Node()
-    }
+    this.nodes[leftChildIndex] = this.nodes[leftChildIndex] || new Node()
+    this.nodes[rightChildIndex] = this.nodes[rightChildIndex] || new Node()
 
     this.nodes[leftChildIndex].leftChild = node.leftChild
     this.nodes[leftChildIndex].primitiveCount = mid - node.leftChild
@@ -177,10 +147,7 @@ export class Scene {
     this.nodes[rightChildIndex].leftChild = mid
     this.nodes[rightChildIndex].primitiveCount = node.primitiveCount - this.nodes[leftChildIndex].primitiveCount
 
-    // Check if both child nodes receive at least one triangle
-    if (this.nodes[leftChildIndex].primitiveCount === 0 || this.nodes[rightChildIndex].primitiveCount === 0) {
-      return
-    }
+    if (this.nodes[leftChildIndex].primitiveCount === 0 || this.nodes[rightChildIndex].primitiveCount === 0) return
 
     node.leftChild = leftChildIndex
     node.primitiveCount = 0
@@ -192,6 +159,9 @@ export class Scene {
   }
 
   update(frametime: number) {
-    //this.buildBVH()
+    this.objectMeshes.forEach((statue) => {
+      statue.update(frametime / 16.667)
+    })
+    this.buildBVH()
   }
 }

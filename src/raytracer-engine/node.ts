@@ -1,4 +1,5 @@
 import { vec3 } from "gl-matrix"
+import { Triangle } from "./triangle"
 
 export class Node {
   minCorner: vec3
