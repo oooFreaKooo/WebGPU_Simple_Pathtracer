@@ -283,17 +283,17 @@ export class Renderer {
     this.updateTriangleData()
     const uploadTimeLabel: HTMLElement = <HTMLElement>document.getElementById("triangles")
     uploadTimeLabel.innerText = this.scene.triangles.length.toFixed(2).toString()
-
+    console.log(this.scene.nodes)
     var nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
     for (let i = 0; i < this.scene.nodesUsed; i++) {
-      nodeData_a[8 * i] = this.scene.nodes[i].minCorner[0]
-      nodeData_a[8 * i + 1] = this.scene.nodes[i].minCorner[1]
-      nodeData_a[8 * i + 2] = this.scene.nodes[i].minCorner[2]
-      nodeData_a[8 * i + 3] = this.scene.nodes[i].leftChild
-      nodeData_a[8 * i + 4] = this.scene.nodes[i].maxCorner[0]
-      nodeData_a[8 * i + 5] = this.scene.nodes[i].maxCorner[1]
-      nodeData_a[8 * i + 6] = this.scene.nodes[i].maxCorner[2]
-      nodeData_a[8 * i + 7] = this.scene.nodes[i].primitiveCount
+      nodeData_a[8 * i] = this.scene.nodes[i].aabbMin[0]
+      nodeData_a[8 * i + 1] = this.scene.nodes[i].aabbMin[1]
+      nodeData_a[8 * i + 2] = this.scene.nodes[i].aabbMin[2]
+      nodeData_a[8 * i + 3] = this.scene.nodes[i].leftFirst
+      nodeData_a[8 * i + 4] = this.scene.nodes[i].aabbMax[0]
+      nodeData_a[8 * i + 5] = this.scene.nodes[i].aabbMax[1]
+      nodeData_a[8 * i + 6] = this.scene.nodes[i].aabbMax[2]
+      nodeData_a[8 * i + 7] = this.scene.nodes[i].triCount
     }
     this.device.queue.writeBuffer(this.nodeBuffer, 0, nodeData_a, 0, 8 * this.scene.nodesUsed)
 

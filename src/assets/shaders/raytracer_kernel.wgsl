@@ -73,7 +73,6 @@ struct SurfacePoint {
 const EPSILON : f32 = 1e-5;
 const PI : f32 = 3.14159265358979323846;
 
-
 fn trace(camRay: Ray, seed: f32) -> vec3f {
     var ray = camRay;
     var color: vec3f = vec3(0.0, 0.0, 0.0);
@@ -94,31 +93,20 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let diffuseDir = randomDirection(hit.normal, newSeed);
         let specularDir = reflect(ray.direction, hit.normal);
 
-        let isSpecular = random(newSeed) < material.specularProbability;
+        let isSpecular = f32(random(newSeed) < material.specularProbability);
 
-        if isSpecular {
-            ray.direction = mix(diffuseDir, specularDir, material.smoothness);
-        } else {
-            ray.direction = diffuseDir;
-        }
-        // TODO: Importance Sampling : https://computergraphics.stackexchange.com/questions/4979/what-is-importance-sampling
-        // Importance Sampling
-        let pdf = dot(hit.normal, ray.direction) / PI; // Probability Density Function
-        if pdf < 0.001 {
-            break;
-        }
-        energy *= material.albedo / pdf;
-
+        ray.direction = mix(diffuseDir, specularDir, material.smoothness * isSpecular);
 
         color += material.emission * material.emissionStrength * energy;
-
+        energy *= mix(material.albedo, material.specular, isSpecular);
+        
         // Russisches roulette: Wahrscheinlichkeit, dass der Strahl weiterhin Energie hat
         // https://www.cs.princeton.edu/courses/archive/fall06/cos526/lectures/montecarlo2.pdf
-        let p = max(energy.r, max(energy.g, energy.b)); // Hoher p wert: Pfad wird fortgesetzt
-        if random(newSeed) >= p { 
+        let p = max(energy.r, max(energy.g, energy.b));
+        if random(newSeed) >= p { // Breche ab, wenn der Zufallswert größer oder gleich p ist
             break;
         }
-        energy *= 1.0 / p;
+        energy *= 1.0 / p;  // Kompensiere die abgebrochene/verlorene Energie durch das Teilen mit der Wahrscheinlichkeit p
     }
 
     return color;
@@ -133,21 +121,19 @@ fn randomDirection(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f32> {
     // Sphärische Koordinaten mit kosinus gewichtung (wahrscheinlichkeit dass vektor zur normale zeigt ist höher wegen sqrt v)
     let theta = 2.0 * PI * u; // Azimutwinkel: horizontale richtung zwischen 0 und 2pi
     let phi = asin(sqrt(v)); // vertikale richtung -pi/2 und pi/2. phi nah an 0 heißt vektor ist nah an horizontaler ebene
-    
+
+    let sin_phi = sin(phi);
     // Kartesische Koordinaten: Vektor der in eine Zufällige richtung im Raum zeigt
-    let x = cos(theta) * sin(phi);
-    let y = sin(theta) * sin(phi);
+    let x = cos(theta) * sin_phi;
+    let y = sin(theta) * sin_phi;
     let z = cos(phi);
 
+
     // Achse aussuchen mit dem kleinsten wert der normale
-    var up: vec3<f32>;
-    if abs(normal.x) < abs(normal.y) && abs(normal.x) < abs(normal.z) {
-        up = vec3(1.0, 0.0, 0.0);
-    } else if abs(normal.y) < abs(normal.z) {
-        up = vec3(0.0, 1.0, 0.0);
-    } else {
-        up = vec3(0.0, 0.0, 1.0);
-    }
+    let xSmallest = f32(abs(normal.x) < abs(normal.y) && abs(normal.x) < abs(normal.z)); // 1 oder 0
+    let ySmallest = f32(abs(normal.y) < abs(normal.z) && abs(normal.x) >= abs(normal.y)); // 1 oder 0
+    let up = vec3(xSmallest, ySmallest, 1.0 - xSmallest - ySmallest);
+
     // Orthonormalbasis: Wir erstellen zwei vektoren die senkrecht zur normale stehen (kreuzprodukt)
     let tangent = normalize(cross(up, normal));
     let bitangent = cross(normal, tangent);
@@ -179,8 +165,8 @@ fn traverse(ray: Ray) -> SurfacePoint {
         let contents: u32 = u32(currentNode.leftChild);
 
         if primitiveCount == 0u {
-            let child1: Node = tree.nodes[contents];
-            let child2: Node = tree.nodes[contents + 1u];
+            var child1: Node = tree.nodes[contents];
+            var child2: Node = tree.nodes[contents + 1u];
 
             var distance1: f32 = hit_aabb(ray, child1);
             var distance2: f32 = hit_aabb(ray, child2);
@@ -189,15 +175,25 @@ fn traverse(ray: Ray) -> SurfacePoint {
                 let temp: f32 = distance1;
                 distance1 = distance2;
                 distance2 = temp;
+
+                var tempChild: Node = child1;
+                child1 = child2;
+                child2 = tempChild;
             }
 
-            if distance1 <= nearestHit {
+            if distance1 > nearestHit {
+                if stackLocation == 0u {
+                    break;
+                } else {
+                    stackLocation -= 1u;
+                    currentNode = stack[stackLocation];
+                }
+            } else {
                 currentNode = child1;
                 if distance2 < nearestHit {
                     stack[stackLocation] = child2;
                     stackLocation += 1u;
                 }
-                continue;
             }
         } else {
             for (var i: u32 = 0u; i < primitiveCount; i++) {
@@ -209,19 +205,20 @@ fn traverse(ray: Ray) -> SurfacePoint {
                     surfacePoint,
                 );
 
-                if newSurfacePoint.hit && newSurfacePoint.t < nearestHit {
+                if newSurfacePoint.hit {
                     nearestHit = newSurfacePoint.t;
                     surfacePoint = newSurfacePoint;
                 }
             }
-        }
 
-        if stackLocation == 0u {
+
+            if stackLocation == 0u {
             break;
+            } else {
+                stackLocation -= 1u;
+                currentNode = stack[stackLocation];
+            }
         }
-
-        stackLocation -= 1u;
-        currentNode = stack[stackLocation];
     }
 
     return surfacePoint;
@@ -244,13 +241,11 @@ fn hit_triangle(
 
     let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
     let edge_ac: vec3<f32> = tri.corner_c - tri.corner_a;
-    //Normale
+
     var n: vec3<f32> = normalize(cross(edge_ab, edge_ac));
     var ray_dot_tri: f32 = dot(ray.direction, n);
     //backface culling
     if ray_dot_tri > 0.0 {
-        //ray_dot_tri = ray_dot_tri * -1.0;
-        //n = n * -1.0;
         return surfacePoint;
     }
     let h: vec3<f32> = cross(ray.direction, edge_ac);
@@ -278,6 +273,10 @@ fn hit_triangle(
     let t: f32 = f * dot(edge_ac, q);
 
     if t > tMin && t < tMax {
+        let w: f32 = 1.0 - u - v; // Compute the third barycentric coordinate
+        // Interpolate normals based on barycentric coordinates
+        // https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
+        //surfacePoint.normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
         surfacePoint.normal = n;
         surfacePoint.material = tri.material;
         surfacePoint.t = t;
@@ -319,8 +318,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     let screen_pos: vec2i = vec2<i32 >(i32(GlobalInvocationID.x), i32(GlobalInvocationID.y));
 
     let aspect_ratio: f32 = f32(screen_size.x) / f32(screen_size.y);
-    let fov: f32 = scene.cameraFOV;
-    let tanHalfFOV: f32 = tan(fov * 0.5);
+    let tanHalfFOV: f32 = tan(scene.cameraFOV * 0.5);
     let halfScreenSize: vec2<f32> = vec2<f32>(screen_size) * 0.5;
 
     let forwards: vec3f = scene.cameraForwards;
@@ -330,20 +328,18 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     let num_samples: u32 = u32(scene.samples);
     var accumulated_color: vec3f = vec3(0.0);
     var seed: f32 = scene.time / 25236.3;
-
+    var myRay: Ray;
     for (var i: u32 = 0u; i < num_samples; i++) {
         let jitter: vec2<f32> = (random(vec2<f32>(seed, f32(i))) - 0.5) / vec2<f32>(screen_size);
         let screen_jittered: vec2<f32> = vec2<f32>(screen_pos) + jitter - halfScreenSize;
         let horizontal_coefficient: f32 = tanHalfFOV * screen_jittered.x / f32(screen_size.x);
         let vertical_coefficient: f32 = tanHalfFOV * screen_jittered.y / (f32(screen_size.y) * aspect_ratio);
 
-        var myRay: Ray;
         myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
         myRay.origin = scene.cameraPos;
         accumulated_color += trace(myRay, seed + f32(i));
-        var textureSky = textureSampleLevel(skyTexture, skySampler, myRay.direction, 0.0).xyz;
     }
-
+    var textureSky = textureSampleLevel(skyTexture, skySampler, myRay.direction, 0.0).xyz;
     var pixel_color: vec3f = accumulated_color / f32(num_samples);
     textureStore(color_buffer, screen_pos, vec4<f32>(pixel_color, 1.0));
 }

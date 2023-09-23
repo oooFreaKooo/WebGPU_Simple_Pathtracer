@@ -3,17 +3,15 @@ import { Triangle } from "./triangle"
 import { Material } from "./material"
 import { Deg2Rad } from "../utils/helper"
 
-const MAX_VALUE = 999999
-const MIN_VALUE = -999999
+const MAX_VALUE = Number.POSITIVE_INFINITY
+const MIN_VALUE = Number.NEGATIVE_INFINITY
 
 export class ObjLoader {
   v: vec3[]
   vt: vec2[]
   vn: vec3[]
 
-  objectID: number
   triangles: Triangle[]
-  triangleIndices: number[]
 
   minCorner: vec3
   maxCorner: vec3
@@ -25,14 +23,13 @@ export class ObjLoader {
   rotation: vec3
   scale: vec3
 
-  constructor(material: Material, position: vec3, scale: vec3, rotation: vec3, objectID: number) {
+  constructor(material: Material, position: vec3, scale: vec3, rotation: vec3) {
     this.material = material
     this.v = []
     this.vt = []
     this.vn = []
-    this.objectID = objectID
+
     this.triangles = []
-    this.triangleIndices = []
 
     this.minCorner = [MAX_VALUE, MAX_VALUE, MAX_VALUE]
     this.maxCorner = [MIN_VALUE, MIN_VALUE, MIN_VALUE]
@@ -43,13 +40,14 @@ export class ObjLoader {
     this.inverseModel = mat4.create()
     this.calculate_transform()
   }
-  update(rate: number) {
+
+  /*   update(rate: number) {
     this.rotation[2] += rate * 0.5
     if (this.rotation[2] > 360) {
       this.rotation[2] -= 360
     }
     this.calculate_transform()
-  }
+  } */
 
   calculate_transform() {
     this.model = mat4.create()
@@ -122,12 +120,9 @@ export class ObjLoader {
       this.read_corner(vertex_descriptions[1], tri)
       this.read_corner(vertex_descriptions[2 + i], tri)
       this.read_corner(vertex_descriptions[3 + i], tri)
-
-      tri.make_centroid()
       tri.material = this.material
-
+      tri.make_centroid()
       this.triangles.push(tri)
-      this.triangleIndices.push(this.triangles.length - 1)
     }
   }
 

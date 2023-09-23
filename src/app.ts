@@ -19,10 +19,10 @@ export class Application {
     const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
     const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
     const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
-    const blueMaterial = new Material({ albedo: [0.53, 0.81, 0.98] })
-    const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 0.85, specularChance: 1.0 })
-    const mirrorMaterial2 = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 1.0, specularChance: 0.02 })
-    const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emission: [1.0, 0.8, 0.6], emissionStrength: 1.0 })
+    const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
+    const mirrorMaterial = new Material({ albedo: [1.0, 0.0, 0.0], smoothness: 1.0, specularChance: 0.02 })
+    const mirrorMaterial2 = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 1.0, specularChance: 1.0 })
+    const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emission: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
     const objectsToLoad: ObjectProperties[] = [
       // Ground
       {
@@ -37,7 +37,7 @@ export class Application {
         material: whiteMaterial,
         position: [0.0, 5.0, 0.0],
         scale: [0.5, 0.5, 0.5],
-        rotation: [0.0, 0.0, 180.0],
+        rotation: [180.0, 0.0, 0.0],
       },
       // Left wall
       {
@@ -91,22 +91,27 @@ export class Application {
       /*       {
         modelPath: "./src/assets/models/sphere.obj",
         material: mirrorMaterial,
-        position: [0.0, 1.5, 0.0],
+        position: [1.0, 1.5, 0.0],
+        scale: [0.75, 0.75, 0.75],
+        rotation: [0.0, 180.0, 0.0],
+      },
+      {
+        modelPath: "./src/assets/models/monkey.obj",
+        material: whiteMaterial,
+        position: [-1.0, 1.5, 0.0],
         scale: [0.75, 0.75, 0.75],
         rotation: [0.0, 180.0, 0.0],
       }, */
       // Lamp
       {
         modelPath: "./src/assets/models/cube.obj",
-        material: blueMaterial,
+        material: whiteMaterial,
         position: [0.0, 4.99, 0.0],
         scale: [0.75, 0.01, 0.75],
       },
     ]
 
     await this.scene.createObjects(objectsToLoad)
-
-    this.scene.buildBVH()
 
     await this.renderer.Initialize()
   }
