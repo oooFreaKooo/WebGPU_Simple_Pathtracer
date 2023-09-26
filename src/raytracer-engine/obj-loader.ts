@@ -122,6 +122,7 @@ export class ObjLoader {
       this.read_corner(vertex_descriptions[3 + i], tri)
       tri.material = this.material
       tri.make_centroid()
+      tri.inverseModel = this.inverseModel
       this.triangles.push(tri)
     }
   }

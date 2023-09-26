@@ -2,7 +2,7 @@ import { CubeMapMaterial } from "./cube_material"
 import raytracer_kernel from "../assets/shaders//raytracer_kernel.wgsl"
 import screen_shader from "../assets/shaders/screen_shader.wgsl"
 import { Scene } from "./scene"
-import { addEventListeners, hexToRgb, linearToSRGB } from "../utils/helper"
+import { addEventListeners, linearToSRGB } from "../utils/helper"
 
 export class Renderer {
   canvas: HTMLCanvasElement
@@ -128,7 +128,7 @@ export class Renderer {
     this.sceneParameters = this.device.createBuffer(parameterBufferDescriptor)
 
     const triangleBufferDescriptor: GPUBufferDescriptor = {
-      size: 160 * this.scene.triangles.length,
+      size: 224 * this.scene.triangles.length,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     }
     this.triangleBuffer = this.device.createBuffer(triangleBufferDescriptor)
@@ -394,7 +394,7 @@ export class Renderer {
   }
 
   updateTriangleData() {
-    const triangleDataSize = 40 // Adjusted size
+    const triangleDataSize = 56
 
     const triangleData: Float32Array = new Float32Array(triangleDataSize * this.scene.triangles.length)
     for (let i = 0; i < this.scene.triangles.length; i++) {
@@ -430,6 +430,10 @@ export class Renderer {
       triangleData[triangleDataSize * i + 37] = tri.material.specularChance
       triangleData[triangleDataSize * i + 38] = 0.0 // Padding
       triangleData[triangleDataSize * i + 39] = 0.0 // Padding
+      // Adding inverseModel data to buffer
+      for (let j = 0; j < 16; j++) {
+        triangleData[triangleDataSize * i + 40 + j] = tri.inverseModel[j]
+      }
     }
 
     this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.scene.triangles.length)

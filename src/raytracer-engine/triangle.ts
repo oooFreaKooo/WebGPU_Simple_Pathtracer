@@ -1,4 +1,4 @@
-import { vec3 } from "gl-matrix"
+import { mat4, vec3 } from "gl-matrix"
 import { Material } from "./material"
 
 export class Triangle {
@@ -6,11 +6,13 @@ export class Triangle {
   normals: vec3[]
   centroid: vec3
   material: Material
+  inverseModel: mat4
 
   constructor(material: Material = new Material()) {
     this.corners = []
     this.normals = []
     this.material = material
+    this.inverseModel = mat4.create()
   }
 
   make_centroid() {

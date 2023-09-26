@@ -47,6 +47,7 @@ struct Triangle {
     corner_c: vec3f,
     normal_c: vec3f,
     material: Material,
+    inverseModel: mat4x4<f32>,
 }
 
 struct ObjectData {
@@ -103,10 +104,11 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         // Russisches roulette: Wahrscheinlichkeit, dass der Strahl weiterhin Energie hat
         // https://www.cs.princeton.edu/courses/archive/fall06/cos526/lectures/montecarlo2.pdf
         let p = max(energy.r, max(energy.g, energy.b));
-        if random(newSeed) >= p { // Breche ab, wenn der Zufallswert größer oder gleich p ist
+        // Je kleiner p ist, desto wahrscheinlicher ist es, dass es abgebrochen wird
+        if random(newSeed) >= p { // Breche ab, wenn der Zufallswert größer p ist
             break;
         }
-        energy *= 1.0 / p;  // Kompensiere die abgebrochene/verlorene Energie durch das Teilen mit der Wahrscheinlichkeit p
+        energy *= (1.0 / p);  // Kompensiere die verlorene Energie
     }
 
     return color;
@@ -118,9 +120,10 @@ fn randomDirection(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f32> {
     let u = random(seed);
     let v = random(vec2(seed.y, seed.x + 1.0));
 
-    // Sphärische Koordinaten mit kosinus gewichtung (wahrscheinlichkeit dass vektor zur normale zeigt ist höher wegen sqrt v)
-    let theta = 2.0 * PI * u; // Azimutwinkel: horizontale richtung zwischen 0 und 2pi
-    let phi = asin(sqrt(v)); // vertikale richtung -pi/2 und pi/2. phi nah an 0 heißt vektor ist nah an horizontaler ebene
+    // Sphärische Koordinaten
+    // Normalverteilung ist kosinus gewichtet: die generierten Vektoren werden in richtung der normalen zeigen
+    let theta = 2.0 * PI * u; // Azimutwinkel: Vollkreis im intervall 0 und 2pi
+    let phi = asin(sqrt(v)); // Polarwinkel: vertikale richtung -pi/2 und pi/2. phi nah an 0 heißt vektor ist nah an horizontaler ebene
 
     let sin_phi = sin(phi);
     // Kartesische Koordinaten: Vektor der in eine Zufällige richtung im Raum zeigt
@@ -129,12 +132,12 @@ fn randomDirection(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f32> {
     let z = cos(phi);
 
 
-    // Achse aussuchen mit dem kleinsten wert der normale
+    // Einen up vektor erstellen der nicht parallel zur Normale ist
     let xSmallest = f32(abs(normal.x) < abs(normal.y) && abs(normal.x) < abs(normal.z)); // 1 oder 0
     let ySmallest = f32(abs(normal.y) < abs(normal.z) && abs(normal.x) >= abs(normal.y)); // 1 oder 0
     let up = vec3(xSmallest, ySmallest, 1.0 - xSmallest - ySmallest);
 
-    // Orthonormalbasis: Wir erstellen zwei vektoren die senkrecht zur normale stehen (kreuzprodukt)
+    // Orthonormalbasis: zwei vektoren die senkrecht zur normale stehen (kreuzprodukt)
     let tangent = normalize(cross(up, normal));
     let bitangent = cross(normal, tangent);
 
@@ -157,7 +160,7 @@ fn traverse(ray: Ray) -> SurfacePoint {
     var nearestHit: f32 = 9999.0;
 
     var currentNode: Node = tree.nodes[0];
-    var stack: array<Node, 20>;
+    var stack: array<Node, 32>;
     var stackLocation: u32 = 0u;
 
     while true {
@@ -200,7 +203,7 @@ fn traverse(ray: Ray) -> SurfacePoint {
                 let newSurfacePoint: SurfacePoint = hit_triangle(
                     ray,
                     objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])],
-                    0.001,
+                    0.0001,
                     nearestHit,
                     surfacePoint,
                 );
@@ -224,9 +227,7 @@ fn traverse(ray: Ray) -> SurfacePoint {
     return surfacePoint;
 }
 
-
-
-
+// https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
 fn hit_triangle(
     ray: Ray,
     tri: Triangle,
@@ -234,59 +235,58 @@ fn hit_triangle(
     tMax: f32,
     oldSurfacePoint: SurfacePoint
 ) -> SurfacePoint {
-
     var surfacePoint: SurfacePoint;
     surfacePoint.hit = false;
     surfacePoint.material = oldSurfacePoint.material;
 
+    // Kanten des Dreiecks vom Punkt A
     let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
     let edge_ac: vec3<f32> = tri.corner_c - tri.corner_a;
+    
+    // h ist das Kreuzprodukt der Richtung des Strahls und einer Kante des Dreiecks
+    let h: vec3<f32> = cross(ray.direction, edge_ac); // Vektor senkrecht zu Dreiecks ebene
+    let a: f32 = dot(edge_ab, h); // Skalarprodukt: Wenn a nahe 0 ist, dann ist h fast parallel zur Kante
 
-    var n: vec3<f32> = normalize(cross(edge_ab, edge_ac));
-    var ray_dot_tri: f32 = dot(ray.direction, n);
-    //backface culling
-    if ray_dot_tri > 0.0 {
-        return surfacePoint;
-    }
-    let h: vec3<f32> = cross(ray.direction, edge_ac);
-    let a: f32 = dot(edge_ab, h);
-
-    if abs(a) < 0.00001 {
+    if a < 0.00001 {
         return surfacePoint;
     }
 
-    let f: f32 = 1.0 / a;
-    let s: vec3<f32> = ray.origin - tri.corner_a;
-    let u: f32 = f * dot(s, h);
-
+    let f: f32 = 1.0 / a; // Kehrwert von a
+    let s: vec3<f32> = ray.origin - tri.corner_a; // S: Vektor vom Ursprung des Strahls zu einer Ecke des Dreiecks
+    let u: f32 = f * dot(s, h); // U: Parameter für baryzentrische Koordinaten
+    
+    // Wenn u außerhalb des Intervalls [0,1] liegt, gibt es keinen Treffer
     if u < 0.0 || u > 1.0 {
         return surfacePoint;
     }
 
     let q: vec3<f32> = cross(s, edge_ab);
-    let v: f32 = f * dot(ray.direction, q);
-
+    let v: f32 = f * dot(ray.direction, q); // Berechne den Parameter v für baryzentrische Koordinaten
+    
+    // Wenn v außerhalb des Intervalls [0,1-u] liegt, gibt es keinen Treffer
     if v < 0.0 || u + v > 1.0 {
         return surfacePoint;
     }
 
-    let t: f32 = f * dot(edge_ac, q);
+    let t: f32 = f * dot(edge_ac, q); // Berechne den Abstand vom Ursprung des Strahls zum Trefferpunkt
 
-    if t > tMin && t < tMax {
-        let w: f32 = 1.0 - u - v; // Compute the third barycentric coordinate
-        // Interpolate normals based on barycentric coordinates
-        // https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
-        //surfacePoint.normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
-        surfacePoint.normal = n;
-        surfacePoint.material = tri.material;
-        surfacePoint.t = t;
-        surfacePoint.position = ray.origin + t * ray.direction;
-        surfacePoint.hit = true;
+    // Wenn t außerhalb des Intervalls [tMin, tMax] liegt, gibt es keinen Treffer
+    if t < tMin || t > tMax {
         return surfacePoint;
     }
 
+    // Berechne die normale am Schnittpunkt mit Interpolation der Normalen der Dreiecksecken
+    let normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
+    surfacePoint.normal = normalize((transpose(tri.inverseModel) * vec4(normal, 0.0)).xyz);
+    surfacePoint.material = tri.material;
+    surfacePoint.t = t;
+    surfacePoint.position = ray.origin + t * ray.direction;
+    surfacePoint.hit = true; // Es gibt einen Treffer
+
     return surfacePoint;
 }
+
+
 
 // Prüfe ob bounding box getroffen wurde
 fn hit_aabb(ray: Ray, node: Node) -> f32 {
