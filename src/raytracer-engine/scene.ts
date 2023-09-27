@@ -67,6 +67,8 @@ export class Scene {
   }
 
   buildBVH() {
+    console.time("Subdivision Time")
+
     var root = this.nodes[0]
     root.leftFirst = 0
     root.triCount = this.triangles.length
@@ -74,6 +76,8 @@ export class Scene {
 
     this.updateNodeBounds(0)
     this.subdivide(0)
+
+    console.timeEnd("Subdivision Time")
   }
 
   updateNodeBounds(nodeIndex: number) {
@@ -91,6 +95,7 @@ export class Scene {
     }
   }
 
+  // Teilen Knoten rekursiv
   subdivide(nodeIdx: number): void {
     const node = this.nodes[nodeIdx]
 

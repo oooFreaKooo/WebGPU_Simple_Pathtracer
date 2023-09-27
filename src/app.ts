@@ -20,35 +20,43 @@ export class Application {
     const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
     const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
     const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
-    const specularMaterial = new Material({ albedo: [0.6, 0.78, 0.56], smoothness: 1.0, specularChance: 0.02 })
+    const specularMaterial = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 1.0, specularChance: 0.02 })
     const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 1.0, specularChance: 1.0 })
+    const mirrorMaterial2 = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 0.95, specularChance: 1.0 })
     const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emission: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
     const objectsToLoad: ObjectProperties[] = [
       // Spheres
       {
-        modelPath: "./src/assets/models/sphere.obj",
-        material: specularMaterial,
-        position: [-1.5, 0.5, 1.0],
+        modelPath: "./src/assets/models/horse.obj",
+        material: whiteMaterial,
+        position: [1.5, 0.0, -1.5],
         scale: [1.0, 1.0, 1.0],
+        rotation: [0.0, -65.0, 0.0],
       },
       {
         modelPath: "./src/assets/models/sphere.obj",
         material: mirrorMaterial,
-        position: [1.0, 1.0, 0.5],
-        scale: [2.0, 2.0, 2.0],
+        position: [-1.5, 0.5, -1.5],
+        scale: [1.0, 1.0, 1.0],
       },
-      /* {
+      {
+        modelPath: "./src/assets/models/sphere.obj",
+        material: glowMaterial,
+        position: [0.25, 0.25, -1.75],
+        scale: [0.5, 0.5, 0.5],
+      },
+      {
         modelPath: "./src/assets/models/cube.obj",
-        material: mirrorMaterial,
+        material: mirrorMaterial2,
         position: [-0.75, 1.5, 0.75],
         scale: [0.75, 1.5, 0.75],
         rotation: [0.0, -20.0, 0.0],
-      }, */
+      },
       // Pyramid
       /*       {
-        modelPath: "./src/assets/models/pyramid.obj",
-        material: glowMaterial,
-        position: [1.0, 0.0, -1.0],
+        modelPath: "./src/assets/models/monkey.obj",
+        material: specularMaterial,
+        position: [1.0, 0.0, 1.0],
         scale: [1.0, 1.0, 1.0],
         rotation: [0.0, 28.0, 0.0],
       }, */
@@ -61,6 +69,7 @@ export class Application {
         rotation: [0.0, 180.0, 0.0],
       },*/
     ]
+
     const cornelbox = createCornellBox()
     await this.scene.createObjects(cornelbox)
 

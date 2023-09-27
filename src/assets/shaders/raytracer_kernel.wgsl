@@ -9,7 +9,6 @@ struct BVH {
     nodes: array<Node>,
 }
 
-
 struct ObjectIndices {
     primitiveIndices: array<f32>,
 }
@@ -83,6 +82,8 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let hit = traverse(ray);
 
         if !hit.hit {
+            //var textureSky = textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz;
+            //color = energy * textureSky;
             break;
         }
 
@@ -94,9 +95,9 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let diffuseDir = randomDirection(hit.normal, newSeed);
         let specularDir = reflect(ray.direction, hit.normal);
 
-        let isSpecular = f32(random(newSeed) < material.specularProbability);
+        let isSpecular = f32(random(newSeed) < material.specularProbability);   // Entscheiden ob diffus oder spekular
 
-        ray.direction = mix(diffuseDir, specularDir, material.smoothness * isSpecular);
+        ray.direction = mix(diffuseDir, specularDir, material.smoothness * isSpecular); // Mischungsgrad basiert auf glätte und indikator
 
         color += material.emission * material.emissionStrength * energy;
         energy *= mix(material.albedo, material.specular, isSpecular);
@@ -104,8 +105,9 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         // Russisches roulette: Wahrscheinlichkeit, dass der Strahl weiterhin Energie hat
         // https://www.cs.princeton.edu/courses/archive/fall06/cos526/lectures/montecarlo2.pdf
         let p = max(energy.r, max(energy.g, energy.b));
+        // Strahlen die wenig beitragen, werden abgebrochen
         // Je kleiner p ist, desto wahrscheinlicher ist es, dass es abgebrochen wird
-        if random(newSeed) >= p { // Breche ab, wenn der Zufallswert größer p ist
+        if random(newSeed) >= p {
             break;
         }
         energy *= (1.0 / p);  // Kompensiere die verlorene Energie
@@ -121,15 +123,15 @@ fn randomDirection(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f32> {
     let v = random(vec2(seed.y, seed.x + 1.0));
 
     // Sphärische Koordinaten
-    // Normalverteilung ist kosinus gewichtet: die generierten Vektoren werden in richtung der normalen zeigen
+    // Verteilung ist kosinus gewichtet: die generierten Vektoren zeigen wahrscheinlicher in richtung der normalen
     let theta = 2.0 * PI * u; // Azimutwinkel: Vollkreis im intervall 0 und 2pi
     let phi = asin(sqrt(v)); // Polarwinkel: vertikale richtung -pi/2 und pi/2. phi nah an 0 heißt vektor ist nah an horizontaler ebene
 
     let sin_phi = sin(phi);
-    // Kartesische Koordinaten: Vektor der in eine Zufällige richtung im Raum zeigt
+    // Kartesische Koordinaten: Vektoren die in eine Zufällige richtung im Raum zeigen
     let x = cos(theta) * sin_phi;
     let y = sin(theta) * sin_phi;
-    let z = cos(phi);
+    let z = cos(phi);   // von 0 bis pi/2 : Halbkugel
 
 
     // Einen up vektor erstellen der nicht parallel zur Normale ist

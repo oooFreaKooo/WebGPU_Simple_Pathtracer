@@ -37,17 +37,18 @@ export function createCornellBox(): ObjectProperties[] {
   const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
   const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
   const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emission: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
+  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 1.0, specularChance: 1.0 })
   return [
     // Ground
     {
-      modelPath: "./src/assets/models/ground.obj",
+      modelPath: "./src/assets/models/plane.obj",
       material: whiteMaterial,
       position: [0.0, 0.0, 0.0],
       scale: [0.5, 0.5, 0.5],
     },
     // Ceiling
     {
-      modelPath: "./src/assets/models/ground.obj",
+      modelPath: "./src/assets/models/plane.obj",
       material: whiteMaterial,
       position: [0.0, 5.0, 0.0],
       scale: [0.5, 0.5, 0.5],
@@ -55,7 +56,7 @@ export function createCornellBox(): ObjectProperties[] {
     },
     // Left wall
     {
-      modelPath: "./src/assets/models/ground.obj",
+      modelPath: "./src/assets/models/plane.obj",
       material: redMaterial,
       position: [-2.5, 2.5, 0.0],
       scale: [0.5, 1.0, 0.5],
@@ -63,7 +64,7 @@ export function createCornellBox(): ObjectProperties[] {
     },
     // Right wall
     {
-      modelPath: "./src/assets/models/ground.obj",
+      modelPath: "./src/assets/models/plane.obj",
       material: greenMaterial,
       position: [2.5, 2.5, 0.0],
       scale: [0.5, 1.0, 0.5],
@@ -71,15 +72,15 @@ export function createCornellBox(): ObjectProperties[] {
     },
     // Back wall
     {
-      modelPath: "./src/assets/models/ground.obj",
-      material: whiteMaterial,
+      modelPath: "./src/assets/models/plane.obj",
+      material: mirrorMaterial,
       position: [0.0, 2.5, 2.5],
       scale: [0.5, 1.0, 0.5],
       rotation: [90.0, 180.0, 0.0],
     },
     // Front wall
     {
-      modelPath: "./src/assets/models/ground.obj",
+      modelPath: "./src/assets/models/plane.obj",
       material: blueMaterial,
       position: [0.0, 2.5, -2.5],
       scale: [0.5, 1.0, 0.5],
