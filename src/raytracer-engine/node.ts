@@ -23,9 +23,19 @@ export class AABB {
     vec3.max(this.bmax, this.bmax, p)
   }
 
+  growByAABB(aabb: AABB): void {
+    vec3.min(this.bmin, this.bmin, aabb.bmin)
+    vec3.max(this.bmax, this.bmax, aabb.bmax)
+  }
+
   area(): number {
     const e = vec3.create()
     vec3.subtract(e, this.bmax, this.bmin)
     return e[0] * e[1] + e[1] * e[2] + e[2] * e[0]
   }
+}
+
+export class Bin {
+  bounds: AABB = new AABB()
+  triCount: number = 0
 }
