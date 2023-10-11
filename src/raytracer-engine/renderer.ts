@@ -428,8 +428,8 @@ export class Renderer {
 
       triangleData[triangleDataSize * i + 36] = tri.material.smoothness
       triangleData[triangleDataSize * i + 37] = tri.material.specularChance
-      triangleData[triangleDataSize * i + 38] = 0.0 // Padding
-      triangleData[triangleDataSize * i + 39] = 0.0 // Padding
+      triangleData[triangleDataSize * i + 38] = tri.material.ior
+      triangleData[triangleDataSize * i + 39] = tri.material.transparency
       // Adding inverseModel data to buffer
       for (let j = 0; j < 16; j++) {
         triangleData[triangleDataSize * i + 40 + j] = tri.inverseModel[j]

@@ -36,7 +36,10 @@ struct Material {
     emissionStrength: f32,
     smoothness: f32,
     specularProbability: f32,
+    ior: f32, // Index of Refraction
+    transparency: f32, // Amount of transparency (0.0 for opaque, 1.0 for fully transparent)
 }
+
 
 struct Triangle {
     corner_a: vec3f,
@@ -96,11 +99,22 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let specularDir = reflect(ray.direction, hit.normal);
 
         let isSpecular = f32(random(newSeed) < material.specularProbability);   // Entscheiden ob diffus oder spekular
+        let isTransparent = f32(random(newSeed) < material.transparency);
 
-        ray.direction = mix(diffuseDir, specularDir, material.smoothness * isSpecular); // Mischungsgrad basiert auf glätte und indikator
-
-        color += material.emission * material.emissionStrength * energy;
-        energy *= mix(material.albedo, material.specular, isSpecular);
+        if isTransparent > 0.0 {
+            let refractedDir = refract(ray.direction, hit.normal, material.ior);
+            if length(refractedDir) == 0.0 {
+                // Handle total internal reflection
+                ray.direction = specularDir;
+            } else {
+                ray.direction = refractedDir;
+            }
+            energy *= material.albedo;
+        } else {
+            ray.direction = mix(diffuseDir, specularDir, material.smoothness * isSpecular); // Mischungsgrad basiert auf glätte und indikator
+            color += material.emission * material.emissionStrength * energy;
+            energy *= mix(material.albedo, material.specular, isSpecular);
+        }
         
         // Russisches roulette: Wahrscheinlichkeit, dass der Strahl weiterhin Energie hat
         // https://www.cs.princeton.edu/courses/archive/fall06/cos526/lectures/montecarlo2.pdf
@@ -154,6 +168,31 @@ fn random(seed: vec2<f32>) -> f32 {
     return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+fn refract(i: vec3f, n: vec3f, eta: f32) -> vec3f {
+    var cosi = clamp(dot(i, n), -1.0, 1.0);
+    var etai = 1.0;
+    var etat = eta;
+    var ni = n;
+
+    if cosi < 0.0 {
+        cosi = -cosi;
+    } else {
+        let temp = etai;
+        etai = etat;
+        etat = temp;
+        ni = -n;
+    }
+
+    let etaRatio = etai / etat;
+    let k = 1.0 - etaRatio * etaRatio * (1.0 - cosi * cosi);
+
+    // Total internal reflection
+    if k < 0.0 {
+        return vec3(0.0, 0.0, 0.0);
+    }
+
+    return etaRatio * i + (etaRatio * abs(cosi) - sqrt(k)) * n;
+}
 
 
 fn traverse(ray: Ray) -> SurfacePoint {

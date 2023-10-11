@@ -37,7 +37,7 @@ export function createCornellBox(): ObjectProperties[] {
   const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
   const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
   const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emission: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
-  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 1.0, specularChance: 1.0 })
+  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 0.95, specularChance: 1.0 })
   return [
     // Ground
     {

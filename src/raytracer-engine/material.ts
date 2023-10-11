@@ -7,6 +7,8 @@ interface MaterialOptions {
   emissionStrength?: number
   smoothness?: number
   specularChance?: number
+  ior?: number // Index of Refraction
+  transparency?: number // Amount of transparency (0.0 for opaque, 1.0 for fully transparent)
 }
 
 export class Material {
@@ -16,6 +18,8 @@ export class Material {
   emissionStrength: number
   smoothness: number
   specularChance: number
+  ior: number // Index of Refraction
+  transparency: number // Amount of transparency
 
   constructor(options: MaterialOptions = {}) {
     const defaults: MaterialOptions = {
@@ -25,6 +29,8 @@ export class Material {
       emissionStrength: 0.0,
       smoothness: 0.0,
       specularChance: 0.0,
+      ior: 1.0, // Default value for Index of Refraction (like air)
+      transparency: 0.0, // Default value for transparency (opaque)
     }
 
     const finalOptions = { ...defaults, ...options }
@@ -35,5 +41,7 @@ export class Material {
     this.emissionStrength = finalOptions.emissionStrength!
     this.smoothness = finalOptions.smoothness!
     this.specularChance = finalOptions.specularChance!
+    this.ior = finalOptions.ior!
+    this.transparency = finalOptions.transparency!
   }
 }
