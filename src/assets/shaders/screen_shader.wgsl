@@ -25,7 +25,9 @@ fn frag_main(@location(0) TexCoord: vec2<f32>) -> @location(0) vec4<f32> {
 
 
     color = accum_color / f32(params.frameCount + 1u);
-
+    color.r = ACESFilmChannel(color.r);
+    color.g = ACESFilmChannel(color.g);
+    color.b = ACESFilmChannel(color.b);
 
     // sRGB-mapping
     color.r = linear_to_srgb(color.r);
@@ -34,6 +36,15 @@ fn frag_main(@location(0) TexCoord: vec2<f32>) -> @location(0) vec4<f32> {
 
     return color;
 }
+fn ACESFilmChannel(x: f32) -> f32 {
+    let a: f32 = 2.51;
+    let b: f32 = 0.03;
+    let c: f32 = 2.43;
+    let d: f32 = 0.59;
+    let e: f32 = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
 
 fn linear_to_srgb(x: f32) -> f32 {
     if x <= 0.0031308 {

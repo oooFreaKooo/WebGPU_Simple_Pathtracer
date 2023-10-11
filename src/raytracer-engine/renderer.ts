@@ -128,7 +128,7 @@ export class Renderer {
     this.sceneParameters = this.device.createBuffer(parameterBufferDescriptor)
 
     const triangleBufferDescriptor: GPUBufferDescriptor = {
-      size: 224 * this.scene.triangles.length,
+      size: 260 * this.scene.triangles.length,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     }
     this.triangleBuffer = this.device.createBuffer(triangleBufferDescriptor)
@@ -146,12 +146,12 @@ export class Renderer {
     this.triangleIndexBuffer = this.device.createBuffer(triangleIndexBufferDescriptor)
 
     const urls = [
-      "./src/assets/textures/skybox/right3.png",
-      "./src/assets/textures/skybox/left3.png",
-      "./src/assets/textures/skybox/top3.png",
-      "./src/assets/textures/skybox/bottom3.png",
-      "./src/assets/textures/skybox/front3.png",
-      "./src/assets/textures/skybox/back3.png",
+      "./src/assets/textures/skybox/right4.png",
+      "./src/assets/textures/skybox/left4.png",
+      "./src/assets/textures/skybox/top4.png",
+      "./src/assets/textures/skybox/bottom4.png",
+      "./src/assets/textures/skybox/front4.png",
+      "./src/assets/textures/skybox/back4.png",
     ]
 
     this.sky_texture = new CubeMapMaterial()
@@ -394,7 +394,7 @@ export class Renderer {
   }
 
   updateTriangleData() {
-    const triangleDataSize = 56
+    const triangleDataSize = 44 + 16
 
     const triangleData: Float32Array = new Float32Array(triangleDataSize * this.scene.triangles.length)
     for (let i = 0; i < this.scene.triangles.length; i++) {
@@ -414,25 +414,31 @@ export class Renderer {
       triangleData[triangleDataSize * i + 24] = tri.material.albedo[0]
       triangleData[triangleDataSize * i + 25] = tri.material.albedo[1]
       triangleData[triangleDataSize * i + 26] = tri.material.albedo[2]
-      triangleData[triangleDataSize * i + 27] = 0.0 // Padding
+      triangleData[triangleDataSize * i + 27] = tri.material.specularChance
 
-      triangleData[triangleDataSize * i + 28] = tri.material.specular[0]
-      triangleData[triangleDataSize * i + 29] = tri.material.specular[1]
-      triangleData[triangleDataSize * i + 30] = tri.material.specular[2]
-      triangleData[triangleDataSize * i + 31] = 0.0 // Padding
+      triangleData[triangleDataSize * i + 28] = tri.material.specularColor[0]
+      triangleData[triangleDataSize * i + 29] = tri.material.specularColor[1]
+      triangleData[triangleDataSize * i + 30] = tri.material.specularColor[2]
+      triangleData[triangleDataSize * i + 31] = tri.material.specularRoughness
 
-      triangleData[triangleDataSize * i + 32] = tri.material.emission[0]
-      triangleData[triangleDataSize * i + 33] = tri.material.emission[1]
-      triangleData[triangleDataSize * i + 34] = tri.material.emission[2]
+      triangleData[triangleDataSize * i + 32] = tri.material.emissionColor[0]
+      triangleData[triangleDataSize * i + 33] = tri.material.emissionColor[1]
+      triangleData[triangleDataSize * i + 34] = tri.material.emissionColor[2]
       triangleData[triangleDataSize * i + 35] = tri.material.emissionStrength
 
-      triangleData[triangleDataSize * i + 36] = tri.material.smoothness
-      triangleData[triangleDataSize * i + 37] = tri.material.specularChance
-      triangleData[triangleDataSize * i + 38] = tri.material.ior
-      triangleData[triangleDataSize * i + 39] = tri.material.transparency
+      triangleData[triangleDataSize * i + 36] = tri.material.refractionColor[0]
+      triangleData[triangleDataSize * i + 37] = tri.material.refractionColor[1]
+      triangleData[triangleDataSize * i + 38] = tri.material.refractionColor[2]
+      triangleData[triangleDataSize * i + 39] = tri.material.refractionChance
+
+      triangleData[triangleDataSize * i + 40] = tri.material.refractionRoughness
+      triangleData[triangleDataSize * i + 41] = tri.material.ior
+      triangleData[triangleDataSize * i + 42] = 0.0
+      triangleData[triangleDataSize * i + 43] = 0.0
+
       // Adding inverseModel data to buffer
       for (let j = 0; j < 16; j++) {
-        triangleData[triangleDataSize * i + 40 + j] = tri.inverseModel[j]
+        triangleData[triangleDataSize * i + 44 + j] = tri.inverseModel[j]
       }
     }
 

@@ -31,13 +31,15 @@ struct SceneData {
 
 struct Material {
     albedo: vec3f,
-    specular: vec3f,
-    emission: vec3f,
+    specularChance: f32,
+    specularColor: vec3f,
+    specularRoughness: f32,
+    emissionColor: vec3f,
     emissionStrength: f32,
-    smoothness: f32,
-    specularProbability: f32,
-    ior: f32, // Index of Refraction
-    transparency: f32, // Amount of transparency (0.0 for opaque, 1.0 for fully transparent)
+    refractionColor: vec3f,
+    refractionChance: f32,
+    refractionRoughness: f32,
+    ior: f32, //Index of Refraction
 }
 
 
@@ -59,9 +61,10 @@ struct ObjectData {
 struct SurfacePoint {
     material: Material,
     position: vec3f,
-    t: f32,
+    dist: f32,
     normal: vec3f,
     hit: bool,
+    inside: bool,
 }
 
 
@@ -73,11 +76,12 @@ struct SurfacePoint {
 @group(0) @binding(5) var skyTexture : texture_cube<f32>;
 @group(0) @binding(6) var skySampler : sampler;
 
-const EPSILON : f32 = 1e-5;
+const EPSILON : f32 = 0.00001;
 const PI : f32 = 3.14159265358979323846;
-
+//https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-camera/
 fn trace(camRay: Ray, seed: f32) -> vec3f {
     var ray = camRay;
+
     var color: vec3f = vec3(0.0, 0.0, 0.0);
     var energy = vec3(1.0, 1.0, 1.0);
 
@@ -85,113 +89,192 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let hit = traverse(ray);
 
         if !hit.hit {
-            //var textureSky = textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz;
-            //color = energy * textureSky;
+            var textureSky = sRGBToLinear(textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz);
+            color = textureSky;
             break;
         }
-
         let material = hit.material;
-        let newSeed = vec2(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
-        ray.origin = hit.position;
-        // Diffuse und spiegelnde Richtung
-        // https://github.com/SebLague/Ray-Tracing/blob/main/Assets/Scripts/Shaders/RayTracing.shader
-        let diffuseDir = randomDirection(hit.normal, newSeed);
-        let specularDir = reflect(ray.direction, hit.normal);
 
-        let isSpecular = f32(random(newSeed) < material.specularProbability);   // Entscheiden ob diffus oder spekular
-        let isTransparent = f32(random(newSeed) < material.transparency);
 
-        if isTransparent > 0.0 {
-            let refractedDir = refract(ray.direction, hit.normal, material.ior);
-            if length(refractedDir) == 0.0 {
-                // Handle total internal reflection
-                ray.direction = specularDir;
-            } else {
-                ray.direction = refractedDir;
-            }
-            energy *= material.albedo;
-        } else {
-            ray.direction = mix(diffuseDir, specularDir, material.smoothness * isSpecular); // Mischungsgrad basiert auf glätte und indikator
-            color += material.emission * material.emissionStrength * energy;
-            energy *= mix(material.albedo, material.specular, isSpecular);
+        //Absorbiere die energie wenn wir von innen treffen
+        if hit.inside {
+            energy *= exp(-material.refractionColor * hit.dist);//berechne die Basis des natürlichen Logarithmus (e) hoch einer gegebenen Zahl
         }
-        
-        // Russisches roulette: Wahrscheinlichkeit, dass der Strahl weiterhin Energie hat
-        // https://www.cs.princeton.edu/courses/archive/fall06/cos526/lectures/montecarlo2.pdf
+
+        var specularChance = material.specularChance;
+        var refractionChance = material.refractionChance;
+
+        //take fresnel into account for specularChance and adjust other chances.
+        //specular takes priority.
+        //chanceMultiplier makes sure we keep diffuse / refraction ratio the same.
+        var rayProbability = 1.0;
+        let newSeed = vec2(hit.position.zx + vec2<f32 >(hit.position.y, seed + f32(bounce)));
+        let randomFloat: f32 = random(newSeed);
+        if specularChance > randomFloat {
+            var ior1 = 0.0;
+            var ior2 = 0.0;
+
+            if hit.inside {
+                ior1 = material.ior;
+                ior2 = 1.0;
+            } else {
+                ior1 = 1.0;
+                ior2 = material.ior;
+            }
+
+            specularChance = FresnelReflectAmount(ior1, ior2, hit.normal, ray.direction, material.specularChance, 1.0);
+
+            let chanceMultiplier: f32 = (1.0 - specularChance) / (1.0 - material.specularChance);
+            refractionChance *= chanceMultiplier;
+        }
+
+
+
+        //calculate whether we are going to do a diffuse, specular, or refractive ray
+        var doSpecular: f32 = 0.0;
+        var doRefraction: f32 = 0.0;
+
+
+        if randomFloat < specularChance {
+            doSpecular = 1.0;
+            rayProbability = specularChance;
+        } else if randomFloat < (specularChance + refractionChance) {
+            doRefraction = 1.0;
+            rayProbability = refractionChance;
+        } else {
+            rayProbability = 1.0 - (specularChance + refractionChance);
+        }
+
+        //numerical problems can cause rayProbability to become small enough to cause a divide by zero.
+        rayProbability = max(rayProbability, 0.001);
+
+        //update the ray position
+        if doRefraction == 1.0 {
+            ray.origin = hit.position - hit.normal * EPSILON;
+        } else {
+            ray.origin = hit.position + hit.normal * EPSILON;
+        }
+
+        //Calculate a new ray direction.
+        //Diffuse uses a normal oriented cosine weighted hemisphere sample.
+        //Perfectly smooth specular uses the reflection ray.
+        //Rough (glossy) specular lerps from the smooth specular to the rough diffuse by the material roughness squared
+        //Squaring the roughness is just a convention to make roughness feel more linear perceptually.
+        let diffuseDir = randomDirection(hit.normal, newSeed);
+        //let diffuseDir = normalize(hit.normal + RandomUnitVector(newSeed));
+
+        var specularDir = reflect(ray.direction, hit.normal);
+
+
+        var iorValue: f32 = 0.0;
+        if hit.inside {
+            iorValue = material.ior;
+        } else {
+            iorValue = 1.0 / material.ior;
+        }
+
+        var refractionRayDir: vec3<f32> = refract(ray.direction, hit.normal, iorValue);
+
+        let randomDirection: vec3<f32> = randomDirection(-hit.normal, newSeed);
+        //let randomDirection = normalize(-hit.normal + RandomUnitVector(newSeed));
+
+        refractionRayDir = normalize(mix(refractionRayDir, randomDirection, material.refractionRoughness * material.refractionRoughness));
+
+        ray.direction = mix(diffuseDir, specularDir, material.specularRoughness * material.specularRoughness * doSpecular);
+        ray.direction = mix(ray.direction, refractionRayDir, doRefraction);
+
+        //add in emissive lighting
+        color += material.emissionColor * material.emissionStrength * energy;
+
+        //update the colorMultiplier. refraction doesn't alter the color until we hit the next thing, so we can do light absorption over distance.
+        if doRefraction == 0.0 {
+            energy *= mix(material.albedo, material.specularColor, doSpecular);
+        }
+
+        //since we chose randomly between diffuse, specular, refract,
+        //we need to account for the times we didn't do one or the other.
+        energy /= rayProbability;
+
+
+        //Russian Roulette
+        //As the energy gets smaller, the ray is more likely to get terminated early.
+        //Survivors have their value boosted to make up for fewer samples being in the average.
+
+        //https://www.cs.princeton.edu/courses/archive/fall06/cos526/lectures/montecarlo2.pdf
+
         let p = max(energy.r, max(energy.g, energy.b));
-        // Strahlen die wenig beitragen, werden abgebrochen
-        // Je kleiner p ist, desto wahrscheinlicher ist es, dass es abgebrochen wird
-        if random(newSeed) >= p {
+        if random(newSeed) > p {
             break;
         }
-        energy *= (1.0 / p);  // Kompensiere die verlorene Energie
+        energy *= (1.0 / p);//Kompensiere die verlorene Energie
+
+        //Diffuse und spiegelnde Richtung
+        //https://github.com/SebLague/Ray-Tracing/blob/main/Assets/Scripts/Shaders/RayTracing.shader
     }
 
     return color;
 }
 
+fn FresnelReflectAmount(n1: f32, n2: f32, normal: vec3<f32>, incident: vec3<f32>, f0: f32, f90: f32) -> f32 {
+    //Schlick approximation
+    var r0: f32 = (n1 - n2) / (n1 + n2);
+    r0 *= r0;
+    var cosX: f32 = -dot(normal, incident);
 
-// https://my.eng.utah.edu/~cs6965/slides/pathtrace.pdf
+    if n1 > n2 {
+        let n: f32 = n1 / n2;
+        let sinT2: f32 = n * n * (1.0 - cosX * cosX);
+        //Total internal reflection
+        if sinT2 > 1.0 {
+            return f90;
+        }
+
+        cosX = sqrt(1.0 - sinT2);
+    }
+
+    let x: f32 = 1.0 - cosX;
+    let ret: f32 = r0 + (1.0 - r0) * x * x * x * x * x;
+
+    //adjust reflect multiplier for object reflectivity
+    return mix(f0, f90, ret);
+}
+
+
+//https://my.eng.utah.edu/~cs6965/slides/pathtrace.pdf
 fn randomDirection(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f32> {
     let u = random(seed);
     let v = random(vec2(seed.y, seed.x + 1.0));
 
-    // Sphärische Koordinaten
-    // Verteilung ist kosinus gewichtet: die generierten Vektoren zeigen wahrscheinlicher in richtung der normalen
-    let theta = 2.0 * PI * u; // Azimutwinkel: Vollkreis im intervall 0 und 2pi
-    let phi = asin(sqrt(v)); // Polarwinkel: vertikale richtung -pi/2 und pi/2. phi nah an 0 heißt vektor ist nah an horizontaler ebene
+    //Sphärische Koordinaten
+    //Verteilung ist kosinus gewichtet: die generierten Vektoren zeigen wahrscheinlicher in richtung der normalen
+    let theta = 2.0 * PI * u; //Azimutwinkel : Vollkreis im intervall 0 und 2pi
+    let phi = asin(sqrt(v));//Polarwinkel: vertikale richtung -pi/2 und pi/2. phi nah an 0 heißt vektor ist nah an horizontaler ebene
 
     let sin_phi = sin(phi);
-    // Kartesische Koordinaten: Vektoren die in eine Zufällige richtung im Raum zeigen
+    //Kartesische Koordinaten: Vektoren die in eine Zufällige richtung im Raum zeigen
     let x = cos(theta) * sin_phi;
     let y = sin(theta) * sin_phi;
-    let z = cos(phi);   // von 0 bis pi/2 : Halbkugel
+    let z = cos(phi);   //von 0 bis pi/2 : Halbkugel
 
 
-    // Einen up vektor erstellen der nicht parallel zur Normale ist
+    //Einen up vektor erstellen der nicht parallel zur Normale ist
     let xSmallest = f32(abs(normal.x) < abs(normal.y) && abs(normal.x) < abs(normal.z)); // 1 oder 0
     let ySmallest = f32(abs(normal.y) < abs(normal.z) && abs(normal.x) >= abs(normal.y)); // 1 oder 0
     let up = vec3(xSmallest, ySmallest, 1.0 - xSmallest - ySmallest);
 
-    // Orthonormalbasis: zwei vektoren die senkrecht zur normale stehen (kreuzprodukt)
+    //Orthonormalbasis: zwei vektoren die senkrecht zur normale stehen (kreuzprodukt)
     let tangent = normalize(cross(up, normal));
     let bitangent = cross(normal, tangent);
 
-    // Basisvektoren werden mit den karthesischen koordinaten kombiniert
+    //Basisvektoren werden mit den karthesischen koordinaten kombiniert
     let dir = tangent * x + bitangent * y + normal * z;
     return normalize(dir);
 }
 
-// Zahl zwischen 0 und 1
-// https://thebookofshaders.com/10/
+//Zahl zwischen 0 und 1
+//https://thebookofshaders.com/10/
 fn random(seed: vec2<f32>) -> f32 {
     return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
-}
-
-fn refract(i: vec3f, n: vec3f, eta: f32) -> vec3f {
-    var cosi = clamp(dot(i, n), -1.0, 1.0);
-    var etai = 1.0;
-    var etat = eta;
-    var ni = n;
-
-    if cosi < 0.0 {
-        cosi = -cosi;
-    } else {
-        let temp = etai;
-        etai = etat;
-        etat = temp;
-        ni = -n;
-    }
-
-    let etaRatio = etai / etat;
-    let k = 1.0 - etaRatio * etaRatio * (1.0 - cosi * cosi);
-
-    // Total internal reflection
-    if k < 0.0 {
-        return vec3(0.0, 0.0, 0.0);
-    }
-
-    return etaRatio * i + (etaRatio * abs(cosi) - sqrt(k)) * n;
 }
 
 
@@ -250,14 +333,14 @@ fn traverse(ray: Ray) -> SurfacePoint {
                 );
 
                 if newSurfacePoint.hit {
-                    nearestHit = newSurfacePoint.t;
+                    nearestHit = newSurfacePoint.dist;
                     surfacePoint = newSurfacePoint;
                 }
             }
 
 
             if stackLocation == 0u {
-            break;
+                break;
             } else {
                 stackLocation -= 1u;
                 currentNode = stack[stackLocation];
@@ -268,7 +351,7 @@ fn traverse(ray: Ray) -> SurfacePoint {
     return surfacePoint;
 }
 
-// https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
+//https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
 fn hit_triangle(
     ray: Ray,
     tri: Triangle,
@@ -278,73 +361,95 @@ fn hit_triangle(
 ) -> SurfacePoint {
     var surfacePoint: SurfacePoint;
     surfacePoint.hit = false;
+    surfacePoint.inside = false;
     surfacePoint.material = oldSurfacePoint.material;
 
-    // Kanten des Dreiecks vom Punkt A
+    //Kanten des Dreiecks vom Punkt A
     let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
     let edge_ac: vec3<f32> = tri.corner_c - tri.corner_a;
-    
-    // h ist das Kreuzprodukt der Richtung des Strahls und einer Kante des Dreiecks
-    let h: vec3<f32> = cross(ray.direction, edge_ac); // Vektor senkrecht zu Dreiecks ebene
-    let a: f32 = dot(edge_ab, h); // Skalarprodukt: Wenn a nahe 0 ist, dann ist h fast parallel zur Kante
 
-    if a < 0.00001 {
+    //h ist das Kreuzprodukt der Richtung des Strahls und einer Kante des Dreiecks
+    let h: vec3<f32> = cross(ray.direction, edge_ac); // Vektor senkrecht zu Dreiecks ebene
+    let a: f32 = dot(edge_ab, h); //Skalarprodukt : Wenn a nahe 0 ist, dann ist h fast parallel zur Kante
+
+    if a < EPSILON {
         return surfacePoint;
     }
 
     let f: f32 = 1.0 / a; // Kehrwert von a
-    let s: vec3<f32> = ray.origin - tri.corner_a; // S: Vektor vom Ursprung des Strahls zu einer Ecke des Dreiecks
-    let u: f32 = f * dot(s, h); // U: Parameter für baryzentrische Koordinaten
-    
-    // Wenn u außerhalb des Intervalls [0,1] liegt, gibt es keinen Treffer
+    let s: vec3<f32> = ray.origin - tri.corner_a; // Vektor vom Ursprung des Strahls zu einer Ecke des Dreiecks
+    let u: f32 = f * dot(s, h);//U: Parameter für baryzentrische Koordinaten
+
+    //Wenn u außerhalb des Intervalls [0,1] liegt, gibt es keinen Treffer
     if u < 0.0 || u > 1.0 {
         return surfacePoint;
     }
 
     let q: vec3<f32> = cross(s, edge_ab);
-    let v: f32 = f * dot(ray.direction, q); // Berechne den Parameter v für baryzentrische Koordinaten
-    
-    // Wenn v außerhalb des Intervalls [0,1-u] liegt, gibt es keinen Treffer
+    let v: f32 = f * dot(ray.direction, q);//Berechne den Parameter v für baryzentrische Koordinaten
+
+    //Wenn v außerhalb des Intervalls [0,1-u] liegt, gibt es keinen Treffer
     if v < 0.0 || u + v > 1.0 {
         return surfacePoint;
     }
 
-    let t: f32 = f * dot(edge_ac, q); // Berechne den Abstand vom Ursprung des Strahls zum Trefferpunkt
+    let dist: f32 = f * dot(edge_ac, q); //Berechne den Abstand vom Ursprung des Strahls zum Trefferpunkt
 
-    // Wenn t außerhalb des Intervalls [tMin, tMax] liegt, gibt es keinen Treffer
-    if t < tMin || t > tMax {
+    //Wenn t außerhalb des Intervalls [tMin, tMax] liegt, gibt es keinen Treffer
+    if dist < tMin || dist > tMax {
         return surfacePoint;
     }
 
-    // Berechne die normale am Schnittpunkt mit Interpolation der Normalen der Dreiecksecken
+    //Berechne die normale am Schnittpunkt mit Interpolation der Normalen der Dreiecksecken
     let normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
     surfacePoint.normal = normalize((transpose(tri.inverseModel) * vec4(normal, 0.0)).xyz);
+
+    //Check if the ray intersects from the inside
+    if dot(ray.direction, surfacePoint.normal) > 0.0 {
+        surfacePoint.inside = true;
+    } else {
+        surfacePoint.inside = false;
+    }
+
+
     surfacePoint.material = tri.material;
-    surfacePoint.t = t;
-    surfacePoint.position = ray.origin + t * ray.direction;
-    surfacePoint.hit = true; // Es gibt einen Treffer
+    surfacePoint.dist = dist;
+    surfacePoint.position = ray.origin + ray.direction * dist;
+    surfacePoint.hit = true;//Es gibt einen Treffer
 
     return surfacePoint;
 }
 
+fn sRGBToLinear(sRGBColor: vec3<f32>) -> vec3<f32> {
+    var linearColor: vec3<f32>;
+
+    for (var i = 0u; i < 3u; i = i + 1u) {
+        if sRGBColor[i] <= 0.04045 {
+            linearColor[i] = sRGBColor[i] / 12.92;
+        } else {
+            linearColor[i] = pow((sRGBColor[i] + 0.055) / 1.055, 2.4);
+        }
+    }
+    return linearColor;
+}
 
 
-// Prüfe ob bounding box getroffen wurde
+//Prüfe ob bounding box getroffen wurde
 fn hit_aabb(ray: Ray, node: Node) -> f32 {
-    // Inverse Richtung des strahls berechnen um divisionen im code zu vermeiden (rechenzeit vebessern)
+    //Inverse Richtung des strahls berechnen um divisionen im code zu vermeiden (rechenzeit vebessern)
     var inverseDir: vec3<f32> = vec3(1.0) / ray.direction;
-    // Berechnung der t werte (bei welchen Wert(distanz) trifft unser Strahl unsere bounding box achse?)
+    //Berechnung der t werte (bei welchen Wert(distanz) trifft unser Strahl unsere bounding box achse?)
     var t1: vec3<f32> = (node.minCorner - ray.origin) * inverseDir;
     var t2: vec3<f32> = (node.maxCorner - ray.origin) * inverseDir;
-    // Sicherstellen dass tMin immer den kleineren und tMax den größeren Wert für jede Achse enthält. (zB bei negativer Stahrrichtung)
+    //Sicherstellen dass tMin immer den kleineren und tMax den größeren Wert für jede Achse enthält. (zB bei negativer Stahrrichtung)
     var tMin: vec3<f32> = min(t1, t2);
     var tMax: vec3<f32> = max(t1, t2);
-    // Bestimmen den größten minimalen wert (sicherstellen dass der Stahl tatsächlich in der Box ist und durch alle 3 Seiten ging)
+    //Bestimmen den größten minimalen wert (sicherstellen dass der Stahl tatsächlich in der Box ist und durch alle 3 Seiten ging)
     var t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
-    // Bestimme den kleinsten maximalen Wert (Wann der strahl unsere bounding box verlässt)
+    //Bestimme den kleinsten maximalen Wert (Wann der strahl unsere bounding box verlässt)
     var t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
-    // Prüfen ob der Schnittpunkt gültig ist. eintrittspunkt muss kleiner als der ausstrittspunkt sein. 
+    //Prüfen ob der Schnittpunkt gültig ist. eintrittspunkt muss kleiner als der ausstrittspunkt sein.
     //Und wenn t_max kleiner null ist der punkt hinter dem strahl ursprung.
     if t_min > t_max || t_max < 0.0 {
         return 99999.0;
@@ -360,7 +465,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
 
     let aspect_ratio: f32 = f32(screen_size.x) / f32(screen_size.y);
     let tanHalfFOV: f32 = tan(scene.cameraFOV * 0.5);
-    let halfScreenSize: vec2<f32> = vec2<f32>(screen_size) * 0.5;
+    let halfScreenSize: vec2<f32> = vec2<f32 >(screen_size) * 0.5;
 
     let forwards: vec3f = scene.cameraForwards;
     let right: vec3f = scene.cameraRight;
@@ -371,8 +476,8 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     var seed: f32 = scene.time / 25236.3;
     var myRay: Ray;
     for (var i: u32 = 0u; i < num_samples; i++) {
-        let jitter: vec2<f32> = (random(vec2<f32>(seed, f32(i))) - 0.5) / vec2<f32>(screen_size);
-        let screen_jittered: vec2<f32> = vec2<f32>(screen_pos) + jitter - halfScreenSize;
+        let jitter: vec2<f32> = (random(vec2<f32 >(seed, f32(i))) - 0.5) / vec2<f32 >(screen_size);
+        let screen_jittered: vec2<f32> = vec2<f32 >(screen_pos) + jitter - halfScreenSize;
         let horizontal_coefficient: f32 = tanHalfFOV * screen_jittered.x / f32(screen_size.x);
         let vertical_coefficient: f32 = tanHalfFOV * screen_jittered.y / (f32(screen_size.y) * aspect_ratio);
 
@@ -382,5 +487,5 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     }
     var textureSky = textureSampleLevel(skyTexture, skySampler, myRay.direction, 0.0).xyz;
     var pixel_color: vec3f = accumulated_color / f32(num_samples);
-    textureStore(color_buffer, screen_pos, vec4<f32>(pixel_color, 1.0));
+    textureStore(color_buffer, screen_pos, vec4<f32 >(pixel_color, 1.0));
 }

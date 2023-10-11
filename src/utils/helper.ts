@@ -36,8 +36,8 @@ export function createCornellBox(): ObjectProperties[] {
   const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
   const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
   const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
-  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emission: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
-  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], smoothness: 0.95, specularChance: 1.0 })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
+  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.95, specularChance: 1.0 })
   return [
     // Ground
     {
@@ -73,7 +73,7 @@ export function createCornellBox(): ObjectProperties[] {
     // Back wall
     {
       modelPath: "./src/assets/models/plane.obj",
-      material: mirrorMaterial,
+      material: whiteMaterial,
       position: [0.0, 2.5, 2.5],
       scale: [0.5, 1.0, 0.5],
       rotation: [90.0, 180.0, 0.0],
@@ -86,11 +86,46 @@ export function createCornellBox(): ObjectProperties[] {
       scale: [0.5, 1.0, 0.5],
       rotation: [90.0, 0.0, 0.0],
     },
+    // Lamp
     {
-      modelPath: "./src/assets/models/cylinder.obj",
+      modelPath: "./src/assets/models/plane.obj",
       material: glowMaterial,
-      position: [0.0, 4.95, 0.0],
-      scale: [0.75, 0.05, 0.75],
+      position: [0.0, 4.99, 0.0],
+      scale: [0.15, 1.0, 0.15],
+    },
+  ]
+}
+
+export function createBasic(): ObjectProperties[] {
+  const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
+  const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
+  const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
+  const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
+  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.95, specularChance: 1.0 })
+  return [
+    // Ground
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: new Material(),
+      position: [0.0, 0.0, 0.0],
+      scale: [1.0, 1.0, 0.25],
+    },
+    // Back wall
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: whiteMaterial,
+      position: [0.0, 1.0, 1.2],
+      scale: [1.0, 1.0, 0.15],
+      rotation: [90.0, 180.0, 0.0],
+    },
+    // Lamp
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: glowMaterial,
+      position: [0.0, 4.99, 0.0],
+      scale: [0.15, 1.0, 0.15],
+      rotation: [0.0, 0.0, 180.0],
     },
   ]
 }
