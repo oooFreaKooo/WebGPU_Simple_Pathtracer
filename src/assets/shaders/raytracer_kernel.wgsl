@@ -33,7 +33,7 @@ struct Material {
     albedo: vec3f,
     specularChance: f32,
     specularColor: vec3f,
-    specularRoughness: f32,
+    specularSmoothness: f32,
     emissionColor: vec3f,
     emissionStrength: f32,
     refractionColor: vec3f,
@@ -64,7 +64,7 @@ struct SurfacePoint {
     dist: f32,
     normal: vec3f,
     hit: bool,
-    inside: bool,
+    front_face: bool,
 }
 
 
@@ -74,12 +74,155 @@ struct SurfacePoint {
 @group(0) @binding(3) var<storage, read> tree : BVH;
 @group(0) @binding(4) var<storage, read> triangleLookup : ObjectIndices;
 @group(0) @binding(5) var skyTexture : texture_cube<f32>;
-@group(0) @binding(6) var skySampler : sampler;
+@group(0) @binding(6) var textureSampler : sampler;
 
 const EPSILON : f32 = 0.00001;
 const PI : f32 = 3.14159265358979323846;
-//https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-camera/
+
+
+// Ray tracing function to compute the color of a ray as it bounces through the scene.
 fn trace(camRay: Ray, seed: f32) -> vec3f {
+    var ray = camRay;
+    var accumulatedColor: vec3f = vec3(0.0, 0.0, 0.0);
+    var energy = vec3(1.0, 1.0, 1.0);
+
+    for (var bounce: u32 = 0u; bounce < u32(scene.maxBounces); bounce++) {
+        let hit = traverse(ray);
+
+        if !hit.hit {
+            accumulatedColor += energy * sRGBToLinear(textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz);
+            break;
+        }
+
+        let material = hit.material;
+        let newSeed = vec2(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
+        let randomFloat: f32 = random(newSeed);
+
+        let specularChance = fresnelReflect2(ray.direction, hit.normal, material.specularChance);
+        let refractionChance = (1.0 - specularChance) * material.refractionChance;
+
+        var rayType = 0; // 0: diffuse, 1: specular, 2: refractive
+        if (specularChance > 0.0) && (randomFloat < specularChance) {
+            rayType = 1;
+        } else if (refractionChance > 0.0) && (randomFloat < (specularChance + refractionChance)) {
+            rayType = 2;
+        }
+
+        ray.origin = hit.position + hit.normal * select(0.001, -0.001, rayType == 2);
+
+        let diffuseDir = CosineWeightedHemisphereSample(hit.normal, newSeed);
+        let specularDir = reflect(ray.direction, hit.normal);
+        var refractDir = refract(ray.direction, hit.normal, 1.0 / material.ior);
+
+        let randomDirection: vec3<f32> = CosineWeightedHemisphereSample(-hit.normal, newSeed);
+        refractDir = normalize(mix(refractDir, randomDirection, material.refractionRoughness * material.refractionRoughness));
+
+        ray.direction = mix(diffuseDir, specularDir, material.specularSmoothness * material.specularSmoothness * f32(rayType == 1));
+        ray.direction = mix(ray.direction, refractDir, f32(rayType == 2));
+
+        accumulatedColor += material.emissionColor * material.emissionStrength * energy;
+        energy *= select(mix(material.albedo, material.specularColor, f32(rayType == 1)), material.refractionColor, rayType == 2);
+
+        let p = max(energy.r, max(energy.g, energy.b));
+        if random(newSeed) > p {
+            break;
+        }
+        energy *= (1.0 / p);
+    }
+
+    return accumulatedColor;
+}
+
+
+
+
+
+fn trace2(camRay: Ray, seed: f32) -> vec3f {
+    var ray = camRay;
+    var color: vec3f = vec3(0.0, 0.0, 0.0);
+    var energy = vec3(1.0, 1.0, 1.0);
+
+    for (var bounce: u32 = 0u; bounce < u32(scene.maxBounces); bounce++) {
+        let hit = traverse(ray);
+
+        if !hit.hit {
+            color = energy * sRGBToLinear(textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz);
+            break;
+        }
+
+        let material = hit.material;
+
+        var specularChance = material.specularChance;
+        var refractionChance = material.refractionChance;
+
+        // Adjust chances based on Fresnel effect
+        var rayProbability = 1.0;
+        let newSeed = vec2(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
+        let randomFloat: f32 = random(newSeed);
+
+        specularChance = fresnelReflect2(ray.direction, hit.normal, material.specularChance);
+        let chanceMultiplier: f32 = (1.0 - specularChance) / (1.0 - material.specularChance);
+        refractionChance *= chanceMultiplier;
+
+        // Determine ray type: diffuse, specular, or refractive
+         //calculate whether we are going to do a diffuse, specular, or refractive ray
+        var doSpecular: f32 = 0.0;
+        var doRefraction: f32 = 0.0;
+
+        if (specularChance > 0.0) && (randomFloat < specularChance) {
+            doSpecular = 1.0;
+            rayProbability = specularChance;
+        } else if (refractionChance > 0.0) && (randomFloat < (specularChance + refractionChance)) {
+            doRefraction = 1.0;
+            rayProbability = refractionChance;
+        } else {
+            rayProbability = 1.0 - (specularChance + refractionChance);
+        }
+
+        //numerical problems can cause rayProbability to become small enough to cause a divide by zero.
+        rayProbability = max(rayProbability, 0.001);
+
+        // Update ray position
+        ray.origin = hit.position + hit.normal * select(0.001, -0.001, doRefraction == 1.0);
+
+        // Calculate new ray direction
+        let diffuseDir = CosineWeightedHemisphereSample(hit.normal, newSeed);
+        var specularDir = reflect(ray.direction, hit.normal);
+
+        var refractionRayDir: vec3<f32> = refract(ray.direction, hit.normal, 1.0 / material.ior);
+        let randomDirection: vec3<f32> = CosineWeightedHemisphereSample(-hit.normal, newSeed);
+        refractionRayDir = normalize(mix(refractionRayDir, randomDirection, material.refractionRoughness * material.refractionRoughness));
+
+        ray.direction = mix(diffuseDir, specularDir, material.specularSmoothness * material.specularSmoothness * doSpecular);
+        ray.direction = mix(ray.direction, refractionRayDir, doRefraction);
+
+        // Add emissive lighting
+        color += material.emissionColor * material.emissionStrength * energy;
+
+        // Update energy
+        if doRefraction == 1.0 {
+            energy *= material.refractionColor; // Multiply by refraction color for refractive rays
+        } else {
+            energy *= mix(material.albedo, material.specularColor, doSpecular);
+        }
+
+
+        energy /= rayProbability;
+
+        // Russian Roulette termination
+        let p = max(energy.r, max(energy.g, energy.b));
+        if random(newSeed) > p {
+            break;
+        }
+        energy *= (1.0 / p);
+    }
+
+    return color;
+}
+
+
+//https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-camera/
+fn trace3(camRay: Ray, seed: f32) -> vec3f {
     var ray = camRay;
 
     var color: vec3f = vec3(0.0, 0.0, 0.0);
@@ -89,7 +232,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let hit = traverse(ray);
 
         if !hit.hit {
-            var textureSky = sRGBToLinear(textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz);
+            var textureSky = sRGBToLinear(textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz);
             color = textureSky;
             break;
         }
@@ -97,7 +240,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
 
 
         //Absorbiere die energie wenn wir von innen treffen
-        if hit.inside {
+        if hit.front_face {
             energy *= exp(-material.refractionColor * hit.dist);//berechne die Basis des natürlichen Logarithmus (e) hoch einer gegebenen Zahl
         }
 
@@ -110,11 +253,12 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         var rayProbability = 1.0;
         let newSeed = vec2(hit.position.zx + vec2<f32 >(hit.position.y, seed + f32(bounce)));
         let randomFloat: f32 = random(newSeed);
+
         if specularChance > randomFloat {
             var ior1 = 0.0;
             var ior2 = 0.0;
 
-            if hit.inside {
+            if hit.front_face {
                 ior1 = material.ior;
                 ior2 = 1.0;
             } else {
@@ -122,7 +266,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
                 ior2 = material.ior;
             }
 
-            specularChance = FresnelReflectAmount(ior1, ior2, hit.normal, ray.direction, material.specularChance, 1.0);
+            specularChance = fresnelReflect(ior1, ior2, hit.normal, ray.direction, material.specularChance, 1.0);
 
             let chanceMultiplier: f32 = (1.0 - specularChance) / (1.0 - material.specularChance);
             refractionChance *= chanceMultiplier;
@@ -160,14 +304,14 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         //Perfectly smooth specular uses the reflection ray.
         //Rough (glossy) specular lerps from the smooth specular to the rough diffuse by the material roughness squared
         //Squaring the roughness is just a convention to make roughness feel more linear perceptually.
-        let diffuseDir = randomDirection(hit.normal, newSeed);
+        let diffuseDir = CosineWeightedHemisphereSample(hit.normal, newSeed);
         //let diffuseDir = normalize(hit.normal + RandomUnitVector(newSeed));
 
         var specularDir = reflect(ray.direction, hit.normal);
 
 
         var iorValue: f32 = 0.0;
-        if hit.inside {
+        if hit.front_face {
             iorValue = material.ior;
         } else {
             iorValue = 1.0 / material.ior;
@@ -175,12 +319,12 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
 
         var refractionRayDir: vec3<f32> = refract(ray.direction, hit.normal, iorValue);
 
-        let randomDirection: vec3<f32> = randomDirection(-hit.normal, newSeed);
+        let randomDirection: vec3<f32> = CosineWeightedHemisphereSample(-hit.normal, newSeed);
         //let randomDirection = normalize(-hit.normal + RandomUnitVector(newSeed));
 
         refractionRayDir = normalize(mix(refractionRayDir, randomDirection, material.refractionRoughness * material.refractionRoughness));
 
-        ray.direction = mix(diffuseDir, specularDir, material.specularRoughness * material.specularRoughness * doSpecular);
+        ray.direction = mix(diffuseDir, specularDir, material.specularSmoothness * material.specularSmoothness * doSpecular);
         ray.direction = mix(ray.direction, refractionRayDir, doRefraction);
 
         //add in emissive lighting
@@ -195,14 +339,13 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         //we need to account for the times we didn't do one or the other.
         energy /= rayProbability;
 
-
         //Russian Roulette
         //As the energy gets smaller, the ray is more likely to get terminated early.
         //Survivors have their value boosted to make up for fewer samples being in the average.
 
         //https://www.cs.princeton.edu/courses/archive/fall06/cos526/lectures/montecarlo2.pdf
 
-        let p = max(energy.r, max(energy.g, energy.b));
+        let p = max(energy.x, max(energy.y, energy.z));
         if random(newSeed) > p {
             break;
         }
@@ -214,34 +357,70 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
 
     return color;
 }
+// https://raytracing.github.io/books/RayTracingInOneWeekend.html#dielectrics/refraction
+fn refract(uv: vec3<f32>, n: vec3<f32>, etai_over_etat: f32) -> vec3<f32> {
+    let cos_theta = min(dot(-uv, n), 1.0);
+    let r_out_perp = etai_over_etat * (uv + cos_theta * n);
+    let r_out_parallel = -sqrt(abs(1.0 - dot(r_out_perp, r_out_perp))) * n;
+    return r_out_perp + r_out_parallel;
+}
 
-fn FresnelReflectAmount(n1: f32, n2: f32, normal: vec3<f32>, incident: vec3<f32>, f0: f32, f90: f32) -> f32 {
-    //Schlick approximation
-    var r0: f32 = (n1 - n2) / (n1 + n2);
-    r0 *= r0;
-    var cosX: f32 = -dot(normal, incident);
 
-    if n1 > n2 {
-        let n: f32 = n1 / n2;
-        let sinT2: f32 = n * n * (1.0 - cosX * cosX);
-        //Total internal reflection
-        if sinT2 > 1.0 {
-            return f90;
-        }
+fn fresnelReflect2(incident: vec3<f32>, norm: vec3<f32>, R0: f32) -> f32 {
+    var cos0: f32 = dot(incident, norm);
 
-        cosX = sqrt(1.0 - sinT2);
+    // Ensure cosI is in the range [0, 1]
+    if cos0 < 0.0 {
+        cos0 = -cos0;
     }
 
-    let x: f32 = 1.0 - cosX;
-    let ret: f32 = r0 + (1.0 - r0) * x * x * x * x * x;
+    // Schlick approximation
+    let x: f32 = pow(1.0 - cos0, 5.0);
+    let ret: f32 = R0 + (1.0 - R0) * x;
 
-    //adjust reflect multiplier for object reflectivity
+    return ret;
+}
+
+fn fresnelReflect(n1: f32, n2: f32, incident: vec3<f32>, norm: vec3<f32>, f0: f32, f90: f32) -> f32 {
+    var normal = norm;
+    var cosI: f32 = dot(incident, normal);
+    var n: f32;
+    var refl: f32;
+    var trans: f32;
+
+    if cosI > 0.0 {
+        n = n1 / n2;
+        normal = -normal;
+    } else {
+        n = n2 / n1;
+        cosI = -cosI;
+    }
+
+    let sinT2: f32 = n * n * (1.0 - cosI * cosI);
+    let cosT: f32 = sqrt(1.0 - sinT2);
+
+    // Fresnel equations
+    var rn: f32 = (n1 * cosI - n2 * cosT) / (n1 * cosI + n2 * cosT);
+    var rt: f32 = (n2 * cosI - n1 * cosT) / (n2 * cosI + n2 * cosT);
+    rn *= rn;
+    rt *= rt;
+    refl = (rn + rt) * 0.5;
+    trans = 1.0 - refl;
+
+    if cosT * cosT < 0.0 {
+        return f90;
+    }
+
+    let x: f32 = 1.0 - cosI;
+    let ret: f32 = f0 + (1.0 - f0) * x * x * x * x * x;
+
+    // Return the reflection coefficient based on the Fresnel equations and the given f0 and f90 values
     return mix(f0, f90, ret);
 }
 
 
 //https://my.eng.utah.edu/~cs6965/slides/pathtrace.pdf
-fn randomDirection(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f32> {
+fn CosineWeightedHemisphereSample(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f32> {
     let u = random(seed);
     let v = random(vec2(seed.y, seed.x + 1.0));
 
@@ -361,7 +540,6 @@ fn hit_triangle(
 ) -> SurfacePoint {
     var surfacePoint: SurfacePoint;
     surfacePoint.hit = false;
-    surfacePoint.inside = false;
     surfacePoint.material = oldSurfacePoint.material;
 
     //Kanten des Dreiecks vom Punkt A
@@ -404,21 +582,22 @@ fn hit_triangle(
     let normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
     surfacePoint.normal = normalize((transpose(tri.inverseModel) * vec4(normal, 0.0)).xyz);
 
-    //Check if the ray intersects from the inside
-    if dot(ray.direction, surfacePoint.normal) > 0.0 {
-        surfacePoint.inside = true;
-    } else {
-        surfacePoint.inside = false;
-    }
-
 
     surfacePoint.material = tri.material;
     surfacePoint.dist = dist;
     surfacePoint.position = ray.origin + ray.direction * dist;
     surfacePoint.hit = true;//Es gibt einen Treffer
 
+    // Determine if the ray hits the front face
+    if dot(ray.direction, surfacePoint.normal) < 0.0 {
+        surfacePoint.front_face = true;
+    } else {
+        surfacePoint.front_face = false;
+        surfacePoint.normal = -surfacePoint.normal; // invert the normal for back face
+    }
     return surfacePoint;
 }
+
 
 fn sRGBToLinear(sRGBColor: vec3<f32>) -> vec3<f32> {
     var linearColor: vec3<f32>;
@@ -485,7 +664,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
         myRay.origin = scene.cameraPos;
         accumulated_color += trace(myRay, seed + f32(i));
     }
-    var textureSky = textureSampleLevel(skyTexture, skySampler, myRay.direction, 0.0).xyz;
+    var textureSky = textureSampleLevel(skyTexture, textureSampler, myRay.direction, 0.0).xyz;
     var pixel_color: vec3f = accumulated_color / f32(num_samples);
     textureStore(color_buffer, screen_pos, vec4<f32 >(pixel_color, 1.0));
 }

@@ -39,7 +39,7 @@ export class Renderer {
   scene: Scene
   frametime: number = 0
   loaded: boolean
-  maxBounces: number = 4
+  maxBounces: number = 8
   accumulationCount: number = 0
   samples: number = 1
 
@@ -419,7 +419,7 @@ export class Renderer {
       triangleData[triangleDataSize * i + 28] = tri.material.specularColor[0]
       triangleData[triangleDataSize * i + 29] = tri.material.specularColor[1]
       triangleData[triangleDataSize * i + 30] = tri.material.specularColor[2]
-      triangleData[triangleDataSize * i + 31] = tri.material.specularRoughness
+      triangleData[triangleDataSize * i + 31] = tri.material.specularSmoothness
 
       triangleData[triangleDataSize * i + 32] = tri.material.emissionColor[0]
       triangleData[triangleDataSize * i + 33] = tri.material.emissionColor[1]
