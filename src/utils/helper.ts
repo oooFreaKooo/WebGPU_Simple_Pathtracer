@@ -45,7 +45,7 @@ export function createCornellBox(): ObjectProperties[] {
   const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
   const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
   const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
-  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularSmoothness: 0.95, specularChance: 1.0 })
+  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.95, specularChance: 1.0 })
   return [
     // Ground
     {
@@ -113,18 +113,18 @@ export function createScene1(): ObjectProperties[] {
   const glassBalls: Material = new Material({
     specularChance: 0.02,
     specularColor: [0.8, 0.8, 0.8],
-    specularSmoothness: 1.0,
-    refractionColor: [1.0, 1.0, 1.0],
+    specularRoughness: 0.0,
+    refractionColor: [0.0, 0.0, 0.0],
     refractionChance: 1.0,
     refractionRoughness: 0.0,
     ior: 1.1,
   })
 
-  const numSpheres = 5
+  const numSpheres = 9
   const roughness_glass_test: ObjectProperties[] = []
 
   for (let i = 0; i < numSpheres; i++) {
-    const positionX = -4.0 + i * 2.0
+    const positionX = -4.0 + i
     const refractionRoughness = (i / (numSpheres - 1)) * 0.5
 
     roughness_glass_test.push({
@@ -134,7 +134,7 @@ export function createScene1(): ObjectProperties[] {
         refractionRoughness: refractionRoughness,
       },
       position: [positionX, 0.75, 0.0],
-      scale: [1.0, 1.0, 1.0],
+      scale: [0.75, 0.75, 0.75],
     })
   }
 
@@ -150,32 +150,37 @@ export function createScene1(): ObjectProperties[] {
     {
       modelPath: "./src/assets/models/plane.obj",
       material: blackMaterial,
-      position: [0.0, 3.01, 0.0],
+      position: [0.0, 2.01, 0.0],
       scale: [1.0, 1.0, 0.25],
       rotation: [0.0, 0.0, 180.0],
     },
   ]
 
-  for (let i = -5; i <= 5; i += 0.25) {
+  for (let i = -5; i <= 5; i += 0.125) {
     planes.push({
       modelPath: "./src/assets/models/plane.obj",
-      material: i % 0.5 === 0 ? whiteMaterial : blackMaterial,
+      material: i % 0.25 === 0 ? whiteMaterial : blackMaterial,
       position: [i, 1.0, 1.2],
-      scale: [0.025, 0.15, 0.15],
+      scale: [0.0125, 0.15, 0.15],
       rotation: [90.0, 180.0, 0.0],
+    })
+  }
+
+  const lampCount = 3
+  const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
+
+  for (let i = 0; i < lampCount; i++) {
+    planes.push({
+      modelPath: "./src/assets/models/plane.obj",
+      material: glowMaterial,
+      position: [-4 + i * lampSpacing, 2.0, 0.0],
+      scale: [0.1, 1.0, 0.1],
+      rotation: [0.0, 0.0, 180.0],
     })
   }
 
   for (const ball of roughness_glass_test) {
     planes.push(ball)
-
-    planes.push({
-      modelPath: "./src/assets/models/plane.obj",
-      material: glowMaterial,
-      position: [ball.position![0], 3.0, ball.position![2]],
-      scale: [0.1, 1.0, 0.1],
-      rotation: [0.0, 0.0, 180.0],
-    })
   }
 
   return planes
@@ -190,18 +195,18 @@ export function createScene2(): ObjectProperties[] {
   const glassBalls: Material = new Material({
     specularChance: 0.02,
     specularColor: [0.8, 0.8, 0.8],
-    specularSmoothness: 1.0,
+    specularRoughness: 0.0,
     refractionChance: 1.0,
     refractionRoughness: 0.1,
     ior: 1.1,
   })
 
-  const numSpheres = 5
+  const numSpheres = 9
   const ior_test: ObjectProperties[] = []
 
   for (let i = 0; i < numSpheres; i++) {
-    const positionX = -4.0 + i * 2.0
-    const ior = 1.0 + (0.5 * i) / (numSpheres - 1)
+    const positionX = -4.0 + i
+    const ior = 1.0 + (0.05 * i) / (numSpheres - 1)
 
     ior_test.push({
       modelPath: "./src/assets/models/sphere.obj",
@@ -210,7 +215,7 @@ export function createScene2(): ObjectProperties[] {
         ior: ior,
       },
       position: [positionX, 0.75, 0.0],
-      scale: [1.0, 1.0, 1.0],
+      scale: [0.75, 0.75, 0.75],
     })
   }
 
@@ -226,34 +231,37 @@ export function createScene2(): ObjectProperties[] {
     {
       modelPath: "./src/assets/models/plane.obj",
       material: blackMaterial,
-      position: [0.0, 3.01, 0.0],
+      position: [0.0, 2.01, 0.0],
       scale: [1.0, 1.0, 0.25],
       rotation: [0.0, 0.0, 180.0],
     },
   ]
 
-  for (let i = -5; i <= 5; i += 0.25) {
+  for (let i = -5; i <= 5; i += 0.125) {
     planes.push({
       modelPath: "./src/assets/models/plane.obj",
-      material: i % 0.5 === 0 ? whiteMaterial : blackMaterial,
+      material: i % 0.25 === 0 ? whiteMaterial : blackMaterial,
       position: [i, 1.0, 1.2],
-      scale: [0.025, 0.15, 0.15],
+      scale: [0.0125, 0.15, 0.15],
       rotation: [90.0, 180.0, 0.0],
     })
   }
 
-  // Add glass balls and lamps
-  for (const ball of ior_test) {
-    planes.push(ball)
+  const lampCount = 3
+  const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
 
-    // Add a lamp above each ball
+  for (let i = 0; i < lampCount; i++) {
     planes.push({
       modelPath: "./src/assets/models/plane.obj",
       material: glowMaterial,
-      position: [ball.position![0], 3.0, ball.position![2]],
+      position: [-4 + i * lampSpacing, 2.0, 0.0],
       scale: [0.1, 1.0, 0.1],
       rotation: [0.0, 0.0, 180.0],
     })
+  }
+
+  for (const ball of ior_test) {
+    planes.push(ball)
   }
 
   return planes
@@ -267,22 +275,24 @@ export function createScene3(): ObjectProperties[] {
 
   const glassBalls: Material = new Material({
     specularChance: 0.02,
-    specularColor: [0.8, 0.8, 0.8],
-    specularSmoothness: 1.0,
+    specularColor: [1.0, 1.0, 1.0],
+    specularRoughness: 0.0,
     refractionChance: 1.0,
     refractionRoughness: 0.0,
     ior: 1.1,
   })
 
-  const numSpheres = 5
+  const numSpheres = 9
   const test: ObjectProperties[] = []
 
   for (let i = 0; i < numSpheres; i++) {
-    const positionX = -4.0 + i * 2.0
-    const absorb = i / (numSpheres - 1.75)
+    const positionX = -4.0 + i
+    const absorb = i / (numSpheres + 3)
 
-    const refractionColor = vec3.fromValues(1.0 - absorb, 1.0 - absorb * absorb, 1.0 - absorb * absorb * absorb)
-
+    let refractionColor = vec3.fromValues(1.5, 1.0, 0.5)
+    refractionColor[0] *= absorb
+    refractionColor[1] *= absorb
+    refractionColor[2] *= absorb
     test.push({
       modelPath: "./src/assets/models/sphere.obj",
       material: {
@@ -290,7 +300,7 @@ export function createScene3(): ObjectProperties[] {
         refractionColor: refractionColor,
       },
       position: [positionX, 0.75, 0.0],
-      scale: [1.0, 1.0, 1.0],
+      scale: [0.75, 0.75, 0.75],
     })
   }
 
@@ -306,35 +316,128 @@ export function createScene3(): ObjectProperties[] {
     {
       modelPath: "./src/assets/models/plane.obj",
       material: blackMaterial,
-      position: [0.0, 3.01, 0.0],
+      position: [0.0, 2.01, 0.0],
       scale: [1.0, 1.0, 0.25],
       rotation: [0.0, 0.0, 180.0],
     },
   ]
 
-  for (let i = -5; i <= 5; i += 0.25) {
+  for (let i = -5; i <= 5; i += 0.125) {
     planes.push({
       modelPath: "./src/assets/models/plane.obj",
-      material: i % 0.5 === 0 ? whiteMaterial : blackMaterial,
+      material: i % 0.25 === 0 ? whiteMaterial : blackMaterial,
       position: [i, 1.0, 1.2],
-      scale: [0.025, 0.15, 0.15],
+      scale: [0.0125, 0.15, 0.15],
       rotation: [90.0, 180.0, 0.0],
     })
   }
 
-  // Add glass balls and lamps
-  for (const ball of test) {
-    planes.push(ball)
+  const lampCount = 3
+  const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
 
-    // Add a lamp above each ball
+  for (let i = 0; i < lampCount; i++) {
     planes.push({
       modelPath: "./src/assets/models/plane.obj",
       material: glowMaterial,
-      position: [ball.position![0], 3.0, ball.position![2]],
+      position: [-4 + i * lampSpacing, 2.0, 0.0],
       scale: [0.1, 1.0, 0.1],
       rotation: [0.0, 0.0, 180.0],
     })
   }
 
+  for (const ball of test) {
+    planes.push(ball)
+  }
+
   return planes
+}
+
+//
+export function createScene4(): ObjectProperties[] {
+  const sphereMaterial = new Material({ albedo: [1.0, 1.0, 1.0] }) // You can customize this material as needed
+
+  const spheres: ObjectProperties[] = []
+
+  const gridSize = 5
+  const spacing = 3
+
+  for (let i = 0; i < gridSize; i++) {
+    for (let j = 0; j < gridSize; j++) {
+      for (let k = 0; k < gridSize; k++) {
+        const positionX = i * spacing
+        const positionY = j * spacing
+        const positionZ = k * spacing
+
+        spheres.push({
+          modelPath: "./src/assets/models/monkey.obj",
+          material: sphereMaterial,
+          position: [positionX, positionY, positionZ],
+          scale: [1.0, 1.0, 1.0],
+        })
+      }
+    }
+  }
+
+  return spheres
+}
+
+const defaults: Material = {
+  albedo: [0.8, 0.8, 0.8],
+  specularColor: [1.0, 1.0, 1.0],
+  emissionColor: [0.0, 0.0, 0.0],
+  emissionStrength: 0.0,
+  specularRoughness: 0.0,
+  specularChance: 0.0,
+  ior: 1.0,
+  refractionChance: 0.0,
+  refractionRoughness: 0.0,
+  refractionColor: [0.0, 0.0, 0.0],
+}
+
+function randomInRange(min: number, max: number): number {
+  return Math.random() * (max - min) + min
+}
+
+function randomMaterial(): Material {
+  return {
+    ...defaults,
+    albedo: [randomInRange(0.5, 1), randomInRange(0.5, 1), randomInRange(0.5, 1)],
+    specularColor: [randomInRange(0, 1), randomInRange(0, 1), randomInRange(0, 1)],
+    emissionStrength: randomInRange(3, 5),
+    specularRoughness: randomInRange(0, 1),
+    specularChance: randomInRange(0, 1),
+    ior: randomInRange(1, 2),
+    refractionChance: randomInRange(0.5, 1),
+    refractionRoughness: randomInRange(0, 1),
+  }
+}
+
+// Monkeys
+export function createScene5(): ObjectProperties[] {
+  const spheres: ObjectProperties[] = []
+  const gridSize = 5
+
+  let positionX = 0
+  let positionY = 0
+  let positionZ = 0
+
+  for (let i = 0; i < gridSize; i++) {
+    positionY = 0
+    for (let j = 0; j < gridSize; j++) {
+      positionZ = 0
+      for (let k = 0; k < gridSize; k++) {
+        spheres.push({
+          modelPath: "./src/assets/models/monkey.obj",
+          material: new Material(randomMaterial()),
+          position: [positionX, positionY, positionZ],
+          scale: [1.0, 1.0, 1.0],
+        })
+        positionZ += randomInRange(2, 5) // Random spacing in Z direction
+      }
+      positionY += randomInRange(2, 5) // Random spacing in Y direction
+    }
+    positionX += randomInRange(2, 5) // Random spacing in X direction
+  }
+
+  return spheres
 }

@@ -5,7 +5,7 @@ interface MaterialOptions {
   specularColor?: vec3 // the color tint of specular reflections
   emissionColor?: vec3 // how much the surface glows
   emissionStrength?: number
-  specularSmoothness?: number // how rough the specular reflections are
+  specularRoughness?: number // how rough the specular reflections are
   specularChance?: number // percentage chance of doing a specular reflection
   ior?: number // index of refraction. used by fresnel and refraction.
   refractionChance?: number // percent chance of doing a refractive transmission
@@ -18,7 +18,7 @@ export class Material {
   specularColor: vec3
   emissionColor: vec3
   emissionStrength: number
-  specularSmoothness: number
+  specularRoughness: number
   specularChance: number
   ior: number
   refractionChance: number
@@ -31,12 +31,12 @@ export class Material {
       specularColor: [1.0, 1.0, 1.0],
       emissionColor: [0.0, 0.0, 0.0],
       emissionStrength: 0.0,
-      specularSmoothness: 0.0,
+      specularRoughness: 1.0,
       specularChance: 0.0,
       ior: 1.0,
       refractionChance: 0.0,
       refractionRoughness: 0.0,
-      refractionColor: [1.0, 1.0, 1.0],
+      refractionColor: [0.0, 0.0, 0.0],
     }
 
     const finalOptions = { ...defaults, ...options }
@@ -45,7 +45,7 @@ export class Material {
     this.specularColor = finalOptions.specularColor!
     this.emissionColor = finalOptions.emissionColor!
     this.emissionStrength = finalOptions.emissionStrength!
-    this.specularSmoothness = finalOptions.specularSmoothness!
+    this.specularRoughness = finalOptions.specularRoughness!
     this.specularChance = finalOptions.specularChance!
     this.ior = finalOptions.ior!
     this.refractionChance = finalOptions.refractionChance!
