@@ -32,7 +32,7 @@ export class Material {
       emissionColor: [0.0, 0.0, 0.0],
       emissionStrength: 0.0,
       specularRoughness: 1.0,
-      specularChance: 0.0,
+      specularChance: 0.01,
       ior: 1.0,
       refractionChance: 0.0,
       refractionRoughness: 0.0,

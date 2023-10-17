@@ -91,6 +91,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
 
         if !hit.hit {
             //accumulatedColor += energy * sRGBToLinear(textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz);
+            accumulatedColor = vec3(0.0, 0.0, 0.0);
             break;
         }
 
@@ -119,8 +120,8 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
             refractionChance *= chanceMultiplier;
         }
 
-        var isSpecular: f32;
-        var isRefractive: f32;
+        var isSpecular: f32 = 0.0;
+        var isRefractive: f32 = 0.0;
         if (specularChance > 0.0) && (randomFloat < specularChance) {
             isSpecular = 1.0;
             rayProbability = specularChance;
@@ -152,7 +153,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
 
         if isRefractive == 0.0 {
             energy = originalEnergy;
-            energy *= mix(material.albedo, material.specularColor, isSpecular);
+            energy *= material.albedo + material.specularColor * isSpecular;
         }
 
         energy /= rayProbability;
@@ -176,83 +177,23 @@ fn refract(uv: vec3<f32>, n: vec3<f32>, etai_over_etat: f32) -> vec3<f32> {
     return r_out_perp + r_out_parallel;
 }
 
-// Schlick's approximation for reflectance.
-fn fresnelReflectAmount(n1: f32, n2: f32, normal: vec3<f32>, incident: vec3<f32>, f0: f32, f90: f32) -> f32 {
-    // Schlick approximation
-    let r0 = (n1 - n2) / (n1 + n2);
-    let r0_squared = r0 * r0;
-    let cosX = -dot(normal, incident);
-    var cosX_updated = cosX;
-    if n1 > n2 {
-        let n = n1 / n2;
-        let sinT2 = n * n * (1.0 - cosX * cosX);
-        // Total internal reflection
-        if sinT2 > 1.0 {
-            return f90;
-        }
-        cosX_updated = sqrt(1.0 - sinT2);
-    }
-    let x = 1.0 - cosX_updated;
-    let ret = r0_squared + (1.0 - r0_squared) * x * x * x * x * x;
 
-    // adjust reflect multiplier for object reflectivity
-    return mix(f0, f90, ret);
-}
-
-
-
-fn fresnelReflect2(incident: vec3<f32>, norm: vec3<f32>, R0: f32) -> f32 {
-    var cos0: f32 = dot(incident, norm);
-
-    // Ensure cosI is in the range [0, 1]
-    if cos0 < 0.0 {
-        cos0 = -cos0;
-    }
-
-    // Schlick approximation
-    let x: f32 = pow(1.0 - cos0, 5.0);
-    let ret: f32 = R0 + (1.0 - R0) * x;
-
-    return ret;
+fn fresnelSchlick(cosTheta: f32, f0: f32, f90: f32) -> f32 {
+    return f0 + (f90 - f0) * pow(1.0 - cosTheta, 5.0);
 }
 
 fn fresnelReflect(n1: f32, n2: f32, incident: vec3<f32>, norm: vec3<f32>, f0: f32, f90: f32) -> f32 {
     var normal = norm;
     var cosI: f32 = dot(incident, normal);
-    var n: f32;
-    var refl: f32;
-    var trans: f32;
 
     if cosI > 0.0 {
-        n = n1 / n2;
         normal = -normal;
     } else {
-        n = n2 / n1;
         cosI = -cosI;
     }
 
-    let sinT2: f32 = n * n * (1.0 - cosI * cosI);
-    let cosT: f32 = sqrt(1.0 - sinT2);
-
-    // Fresnel equations
-    var rn: f32 = (n1 * cosI - n2 * cosT) / (n1 * cosI + n2 * cosT);
-    var rt: f32 = (n2 * cosI - n1 * cosT) / (n2 * cosI + n2 * cosT);
-    rn *= rn;
-    rt *= rt;
-    refl = (rn + rt) * 0.5;
-    trans = 1.0 - refl;
-
-    if cosT * cosT < 0.0 {
-        return f90;
-    }
-
-    let x: f32 = 1.0 - cosI;
-    let ret: f32 = f0 + (1.0 - f0) * x * x * x * x * x;
-
-    // Return the reflection coefficient based on the Fresnel equations and the given f0 and f90 values
-    return mix(f0, f90, ret);
+    return fresnelSchlick(cosI, f0, f90);
 }
-
 
 //https://my.eng.utah.edu/~cs6965/slides/pathtrace.pdf
 fn CosineWeightedHemisphereSample(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f32> {
@@ -261,8 +202,8 @@ fn CosineWeightedHemisphereSample(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f3
 
     //Sphärische Koordinaten
     //Verteilung ist kosinus gewichtet: die generierten Vektoren zeigen wahrscheinlicher in richtung der normalen
-    let theta = 2.0 * PI * u; //Azimutwinkel : Vollkreis im intervall 0 und 2pi
-    let phi = asin(sqrt(v));//Polarwinkel: vertikale richtung -pi/2 und pi/2. phi nah an 0 heißt vektor ist nah an horizontaler ebene
+    let theta = 2.0 * PI * v; //Azimutwinkel : Vollkreis im intervall 0 und 2pi
+    let phi = asin(sqrt(u));//Polarwinkel: vertikale richtung -pi/2 und pi/2. phi nah an 0 heißt vektor ist nah an horizontaler ebene
 
     let sin_phi = sin(phi);
     //Kartesische Koordinaten: Vektoren die in eine Zufällige richtung im Raum zeigen
@@ -284,6 +225,7 @@ fn CosineWeightedHemisphereSample(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f3
     let dir = tangent * x + bitangent * y + normal * z;
     return normalize(dir);
 }
+
 
 //Zahl zwischen 0 und 1
 //https://thebookofshaders.com/10/

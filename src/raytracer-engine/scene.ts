@@ -5,6 +5,8 @@ import { ObjLoader } from "./obj-loader"
 import { Triangle } from "./triangle"
 import { AABB, Bin, Node } from "./node"
 import { ObjectProperties } from "../utils/helper"
+import { PointCloudMesher } from "./mesher"
+import { Material } from "./material"
 
 const MAX_VALUE = Number.POSITIVE_INFINITY
 const MIN_VALUE = Number.NEGATIVE_INFINITY
@@ -20,6 +22,7 @@ export class Scene {
   nodes: Node[]
   nodesUsed: number = 0
   objectMeshes: ObjLoader[] = []
+  mesher: PointCloudMesher
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -41,7 +44,12 @@ export class Scene {
 
       this.objectMeshes.push(objectMesh)
     }
-    await this.prepareBVH()
+  }
+
+  // Additional method to load and extract triangles from the PointCloudMesher.
+  async pointCloudMesh(pointCloud: vec3[], material: Material): Promise<void> {
+    this.mesher = new PointCloudMesher(pointCloud)
+    this.mesher.generateTriangles(material)
   }
 
   async prepareBVH() {
@@ -54,6 +62,9 @@ export class Scene {
       })
     })
 
+    /* this.mesher.triangles.forEach((triangle) => {
+      this.triangles.push(triangle)
+    }) */
     this.triangleIndices = new Array(this.triangles.length)
     for (var i: number = 0; i < this.triangles.length; i += 1) {
       this.triangleIndices[i] = i
@@ -66,6 +77,11 @@ export class Scene {
     this.buildBVH()
   }
 
+  // https://download.hrz.tu-darmstadt.de/pub/FB20/GCC/paper/rsah_gi2016.pdf
+  // http://www.dominikwodniok.de/publications/Wodniok_CAG2017.pdf
+  //https://meistdan.github.io/publications/bvh_star/paper.pdf
+  // https://jcgt.org/published/0011/04/01/paper-lowres.pdf - COST
+  // https://www.sci.utah.edu/~wald/Publications/2007/ParallelBVHBuild/fastbuild.pdf - BINNING
   buildBVH() {
     console.time("Subdivision Time")
 

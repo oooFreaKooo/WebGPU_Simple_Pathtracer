@@ -1,6 +1,6 @@
 import { CubeMapMaterial } from "./cube_material"
-import raytracer_kernel from "../assets/shaders//raytracer_kernel.wgsl"
-import screen_shader from "../assets/shaders/screen_shader.wgsl"
+import raytracer_kernel from "../utils/raytracer_kernel.wgsl"
+import screen_shader from "../utils/screen_shader.wgsl"
 import { Scene } from "./scene"
 import { addEventListeners, linearToSRGB } from "../utils/helper"
 
@@ -38,7 +38,7 @@ export class Renderer {
   // Scene to render
   scene: Scene
   frametime: number = 0
-  loaded: boolean
+  loaded = false
   maxBounces: number = 8
   accumulationCount: number = 0
   samples: number = 1
@@ -64,7 +64,6 @@ export class Renderer {
 
     await this.makePipelines()
 
-    this.loaded = false
     await this.renderLoop()
   }
 
