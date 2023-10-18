@@ -11,6 +11,7 @@ import {
   createScene5,
   createScene6,
   createScene8,
+  createScene9,
 } from "./utils/helper"
 
 export class Application {
@@ -98,7 +99,8 @@ export class Application {
     const scene5 = createScene5()
     const scene6 = createScene6()
     const scene8 = createScene8()
-    await this.scene.createObjects(scene4)
+    const scene9 = createScene9()
+    await this.scene.createObjects(scene9)
     //await this.scene.pointCloudMesh(terrainPointCloud, glowMaterial)
     await this.scene.prepareBVH()
     await this.renderer.Initialize()

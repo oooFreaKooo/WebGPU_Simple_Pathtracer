@@ -648,7 +648,6 @@ function randomMaterial(): Material {
     ...defaults,
     albedo: [randomInRange(0.5, 1), randomInRange(0.5, 1), randomInRange(0.5, 1)],
     specularColor: [randomInRange(0, 1), randomInRange(0, 1), randomInRange(0, 1)],
-    emissionStrength: randomInRange(3, 5),
     specularRoughness: randomInRange(0, 1),
     specularChance: randomInRange(0, 1),
     ior: randomInRange(1, 2),
@@ -660,7 +659,30 @@ function randomMaterial(): Material {
 // Monkeys
 export function createScene9(): ObjectProperties[] {
   const spheres: ObjectProperties[] = []
-  const gridSize = 5
+  const gridSize = 50
+
+  let positionX = 0
+  let positionZ = 0
+
+  for (let i = 0; i < gridSize; i++) {
+    positionZ = 0
+    for (let k = 0; k < gridSize; k++) {
+      spheres.push({
+        modelPath: "./src/assets/models/monkey.obj",
+        material: new Material(randomMaterial()),
+        position: [positionX, 1.0, positionZ],
+        scale: [1.0, 1.0, 1.0],
+      })
+      positionZ += randomInRange(5, 5) // Random spacing in Z direction
+    }
+    positionX += randomInRange(5, 5) // Random spacing in X direction
+  }
+  return spheres
+}
+/* 
+export function createScene9(): ObjectProperties[] {
+  const spheres: ObjectProperties[] = []
+  const gridSize = 15
 
   let positionX = 0
   let positionY = 0
@@ -672,17 +694,17 @@ export function createScene9(): ObjectProperties[] {
       positionZ = 0
       for (let k = 0; k < gridSize; k++) {
         spheres.push({
-          modelPath: "./src/assets/models/monkey.obj",
+          modelPath: "./src/assets/models/sphere.obj",
           material: new Material(randomMaterial()),
           position: [positionX, positionY, positionZ],
-          scale: [1.0, 1.0, 1.0],
+          scale: [2.0, 2.0, 2.0],
         })
-        positionZ += randomInRange(2, 5) // Random spacing in Z direction
+        positionZ += randomInRange(5, 5) // Random spacing in Z direction
       }
-      positionY += randomInRange(2, 5) // Random spacing in Y direction
+      positionY += randomInRange(5, 5) // Random spacing in Y direction
     }
-    positionX += randomInRange(2, 5) // Random spacing in X direction
+    positionX += randomInRange(5, 5) // Random spacing in X direction
   }
 
   return spheres
-}
+} */

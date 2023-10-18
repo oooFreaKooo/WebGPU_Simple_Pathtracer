@@ -96,7 +96,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
 
         if !hit.hit {
             accumulatedColor += energy * sRGBToLinear(textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz);
-            //accumulatedColor = vec3(0.0, 0.0, 0.0);
+            //accumulatedColor = vec3(0.5, 0.5, 0.5);
             break;
         }
 

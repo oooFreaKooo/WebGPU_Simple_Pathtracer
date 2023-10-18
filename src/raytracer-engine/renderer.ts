@@ -72,13 +72,24 @@ export class Renderer {
   }
 
   async setupDevice() {
-    //adapter: wrapper around (physical) GPU.
-    //Describes features and limits
+    // adapter: wrapper around (physical) GPU.
+    // Describes features and limits
     this.adapter = <GPUAdapter>await navigator.gpu?.requestAdapter()
-    //device: wrapper around GPU functionality
-    //Function calls are made through the device
-    this.device = <GPUDevice>await this.adapter?.requestDevice()
-    //context: similar to vulkan instance (or OpenGL context)
+    if (!this.adapter) {
+      throw Error("Couldn't request WebGPU adapter.")
+    }
+
+    const requiredLimits: Record<string, number> = {}
+
+    requiredLimits["maxStorageBufferBindingSize"] = 1e9 // 1 GB
+
+    // device: wrapper around GPU functionality
+    // Function calls are made through the device
+    this.device = <GPUDevice>await this.adapter?.requestDevice({
+      requiredLimits, // include the required limits in the requestDevice options
+    })
+
+    // context: similar to Vulkan instance (or OpenGL context)
     this.context = <GPUCanvasContext>this.canvas.getContext("webgpu")
     this.format = "rgba16float"
     this.context.configure({
