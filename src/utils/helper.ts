@@ -18,8 +18,8 @@ export function Deg2Rad(theta: number): number {
 export function addEventListeners(instance: Renderer) {
   document.querySelector<HTMLInputElement>("#emissionStrength")!.addEventListener("input", (event) => {
     const value = parseFloat((event.target as HTMLInputElement).value)
-    for (let triangle of instance.scene.triangles) {
-      triangle.material.emissionStrength = value
+    for (let mesh of instance.scene.objectMeshes) {
+      mesh.material.emissionStrength = value
     }
     instance.updateTriangleData()
   })

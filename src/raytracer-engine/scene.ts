@@ -21,6 +21,7 @@ export class Scene {
   nodes: Node[]
   nodesUsed: number = 0
   objectMeshes: ObjLoader[] = []
+  objectIDCount: number = 0
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -36,11 +37,12 @@ export class Scene {
     for (const obj of objects) {
       const { modelPath, material, position = [0, 0, 0], scale = [1, 1, 1], rotation = [0, 0, 0] } = obj
 
-      const objectMesh = new ObjLoader(material, position, scale, rotation)
+      const objectMesh = new ObjLoader(material, position, scale, rotation, this.objectIDCount)
 
       await objectMesh.initialize(modelPath)
 
       this.objectMeshes.push(objectMesh)
+      this.objectIDCount++
     }
   }
 

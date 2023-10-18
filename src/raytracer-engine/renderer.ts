@@ -25,6 +25,7 @@ export class Renderer {
   sampler: GPUSampler
   sceneParameters: GPUBuffer
   triangleBuffer: GPUBuffer
+  materialBuffer: GPUBuffer
   nodeBuffer: GPUBuffer
   triangleIndexBuffer: GPUBuffer
   sky_texture: CubeMapMaterial
@@ -92,6 +93,7 @@ export class Renderer {
     this.createAccumulationBuffers()
     this.createSampler()
     this.createSceneParameterBuffer()
+    this.createMaterialBuffer()
     this.createTriangleBuffer()
     this.createNodeBuffer()
     this.createTriangleIndexBuffer()
@@ -154,6 +156,12 @@ export class Renderer {
         {
           binding: 6,
           resource: this.sky_texture.sampler,
+        },
+        {
+          binding: 7,
+          resource: {
+            buffer: this.materialBuffer,
+          },
         },
       ],
     })
@@ -226,7 +234,7 @@ export class Renderer {
       return
     }
     this.loaded = true
-
+    this.updateMaterialData()
     this.updateTriangleData()
     const uploadTimeLabel: HTMLElement = <HTMLElement>document.getElementById("triangles")
     uploadTimeLabel.innerText = this.scene.triangles.length.toFixed(2).toString()
@@ -394,10 +402,18 @@ export class Renderer {
 
   createTriangleBuffer() {
     const triangleBufferDescriptor: GPUBufferDescriptor = {
-      size: 260 * this.scene.triangles.length,
+      size: 96 * this.scene.triangles.length,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     }
     this.triangleBuffer = this.device.createBuffer(triangleBufferDescriptor)
+  }
+
+  createMaterialBuffer() {
+    const materialBufferDescriptor: GPUBufferDescriptor = {
+      size: 144 * this.scene.objectMeshes.length,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    }
+    this.materialBuffer = this.device.createBuffer(materialBufferDescriptor)
   }
 
   createNodeBuffer() {
@@ -439,12 +455,12 @@ export class Renderer {
   }
 
   updateTriangleData() {
-    const triangleDataSize = 44 + 16
+    const triangleDataSize = 24
 
     const triangleData: Float32Array = new Float32Array(triangleDataSize * this.scene.triangles.length)
     for (let i = 0; i < this.scene.triangles.length; i++) {
       const tri = this.scene.triangles[i]
-      for (var corner = 0; corner < 3; corner++) {
+      for (var corner = 0; corner < 2; corner++) {
         triangleData[triangleDataSize * i + 8 * corner] = this.scene.triangles[i].corners[corner][0]
         triangleData[triangleDataSize * i + 8 * corner + 1] = this.scene.triangles[i].corners[corner][1]
         triangleData[triangleDataSize * i + 8 * corner + 2] = this.scene.triangles[i].corners[corner][2]
@@ -455,40 +471,61 @@ export class Renderer {
         triangleData[triangleDataSize * i + 8 * corner + 6] = this.scene.triangles[i].normals[corner][2]
         triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0
       }
+      triangleData[triangleDataSize * i + 16] = this.scene.triangles[i].corners[2][0]
+      triangleData[triangleDataSize * i + 17] = this.scene.triangles[i].corners[2][1]
+      triangleData[triangleDataSize * i + 18] = this.scene.triangles[i].corners[2][2]
+      triangleData[triangleDataSize * i + 19] = 0.0
 
-      triangleData[triangleDataSize * i + 24] = tri.material.albedo[0]
-      triangleData[triangleDataSize * i + 25] = tri.material.albedo[1]
-      triangleData[triangleDataSize * i + 26] = tri.material.albedo[2]
-      triangleData[triangleDataSize * i + 27] = tri.material.specularChance
-
-      triangleData[triangleDataSize * i + 28] = tri.material.specularColor[0]
-      triangleData[triangleDataSize * i + 29] = tri.material.specularColor[1]
-      triangleData[triangleDataSize * i + 30] = tri.material.specularColor[2]
-      triangleData[triangleDataSize * i + 31] = tri.material.specularRoughness
-
-      triangleData[triangleDataSize * i + 32] = tri.material.emissionColor[0]
-      triangleData[triangleDataSize * i + 33] = tri.material.emissionColor[1]
-      triangleData[triangleDataSize * i + 34] = tri.material.emissionColor[2]
-      triangleData[triangleDataSize * i + 35] = tri.material.emissionStrength
-
-      triangleData[triangleDataSize * i + 36] = tri.material.refractionColor[0]
-      triangleData[triangleDataSize * i + 37] = tri.material.refractionColor[1]
-      triangleData[triangleDataSize * i + 38] = tri.material.refractionColor[2]
-      triangleData[triangleDataSize * i + 39] = tri.material.refractionChance
-
-      triangleData[triangleDataSize * i + 40] = tri.material.refractionRoughness
-      triangleData[triangleDataSize * i + 41] = tri.material.ior
-      triangleData[triangleDataSize * i + 42] = 0.0
-      triangleData[triangleDataSize * i + 43] = 0.0
-
-      // Adding inverseModel data to buffer
-      for (let j = 0; j < 16; j++) {
-        triangleData[triangleDataSize * i + 44 + j] = tri.inverseModel[j]
-      }
+      triangleData[triangleDataSize * i + 20] = this.scene.triangles[i].normals[2][0]
+      triangleData[triangleDataSize * i + 21] = this.scene.triangles[i].normals[2][1]
+      triangleData[triangleDataSize * i + 22] = this.scene.triangles[i].normals[2][2]
+      triangleData[triangleDataSize * i + 23] = tri.objectID
     }
 
     this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.scene.triangles.length)
   }
+
+  updateMaterialData() {
+    const materialDataSize = 36
+
+    const materialData: Float32Array = new Float32Array(materialDataSize * this.scene.objectMeshes.length)
+    for (let i = 0; i < this.scene.objectMeshes.length; i++) {
+      const mesh = this.scene.objectMeshes[i]
+
+      materialData[materialDataSize * i + 0] = mesh.material.albedo[0]
+      materialData[materialDataSize * i + 1] = mesh.material.albedo[1]
+      materialData[materialDataSize * i + 2] = mesh.material.albedo[2]
+      materialData[materialDataSize * i + 3] = mesh.material.specularChance
+
+      materialData[materialDataSize * i + 4] = mesh.material.specularColor[0]
+      materialData[materialDataSize * i + 5] = mesh.material.specularColor[1]
+      materialData[materialDataSize * i + 6] = mesh.material.specularColor[2]
+      materialData[materialDataSize * i + 7] = mesh.material.specularRoughness
+
+      materialData[materialDataSize * i + 8] = mesh.material.emissionColor[0]
+      materialData[materialDataSize * i + 9] = mesh.material.emissionColor[1]
+      materialData[materialDataSize * i + 10] = mesh.material.emissionColor[2]
+      materialData[materialDataSize * i + 11] = mesh.material.emissionStrength
+
+      materialData[materialDataSize * i + 12] = mesh.material.refractionColor[0]
+      materialData[materialDataSize * i + 13] = mesh.material.refractionColor[1]
+      materialData[materialDataSize * i + 14] = mesh.material.refractionColor[2]
+      materialData[materialDataSize * i + 15] = mesh.material.refractionChance
+
+      materialData[materialDataSize * i + 16] = mesh.material.refractionRoughness
+      materialData[materialDataSize * i + 17] = mesh.material.ior
+      materialData[materialDataSize * i + 18] = 0.0
+      materialData[materialDataSize * i + 19] = 0.0
+
+      // Adding inverseModel data to buffer
+      for (let j = 0; j < 16; j++) {
+        materialData[materialDataSize * i + 20 + j] = mesh.inverseModel[j]
+      }
+    }
+
+    this.device.queue.writeBuffer(this.materialBuffer, 0, materialData, 0, materialDataSize * this.scene.objectMeshes.length)
+  }
+
   updateSceneParameters() {
     const sceneData = {
       cameraPos: this.scene.camera.position,

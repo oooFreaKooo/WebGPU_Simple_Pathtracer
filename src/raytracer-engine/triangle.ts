@@ -5,31 +5,11 @@ export class Triangle {
   corners: vec3[]
   normals: vec3[]
   centroid: vec3
-  material: Material
-  inverseModel: mat4
-
-  constructor(material: Material = new Material()) {
+  objectID: number
+  constructor(objectID: number = 0) {
     this.corners = []
     this.normals = []
-    this.material = material
-    this.inverseModel = mat4.create()
-  }
-
-  setCorners(corner1: vec3, corner2: vec3, corner3: vec3): void {
-    this.corners = [corner1, corner2, corner3]
-  }
-
-  calculateNormals(): void {
-    const edge1 = vec3.create()
-    const edge2 = vec3.create()
-    const normal = vec3.create()
-
-    vec3.subtract(edge1, this.corners[1], this.corners[0])
-    vec3.subtract(edge2, this.corners[2], this.corners[0])
-    vec3.cross(normal, edge1, edge2)
-    vec3.normalize(normal, normal)
-
-    this.normals = [normal, normal, normal]
+    this.objectID = objectID
   }
 
   make_centroid(): void {

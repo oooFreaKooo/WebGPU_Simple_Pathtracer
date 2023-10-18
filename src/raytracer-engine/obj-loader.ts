@@ -22,9 +22,11 @@ export class ObjLoader {
   position: vec3
   rotation: vec3
   scale: vec3
+  objectID: number
 
-  constructor(material: Material, position: vec3, scale: vec3, rotation: vec3) {
+  constructor(material: Material, position: vec3, scale: vec3, rotation: vec3, objectID: number) {
     this.material = material
+    this.objectID = objectID
     this.v = []
     this.vt = []
     this.vn = []
@@ -120,9 +122,8 @@ export class ObjLoader {
       this.read_corner(vertex_descriptions[1], tri)
       this.read_corner(vertex_descriptions[2 + i], tri)
       this.read_corner(vertex_descriptions[3 + i], tri)
-      tri.material = this.material
+      tri.objectID = this.objectID
       tri.make_centroid()
-      tri.inverseModel = this.inverseModel
       this.triangles.push(tri)
     }
   }

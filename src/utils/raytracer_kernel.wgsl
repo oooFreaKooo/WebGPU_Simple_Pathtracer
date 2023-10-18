@@ -40,6 +40,7 @@ struct Material {
     refractionChance: f32,
     refractionRoughness: f32,
     ior: f32, //Index of Refraction
+    inverseModel: mat4x4<f32>,
 }
 
 
@@ -50,10 +51,12 @@ struct Triangle {
     normal_b: vec3f,
     corner_c: vec3f,
     normal_c: vec3f,
-    material: Material,
-    inverseModel: mat4x4<f32>,
+    objectID: f32,
 }
 
+struct MeshData {
+    materials: array<Material>,
+}
 
 struct ObjectData {
     triangles: array<Triangle>,
@@ -76,6 +79,7 @@ struct SurfacePoint {
 @group(0) @binding(4) var<storage, read> triangleLookup : ObjectIndices;
 @group(0) @binding(5) var skyTexture : texture_cube<f32>;
 @group(0) @binding(6) var textureSampler : sampler;
+@group(0) @binding(7) var<storage, read> mesh : MeshData;
 
 const EPSILON : f32 = 0.00001;
 const PI : f32 = 3.14159265358979323846;
@@ -341,10 +345,9 @@ fn hit_triangle(
 
     //Berechne die normale am Schnittpunkt mit Interpolation der Normalen der Dreiecksecken
     let normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
-    surfacePoint.normal = normalize((transpose(tri.inverseModel) * vec4(normal, 0.0)).xyz);
+    surfacePoint.normal = normalize((transpose(mesh.materials[u32(tri.objectID)].inverseModel) * vec4(normal, 0.0)).xyz);
 
-
-    surfacePoint.material = tri.material;
+    surfacePoint.material = mesh.materials[u32(tri.objectID)];
     surfacePoint.dist = dist;
     surfacePoint.position = ray.origin + ray.direction * dist;
     surfacePoint.hit = true; //Es gibt einen Treffer
