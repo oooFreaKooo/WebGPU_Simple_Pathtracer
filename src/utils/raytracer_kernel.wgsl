@@ -54,6 +54,7 @@ struct Triangle {
     inverseModel: mat4x4<f32>,
 }
 
+
 struct ObjectData {
     triangles: array<Triangle>,
 }
@@ -78,7 +79,7 @@ struct SurfacePoint {
 
 const EPSILON : f32 = 0.00001;
 const PI : f32 = 3.14159265358979323846;
-
+const BACKFACE_CULLING = true;
 
 //https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-camera/
 fn trace(camRay: Ray, seed: f32) -> vec3f {
@@ -90,17 +91,15 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let hit = traverse(ray);
 
         if !hit.hit {
-            //accumulatedColor += energy * sRGBToLinear(textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz);
-            accumulatedColor = vec3(0.0, 0.0, 0.0);
+            accumulatedColor += energy * sRGBToLinear(textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz);
+            //accumulatedColor = vec3(0.0, 0.0, 0.0);
             break;
         }
 
         let material = hit.material;
         var originalEnergy = energy;
 
-        if hit.front_face {
-            energy *= exp(-material.refractionColor * hit.dist);
-        }
+        energy *= select(vec3(1.0), exp(-material.refractionColor * hit.dist), hit.front_face);
 
         let newSeed = vec2(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
         let randomFloat: f32 = random(newSeed);
@@ -114,7 +113,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         var refractionChance = material.refractionChance;
         var rayProbability = 1.0;
 
-        if specularChance >= 0.0 {
+        if specularChance > 0.0 {
             specularChance = fresnelReflect(n1, n2, hit.normal, rayDirNorm, material.specularChance, 1.0);
             let chanceMultiplier = (1.0 - specularChance) / (1.0 - material.specularChance);
             refractionChance *= chanceMultiplier;
@@ -177,22 +176,12 @@ fn refract(uv: vec3<f32>, n: vec3<f32>, etai_over_etat: f32) -> vec3<f32> {
     return r_out_perp + r_out_parallel;
 }
 
+fn fresnelReflect(n1: f32, n2: f32, normal: vec3<f32>, rayDir: vec3<f32>, minReflectivity: f32, maxReflectivity: f32) -> f32 {
+    let r0 = pow(((n1 - n2) / (n1 + n2)), 2.0);
+    let cosTheta = min(dot(-rayDir, normal), 1.0);
+    let reflectance = r0 + (1.0 - r0) * pow(1.0 - cosTheta, 5.0);
 
-fn fresnelSchlick(cosTheta: f32, f0: f32, f90: f32) -> f32 {
-    return f0 + (f90 - f0) * pow(1.0 - cosTheta, 5.0);
-}
-
-fn fresnelReflect(n1: f32, n2: f32, incident: vec3<f32>, norm: vec3<f32>, f0: f32, f90: f32) -> f32 {
-    var normal = norm;
-    var cosI: f32 = dot(incident, normal);
-
-    if cosI > 0.0 {
-        normal = -normal;
-    } else {
-        cosI = -cosI;
-    }
-
-    return fresnelSchlick(cosI, f0, f90);
+    return mix(minReflectivity, maxReflectivity, reflectance);
 }
 
 //https://my.eng.utah.edu/~cs6965/slides/pathtrace.pdf
@@ -200,22 +189,18 @@ fn CosineWeightedHemisphereSample(normal: vec3<f32>, seed: vec2<f32>) -> vec3<f3
     let u = random(seed);
     let v = random(vec2(seed.y, seed.x + 1.0));
 
-    //Sphärische Koordinaten
-    //Verteilung ist kosinus gewichtet: die generierten Vektoren zeigen wahrscheinlicher in richtung der normalen
-    let theta = 2.0 * PI * v; //Azimutwinkel : Vollkreis im intervall 0 und 2pi
-    let phi = asin(sqrt(u));//Polarwinkel: vertikale richtung -pi/2 und pi/2. phi nah an 0 heißt vektor ist nah an horizontaler ebene
+    // Spherical to Cartesian coordinates transformation
+    let sin_phi = sqrt(u);
+    let cos_phi = sqrt(1.0 - u);
+    let cos_theta = cos(2.0 * PI * v);
+    let sin_theta = sin(2.0 * PI * v);
 
-    let sin_phi = sin(phi);
-    //Kartesische Koordinaten: Vektoren die in eine Zufällige richtung im Raum zeigen
-    let x = cos(theta) * sin_phi;
-    let y = sin(theta) * sin_phi;
-    let z = cos(phi);   //von 0 bis pi/2 : Halbkugel
-
+    let x = cos_theta * sin_phi;
+    let y = sin_theta * sin_phi;
+    let z = cos_phi;
 
     //Einen up vektor erstellen der nicht parallel zur Normale ist
-    let xSmallest = f32(abs(normal.x) < abs(normal.y) && abs(normal.x) < abs(normal.z)); // 1 oder 0
-    let ySmallest = f32(abs(normal.y) < abs(normal.z) && abs(normal.x) >= abs(normal.y)); // 1 oder 0
-    let up = vec3(xSmallest, ySmallest, 1.0 - xSmallest - ySmallest);
+    let up = select(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), (abs(normal.z) < 0.99));
 
     //Orthonormalbasis: zwei vektoren die senkrecht zur normale stehen (kreuzprodukt)
     let tangent = normalize(cross(up, normal));
@@ -233,14 +218,13 @@ fn random(seed: vec2<f32>) -> f32 {
     return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-
 fn traverse(ray: Ray) -> SurfacePoint {
     var surfacePoint: SurfacePoint;
     surfacePoint.hit = false;
     var nearestHit: f32 = 9999.0;
 
     var currentNode: Node = tree.nodes[0];
-    var stack: array<Node, 32>;
+    var stack: array<Node, 20>;
     var stackLocation: u32 = 0u;
 
     while true {
@@ -327,9 +311,9 @@ fn hit_triangle(
     let h: vec3<f32> = cross(ray.direction, edge_ac); // Vektor senkrecht zu Dreiecks ebene
     let a: f32 = dot(edge_ab, h); //Skalarprodukt : Wenn a nahe 0 ist, dann ist h fast parallel zur Kante
 
-    //if a < EPSILON {
-    //    return surfacePoint;
-    //}
+    if (a < EPSILON) && BACKFACE_CULLING == true {
+        return surfacePoint;
+    }
 
     let f: f32 = 1.0 / a; // Kehrwert von a
     let s: vec3<f32> = ray.origin - tri.corner_a; // Vektor vom Ursprung des Strahls zu einer Ecke des Dreiecks
@@ -363,7 +347,7 @@ fn hit_triangle(
     surfacePoint.material = tri.material;
     surfacePoint.dist = dist;
     surfacePoint.position = ray.origin + ray.direction * dist;
-    surfacePoint.hit = true;//Es gibt einen Treffer
+    surfacePoint.hit = true; //Es gibt einen Treffer
 
     // Determine if the ray hits the front face
     if dot(ray.direction, surfacePoint.normal) < 0.0 {
@@ -431,6 +415,8 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     var accumulated_color: vec3f = vec3(0.0);
     var seed: f32 = scene.time / 25236.3;
     var myRay: Ray;
+    myRay.origin = scene.cameraPos;
+
     for (var i: u32 = 0u; i < num_samples; i++) {
         let jitter: vec2<f32> = (random(vec2<f32 >(seed, f32(i))) - 0.5) / vec2<f32 >(screen_size);
         let screen_jittered: vec2<f32> = vec2<f32 >(screen_pos) + jitter - halfScreenSize;
@@ -438,7 +424,6 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
         let vertical_coefficient: f32 = tanHalfFOV * screen_jittered.y / (f32(screen_size.y) * aspect_ratio);
 
         myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
-        myRay.origin = scene.cameraPos;
         accumulated_color += trace(myRay, seed + f32(i));
     }
     var textureSky = textureSampleLevel(skyTexture, textureSampler, myRay.direction, 0.0).xyz;

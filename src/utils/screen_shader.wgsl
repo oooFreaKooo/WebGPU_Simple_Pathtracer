@@ -5,8 +5,8 @@ struct ViewParams {
 @group(0) @binding(0) var screen_sampler : sampler;
 @group(0) @binding(1) var color_buffer : texture_2d<f32>;
 @group(0) @binding(2) var<uniform> params: ViewParams;
-@group(0) @binding(3) var accum_buffer_in: texture_2d<f32>;
-@group(0) @binding(4) var accum_buffer_out: texture_storage_2d<rgba16float, write>;
+@group(1) @binding(0) var accum_buffer_in: texture_2d<f32>;
+@group(1) @binding(1) var accum_buffer_out: texture_storage_2d<rgba16float, write>;
 
 @fragment
 fn frag_main(@location(0) TexCoord: vec2<f32>) -> @location(0) vec4<f32> {

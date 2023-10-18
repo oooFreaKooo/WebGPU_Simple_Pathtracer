@@ -686,19 +686,3 @@ export function createScene9(): ObjectProperties[] {
 
   return spheres
 }
-
-export function generateTerrain(width: number, depth: number, resolution: number): vec3[] {
-  const pointCloud: vec3[] = []
-
-  for (let x = 0; x <= width; x += resolution) {
-    for (let z = 0; z <= depth; z += resolution) {
-      // Simple height generation using a sine wave function
-      const y = Math.sin(x * 0.1) * 10 + Math.sin(z * 0.1) * 10
-
-      const point: vec3 = [x, y, z]
-      pointCloud.push(point)
-    }
-  }
-
-  return pointCloud
-}

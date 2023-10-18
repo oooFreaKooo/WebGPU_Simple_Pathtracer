@@ -9,8 +9,8 @@ import {
   createScene3,
   createScene4,
   createScene5,
-  generateTerrain,
   createScene6,
+  createScene8,
 } from "./utils/helper"
 
 export class Application {
@@ -90,7 +90,6 @@ export class Application {
         scale: [0.5, 0.5, 0.5],
       },
     ]
-    const terrainPointCloud = generateTerrain(10, 10, 2)
     const cornelbox = createCornellBox()
     const scene1 = createScene1()
     const scene2 = createScene2()
@@ -98,7 +97,8 @@ export class Application {
     const scene4 = createScene4()
     const scene5 = createScene5()
     const scene6 = createScene6()
-    await this.scene.createObjects(scene6)
+    const scene8 = createScene8()
+    await this.scene.createObjects(scene4)
     //await this.scene.pointCloudMesh(terrainPointCloud, glowMaterial)
     await this.scene.prepareBVH()
     await this.renderer.Initialize()

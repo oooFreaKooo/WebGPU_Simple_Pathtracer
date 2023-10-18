@@ -5,7 +5,6 @@ import { ObjLoader } from "./obj-loader"
 import { Triangle } from "./triangle"
 import { AABB, Bin, Node } from "./node"
 import { ObjectProperties } from "../utils/helper"
-import { PointCloudMesher } from "./mesher"
 import { Material } from "./material"
 
 const MAX_VALUE = Number.POSITIVE_INFINITY
@@ -22,7 +21,6 @@ export class Scene {
   nodes: Node[]
   nodesUsed: number = 0
   objectMeshes: ObjLoader[] = []
-  mesher: PointCloudMesher
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -46,12 +44,6 @@ export class Scene {
     }
   }
 
-  // Additional method to load and extract triangles from the PointCloudMesher.
-  async pointCloudMesh(pointCloud: vec3[], material: Material): Promise<void> {
-    this.mesher = new PointCloudMesher(pointCloud)
-    this.mesher.generateTriangles(material)
-  }
-
   async prepareBVH() {
     this.triangles = []
 
@@ -62,9 +54,6 @@ export class Scene {
       })
     })
 
-    /* this.mesher.triangles.forEach((triangle) => {
-      this.triangles.push(triangle)
-    }) */
     this.triangleIndices = new Array(this.triangles.length)
     for (var i: number = 0; i < this.triangles.length; i += 1) {
       this.triangleIndices[i] = i
