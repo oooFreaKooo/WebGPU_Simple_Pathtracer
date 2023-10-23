@@ -1,11 +1,11 @@
-import { Application } from "./app"
+import { Application } from "./raytracer-own/core/app"
 
 async function mainFunc() {
   const canvas = document.createElement("canvas")
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
 
-  // Get the .time-container div
+  // Get the .time-container from the html file
   const timeContainer = document.querySelector(".time-container")
 
   // If the timeContainer exists, insert the canvas before it. Otherwise, append the canvas to the body.
@@ -15,6 +15,7 @@ async function mainFunc() {
     document.body.appendChild(canvas)
   }
 
+  // start the application
   const app = new Application(canvas)
   await app.start()
 }
