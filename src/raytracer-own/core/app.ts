@@ -58,10 +58,10 @@ export class Application {
         rotation: [90.0, 180.0, 0.0],
       },
       {
-        modelPath: "./src/assets/models/klein.obj",
-        material: glass,
-        position: [0.0, 0.0, 0.0],
-        scale: [0.35, 0.35, 0.35],
+        modelPath: "./src/assets/models/sphere.obj",
+        material: gold,
+        position: [0.0, 2.0, 0.0],
+        scale: [1.35, 1.35, 1.35],
       },
     ]
 
@@ -79,7 +79,7 @@ export class Application {
 
     // Create objects in the scene
     //await this.scene.createObjects(cornelbox)
-    await this.scene.createObjects(scene3)
+    await this.scene.createObjects(scene9)
 
     // Build the BVH after creating all the objects
     await this.scene.prepareBVH()

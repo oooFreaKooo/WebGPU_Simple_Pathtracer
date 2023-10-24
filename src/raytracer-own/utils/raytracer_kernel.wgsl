@@ -24,6 +24,7 @@ struct SceneData {
     maxBounces: f32,
     time: f32,
     samples: f32,
+    weight: f32,
 }
 
 struct Material {
@@ -71,15 +72,15 @@ struct SurfacePoint {
     front_face: bool,
 }
 
-
-@group(0) @binding(0) var color_buffer : texture_storage_2d<rgba16float, write>;
-@group(0) @binding(1) var<uniform> scene : SceneData;
-@group(0) @binding(2) var<storage, read> objects : ObjectData;
-@group(0) @binding(3) var<storage, read> tree : BVH;
-@group(0) @binding(4) var<storage, read> triangleLookup : ObjectIndices;
-@group(0) @binding(5) var skyTexture : texture_cube<f32>;
-@group(0) @binding(6) var textureSampler : sampler;
-@group(0) @binding(7) var<storage, read> mesh : MeshData;
+@group(0) @binding(0) var outputTex : texture_storage_2d<rgba16float, write>;
+@group(0) @binding(1) var inputTex : texture_2d<f32>;
+@group(0) @binding(2) var<uniform> scene : SceneData;
+@group(0) @binding(3) var<storage, read> objects : ObjectData;
+@group(0) @binding(4) var<storage, read> tree : BVH;
+@group(0) @binding(5) var<storage, read> triangleLookup : ObjectIndices;
+@group(0) @binding(6) var skyTexture : texture_cube<f32>;
+@group(0) @binding(7) var textureSampler : sampler;
+@group(0) @binding(8) var<storage, read> mesh : MeshData;
 
 const EPSILON : f32 = 0.00001;
 const PI : f32 = 3.14159265358979323846;
@@ -95,7 +96,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let hit = traverse(ray);
 
         if !hit.hit {
-            accumulatedColor += energy * sRGBToLinear(textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz);
+            accumulatedColor += energy * textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz;
             //accumulatedColor += energy * vec3(0.35, 0.35, 0.35);
             break;
         }
@@ -157,6 +158,8 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         if isRefractive == 0.0 {
             energy = originalEnergy;
             energy *= material.albedo + material.specularColor * isSpecular;
+
+            //energy += material.emissionColor * material.emissionStrength;
         }
 
         energy /= rayProbability;
@@ -403,10 +406,10 @@ fn hit_aabb(ray: Ray, node: Node) -> f32 {
     }
 }
 
-@compute @workgroup_size(8, 8, 1)
+@compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
-    let screen_size: vec2i = vec2<i32 >(textureDimensions(color_buffer));
-    let screen_pos: vec2i = vec2<i32 >(i32(GlobalInvocationID.x), i32(GlobalInvocationID.y));
+    let screen_size: vec2i = vec2<i32 >(textureDimensions(outputTex));
+    let screen_pos: vec2i = vec2<i32>(GlobalInvocationID.xy);
 
     let aspect_ratio: f32 = f32(screen_size.x) / f32(screen_size.y);
     let FOV: f32 = scene.cameraFOV;
@@ -417,24 +420,30 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     let up: vec3f = scene.cameraUp;
 
     let num_samples: u32 = u32(scene.samples);
-    var accumulated_color: vec3f = vec3(0.0);
+    var accumulated_color = vec4(0.0, 0.0, 0.0, 1.0);
     var seed: f32 = scene.time * 0.00025;
     var myRay: Ray;
     myRay.origin = scene.cameraPos;
 
     for (var i: u32 = 0u; i < num_samples; i++) {
-        let jitter: vec2<f32> = (random(vec2<f32 >(seed, f32(i))) - 0.5) / vec2<f32 >(screen_size);
-        let screen_jittered: vec2<f32> = vec2<f32 >(screen_pos) + jitter - halfScreenSize;
-        let horizontal_coefficient: f32 = FOV * screen_jittered.x / f32(screen_size.x);
-        let vertical_coefficient: f32 = FOV * screen_jittered.y / (f32(screen_size.y) * aspect_ratio);
+        let sample_offset: vec2<f32> = vec2<f32>(f32(i) % 2.0, f32(i) / 2.0) / vec2<f32>(2.0, 2.0); // 2x2 grid for 4 samples
+        let screen_sampled: vec2<f32> = vec2<f32 >(screen_pos) + sample_offset - halfScreenSize;
+        let horizontal_coefficient: f32 = FOV * screen_sampled.x / f32(screen_size.x);
+        let vertical_coefficient: f32 = FOV * screen_sampled.y / (f32(screen_size.y) * aspect_ratio);
 
         myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
-        accumulated_color += trace(myRay, seed + f32(i));
+        accumulated_color += vec4(trace(myRay, seed + f32(i)), 1.0);
     }
+
     var textureSky = textureSampleLevel(skyTexture, textureSampler, myRay.direction, 0.0).xyz;
-    var pixel_color: vec3f = accumulated_color / f32(num_samples);
-    //pixel_color = clamp(pixel_color, vec3<f32>(0.0), vec3<f32>(1.5));
-    textureStore(color_buffer, screen_pos, vec4<f32 >(pixel_color, 1.0));
+    let newImage = accumulated_color / f32(num_samples);
+    let accumulated = textureLoad(inputTex, screen_pos, 0);
+
+  // weighted average between the new and the accumulated image
+    let result_color = scene.weight * newImage + (1.0 - scene.weight) * accumulated;
+
+    //let result_color = newImage + accumulated;
+    textureStore(outputTex, screen_pos, result_color);
 }
 
 

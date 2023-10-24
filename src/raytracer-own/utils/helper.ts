@@ -651,23 +651,23 @@ function randomMaterial(): Material {
 // Monkeys
 export function createScene9(): ObjectProperties[] {
   const spheres: ObjectProperties[] = []
-  const gridSize = 50
+  const gridSize = 25
 
-  let positionX = 0
+  let positionY = 0
   let positionZ = 0
 
   for (let i = 0; i < gridSize; i++) {
     positionZ = 0
     for (let k = 0; k < gridSize; k++) {
       spheres.push({
-        modelPath: "./src/assets/models/monkey.obj",
+        modelPath: "./src/assets/models/dragon.obj",
         material: new Material(randomMaterial()),
-        position: [positionX, 1.0, positionZ],
+        position: [1.0, positionY, positionZ],
         scale: [1.0, 1.0, 1.0],
       })
       positionZ += randomInRange(5, 5) // Random spacing in Z direction
     }
-    positionX += randomInRange(5, 5) // Random spacing in X direction
+    positionY += randomInRange(5, 5) // Random spacing in X direction
   }
   return spheres
 }
