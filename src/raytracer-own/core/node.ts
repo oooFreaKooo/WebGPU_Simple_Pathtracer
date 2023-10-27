@@ -1,5 +1,4 @@
 import { vec3 } from "gl-matrix"
-import { Triangle } from "./triangle"
 
 export class Node {
   aabbMax: vec3

@@ -15,15 +15,16 @@ struct Ray {
     origin: vec3<f32>,
 }
 
-struct SceneData {
+struct CameraData {
     cameraPos: vec3<f32>,
     cameraForwards: vec3<f32>,
     cameraRight: vec3<f32>,
     cameraUp: vec3<f32>,
-    cameraFOV: f32,
-    maxBounces: f32,
+}
+
+
+struct SceneVariables {
     time: f32,
-    samples: f32,
     weight: f32,
 }
 
@@ -63,6 +64,16 @@ struct ObjectData {
 struct ObjectIndices {
     primitiveIndices: array<f32>,
 }
+
+struct Settings {
+    cameraFOV: f32,
+    maxBounces: f32,
+    numSamples: f32,
+    BACKFACE_CULLING: f32,
+    SKY_TEXTURE: f32,
+    aspectRatio: f32,
+}
+
 struct SurfacePoint {
     material: Material,
     position: vec3f,
@@ -74,30 +85,76 @@ struct SurfacePoint {
 
 @group(0) @binding(0) var outputTex : texture_storage_2d<rgba16float, write>;
 @group(0) @binding(1) var inputTex : texture_2d<f32>;
-@group(0) @binding(2) var<uniform> scene : SceneData;
+@group(0) @binding(2) var<uniform> camera : CameraData;
 @group(0) @binding(3) var<storage, read> objects : ObjectData;
 @group(0) @binding(4) var<storage, read> tree : BVH;
 @group(0) @binding(5) var<storage, read> triangleLookup : ObjectIndices;
 @group(0) @binding(6) var skyTexture : texture_cube<f32>;
 @group(0) @binding(7) var textureSampler : sampler;
 @group(0) @binding(8) var<storage, read> mesh : MeshData;
+@group(0) @binding(9) var<uniform> settings : Settings;
+@group(0) @binding(10) var<uniform> scene : SceneVariables;
+
 
 const EPSILON : f32 = 0.00001;
 const PI : f32 = 3.14159265358979323846;
-const BACKFACE_CULLING = true;
+
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
+    let screen_size: vec2i = vec2<i32 >(textureDimensions(outputTex));
+    let screen_pos: vec2i = vec2<i32>(GlobalInvocationID.xy);
+
+    let FOV: f32 = settings.cameraFOV;
+    let halfScreenSize: vec2<f32> = vec2<f32 >(screen_size) * 0.5;
+
+    let forwards: vec3f = camera.cameraForwards;
+    let right: vec3f = camera.cameraRight;
+    let up: vec3f = camera.cameraUp;
+    var myRay: Ray;
+    myRay.origin = camera.cameraPos;
+    let seed = scene.time * 0.00025;
+    let jitterScale: f32 = 3.0;
+
+    var accumulatedColor: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+
+    for (var i: f32 = 0.0; i < settings.numSamples; i = i + 1.0) {
+        let jitter: vec2<f32> = (vec2<f32>(random(vec2<f32>(f32(screen_pos.x), seed + i)), random(vec2<f32>(f32(screen_pos.y), seed - i))) - 0.5) * jitterScale;
+        let screen_sampled_jittered: vec2<f32> = vec2<f32>(screen_pos) + jitter - halfScreenSize;
+        let horizontal_coefficient: f32 = FOV * screen_sampled_jittered.x / f32(screen_size.x);
+        let vertical_coefficient: f32 = FOV * screen_sampled_jittered.y / (f32(screen_size.y) * settings.aspectRatio);
+        myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
+        accumulatedColor = accumulatedColor + vec4(trace(myRay, seed + i), 1.0);
+        let currentBrightness: f32 = (accumulatedColor.r + accumulatedColor.g + accumulatedColor.b) / 3.0;
+    }
+
+    let newImage = accumulatedColor / settings.numSamples;
+
+    var textureSky = textureSampleLevel(skyTexture, textureSampler, myRay.direction, 0.0).xyz;
+    let accumulated = textureLoad(inputTex, screen_pos, 0);
+
+    // weighted average between the new and the accumulated image
+    let result_color = scene.weight * newImage + (1.0 - scene.weight) * accumulated;
+
+    textureStore(outputTex, screen_pos, result_color);
+}
+
 
 //https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-camera/
 fn trace(camRay: Ray, seed: f32) -> vec3f {
     var ray = camRay;
     var accumulatedColor: vec3f = vec3(0.0, 0.0, 0.0);
     var energy = vec3(1.0, 1.0, 1.0);
+    var skyColor: vec3f;
 
-    for (var bounce: u32 = 0u; bounce < u32(scene.maxBounces); bounce++) {
+    for (var bounce: u32 = 0u; bounce < u32(settings.maxBounces); bounce++) {
         let hit = traverse(ray);
 
-        if !hit.hit {
+        if !hit.hit && settings.SKY_TEXTURE == 1.0 {
             accumulatedColor += energy * textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz;
-            //accumulatedColor += energy * vec3(0.35, 0.35, 0.35);
+            break;
+        } else if !hit.hit {
+            accumulatedColor += energy * vec3(0.0);
             break;
         }
 
@@ -118,7 +175,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         var refractionChance = material.refractionChance;
         var rayProbability = 1.0;
 
-        if specularChance > 0.0 {
+        if specularChance > 0.5 {
             specularChance = fresnelReflect(n1, n2, hit.normal, rayDirNorm, material.specularChance, 1.0);
             let chanceMultiplier = (1.0 - specularChance) / (1.0 - material.specularChance);
             refractionChance *= chanceMultiplier;
@@ -136,7 +193,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
             rayProbability = 1.0 - (specularChance + refractionChance);
         }
 
-        rayProbability = max(rayProbability, 0.001);
+        rayProbability = max(rayProbability, 0.01);
 
         ray.origin = hit.position + hit.normal * select(0.01, -0.01, isRefractive == 1.0);
 
@@ -150,25 +207,23 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let randomDirection: vec3<f32> = CosineWeightedHemisphereSample(-hit.normal, newSeed);
         refractDir = normalize(mix(refractDir, randomDirection, material.refractionRoughness * material.refractionRoughness));
 
-        ray.direction = mix(diffuseDir, specularDir, isSpecular);
-        ray.direction = mix(ray.direction, refractDir, isRefractive);
+        ray.direction = mix(mix(diffuseDir, specularDir, isSpecular), refractDir, isRefractive);
 
-        accumulatedColor += material.emissionColor * material.emissionStrength * energy;
+
+        accumulatedColor += energy * material.emissionColor * material.emissionStrength;
 
         if isRefractive == 0.0 {
             energy = originalEnergy;
             energy *= material.albedo + material.specularColor * isSpecular;
-
-            //energy += material.emissionColor * material.emissionStrength;
         }
 
         energy /= rayProbability;
 
         let p = max(energy.r, max(energy.g, energy.b));
-        if random(newSeed) > p {
+        if randomFloat > p {
             break;
         }
-        energy *= (1.0 / p);
+        energy *= (2.0 / p);
     }
 
     return accumulatedColor;
@@ -301,6 +356,7 @@ fn traverse(ray: Ray) -> SurfacePoint {
 }
 
 //https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
+// Möller–Trumbore intersection algorithm
 fn hit_triangle(
     ray: Ray,
     tri: Triangle,
@@ -313,14 +369,15 @@ fn hit_triangle(
     surfacePoint.material = oldSurfacePoint.material;
 
     //Kanten des Dreiecks vom Punkt A
-    let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
-    let edge_ac: vec3<f32> = tri.corner_c - tri.corner_a;
+    let edge_1: vec3<f32> = tri.corner_b - tri.corner_a;
+    let edge_2: vec3<f32> = tri.corner_c - tri.corner_a;
 
     //h ist das Kreuzprodukt der Richtung des Strahls und einer Kante des Dreiecks
-    let h: vec3<f32> = cross(ray.direction, edge_ac); // Vektor senkrecht zu Dreiecks ebene
-    let a: f32 = dot(edge_ab, h); //Skalarprodukt : Wenn a nahe 0 ist, dann ist h fast parallel zur Kante
+    let h: vec3<f32> = cross(ray.direction, edge_2); // Vektor senkrecht zu Dreiecks ebene
+    let a: f32 = dot(edge_1, h); //Skalarprodukt : Wenn a nahe 0 ist, dann ist h fast parallel zur Kante
 
-    if (a < EPSILON) && BACKFACE_CULLING == true {
+
+    if (a < EPSILON) && settings.BACKFACE_CULLING == 1.0 {
         return surfacePoint;
     }
 
@@ -333,7 +390,7 @@ fn hit_triangle(
         return surfacePoint;
     }
 
-    let q: vec3<f32> = cross(s, edge_ab);
+    let q: vec3<f32> = cross(s, edge_1);
     let v: f32 = f * dot(ray.direction, q);//Berechne den Parameter v für baryzentrische Koordinaten
 
     //Wenn v außerhalb des Intervalls [0,1-u] liegt, gibt es keinen Treffer
@@ -341,7 +398,7 @@ fn hit_triangle(
         return surfacePoint;
     }
 
-    let dist: f32 = f * dot(edge_ac, q); //Berechne den Abstand vom Ursprung des Strahls zum Trefferpunkt
+    let dist: f32 = f * dot(edge_2, q); //Berechne den Abstand vom Ursprung des Strahls zum Trefferpunkt
 
     //Wenn t außerhalb des Intervalls [tMin, tMax] liegt, gibt es keinen Treffer
     if dist < tMin || dist > tMax {
@@ -349,7 +406,8 @@ fn hit_triangle(
     }
 
     //Berechne die normale am Schnittpunkt mit Interpolation der Normalen der Dreiecksecken
-    let normal = (1.0 - u - v) * tri.normal_a + u * tri.normal_b + v * tri.normal_c;
+    let normal = normalize(tri.normal_b * u + tri.normal_c * v + tri.normal_a * (1.0 - u - v));
+    //let normal = normalize(cross(edge_1, edge_2));
     surfacePoint.normal = normalize((transpose(mesh.materials[u32(tri.objectID)].inverseModel) * vec4(normal, 0.0)).xyz);
 
     surfacePoint.material = mesh.materials[u32(tri.objectID)];
@@ -365,20 +423,6 @@ fn hit_triangle(
         surfacePoint.normal = -surfacePoint.normal; // invert the normal for back face
     }
     return surfacePoint;
-}
-
-
-fn sRGBToLinear(sRGBColor: vec3<f32>) -> vec3<f32> {
-    var linearColor: vec3<f32>;
-
-    for (var i = 0u; i < 3u; i = i + 1u) {
-        if sRGBColor[i] <= 0.04045 {
-            linearColor[i] = sRGBColor[i] / 12.92;
-        } else {
-            linearColor[i] = pow((sRGBColor[i] + 0.055) / 1.055, 2.4);
-        }
-    }
-    return linearColor;
 }
 
 
@@ -405,45 +449,4 @@ fn hit_aabb(ray: Ray, node: Node) -> f32 {
         return t_min;
     }
 }
-
-@compute @workgroup_size(8, 8)
-fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
-    let screen_size: vec2i = vec2<i32 >(textureDimensions(outputTex));
-    let screen_pos: vec2i = vec2<i32>(GlobalInvocationID.xy);
-
-    let aspect_ratio: f32 = f32(screen_size.x) / f32(screen_size.y);
-    let FOV: f32 = scene.cameraFOV;
-    let halfScreenSize: vec2<f32> = vec2<f32 >(screen_size) * 0.5;
-
-    let forwards: vec3f = scene.cameraForwards;
-    let right: vec3f = scene.cameraRight;
-    let up: vec3f = scene.cameraUp;
-
-    let num_samples: u32 = u32(scene.samples);
-    var accumulated_color = vec4(0.0, 0.0, 0.0, 1.0);
-    var seed: f32 = scene.time * 0.00025;
-    var myRay: Ray;
-    myRay.origin = scene.cameraPos;
-
-    for (var i: u32 = 0u; i < num_samples; i++) {
-        let sample_offset: vec2<f32> = vec2<f32>(f32(i) % 2.0, f32(i) / 2.0) / vec2<f32>(2.0, 2.0); // 2x2 grid for 4 samples
-        let screen_sampled: vec2<f32> = vec2<f32 >(screen_pos) + sample_offset - halfScreenSize;
-        let horizontal_coefficient: f32 = FOV * screen_sampled.x / f32(screen_size.x);
-        let vertical_coefficient: f32 = FOV * screen_sampled.y / (f32(screen_size.y) * aspect_ratio);
-
-        myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
-        accumulated_color += vec4(trace(myRay, seed + f32(i)), 1.0);
-    }
-
-    var textureSky = textureSampleLevel(skyTexture, textureSampler, myRay.direction, 0.0).xyz;
-    let newImage = accumulated_color / f32(num_samples);
-    let accumulated = textureLoad(inputTex, screen_pos, 0);
-
-  // weighted average between the new and the accumulated image
-    let result_color = scene.weight * newImage + (1.0 - scene.weight) * accumulated;
-
-    //let result_color = newImage + accumulated;
-    textureStore(outputTex, screen_pos, result_color);
-}
-
 

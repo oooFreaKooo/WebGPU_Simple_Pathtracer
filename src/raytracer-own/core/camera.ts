@@ -4,18 +4,16 @@ import { Deg2Rad } from "../utils/helper"
 export class Camera {
   cameraIsMoving: boolean = false
   forwards: Float32Array
-  fov: number
+  fov: number = 135
   phi: number
   position: Float32Array
   right: Float32Array
   theta: number
   up: Float32Array
-  constructor(position: number[], fovDegrees = 120.0) {
+  constructor(position: number[]) {
     this.position = new Float32Array(position)
     this.theta = 0.0
     this.phi = 0.0
-    this.fov = Deg2Rad(fovDegrees)
-
     this.recalculate_vectors()
   }
 

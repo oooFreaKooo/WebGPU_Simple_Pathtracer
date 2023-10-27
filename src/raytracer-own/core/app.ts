@@ -12,6 +12,7 @@ import {
   createScene6,
   createScene8,
   createScene9,
+  createScene7,
 } from "../utils/helper"
 
 export class Application {
@@ -70,20 +71,21 @@ export class Application {
 
     const scene1 = createScene1() // Refraction Roughness Test
     const scene2 = createScene2() // IOR Test
-    const scene3 = createScene3() // Absorbsion Test
+    const scene3 = createScene3() // Refraction Color Test
     const scene4 = createScene4() // Reflection Test
     const scene5 = createScene5() // Reflection roughtness Test
-    const scene6 = createScene6() // Absorbsion Test
-    const scene8 = createScene8()
-    const scene9 = createScene9()
+    const scene6 = createScene6() // Emission Color Test
+    const scene7 = createScene7() // Cornell Boxes Wall
+    const scene8 = createScene8() // Dragon
+    const scene9 = createScene9() // Monkeys with random materials
 
     // Create objects in the scene
     //await this.scene.createObjects(cornelbox)
-    await this.scene.createObjects(scene9)
+    await this.scene.createObjects(cornelbox)
 
     // Build the BVH after creating all the objects
+    //await this.scene.prepareBVH()
     await this.scene.prepareBVH()
-
     // Initialize the renderer
     await this.renderer.Initialize()
   }

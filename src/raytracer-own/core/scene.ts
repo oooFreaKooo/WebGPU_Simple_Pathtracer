@@ -21,16 +21,20 @@ export class Scene {
   nodesUsed: number = 0
   triangleIndices: number[]
   triangles: Triangle[]
+  enableSkytexture: number = 0
+  enableCulling: number = 1
+  maxBounces: number = 8
+  samples: number = 1
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
     this.initialize()
   }
 
-  // create the camera and controls
+  // scene settings
   private initialize() {
-    this.camera = new Camera([0.01, 1.5, -6.0])
-    this.cameraControls = new Controls(this.canvas, this.camera)
+    this.camera = new Camera([0.01, 1.5, -6.0]) // camera position
+    this.cameraControls = new Controls(this.canvas, this.camera) // create controls
   }
 
   // creates objects using the ObjLoader
@@ -169,7 +173,7 @@ export class Scene {
   // This function determines the best split plane for a given node in a spatial data structure
   // The goal is to find an optimal axis and position to split the nodes triangles, minimizing the cost
   private findBestSplitPlane(node: Node): { bestAxis: number; bestPos: number; bestCost: number } {
-    const BINS = 4
+    const BINS = 8
     let bestCost = Infinity
     let bestAxis = -1
     let bestPos = 0

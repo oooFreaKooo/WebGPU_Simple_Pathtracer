@@ -104,15 +104,34 @@ export class ObjLoader {
     line = line.replace("\n", "")
     const vertex_descriptions = line.split(" ")
 
-    const triangle_count = vertex_descriptions.length - 3
-    for (var i = 0; i < triangle_count; i++) {
+    if (vertex_descriptions.length === 4) {
+      // Triangular face
       var tri: Triangle = new Triangle()
       this.read_corner(vertex_descriptions[1], tri)
-      this.read_corner(vertex_descriptions[2 + i], tri)
-      this.read_corner(vertex_descriptions[3 + i], tri)
+      this.read_corner(vertex_descriptions[2], tri)
+      this.read_corner(vertex_descriptions[3], tri)
       tri.objectID = this.objectID
       tri.make_centroid()
       this.triangles.push(tri)
+    } else if (vertex_descriptions.length === 5) {
+      // Quadrilateral face
+      // First triangle
+      var tri1: Triangle = new Triangle()
+      this.read_corner(vertex_descriptions[1], tri1)
+      this.read_corner(vertex_descriptions[2], tri1)
+      this.read_corner(vertex_descriptions[3], tri1)
+      tri1.objectID = this.objectID
+      tri1.make_centroid()
+      this.triangles.push(tri1)
+
+      // Second triangle
+      var tri2: Triangle = new Triangle()
+      this.read_corner(vertex_descriptions[1], tri2)
+      this.read_corner(vertex_descriptions[3], tri2)
+      this.read_corner(vertex_descriptions[4], tri2)
+      tri2.objectID = this.objectID
+      tri2.make_centroid()
+      this.triangles.push(tri2)
     }
   }
 
