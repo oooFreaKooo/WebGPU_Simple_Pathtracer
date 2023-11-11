@@ -380,7 +380,7 @@ export class Renderer {
       frameTimeLabel.innerText = avgFps.toFixed(2).toString()
     }
     if (renderTimeLabel) {
-      renderTimeLabel.innerText = avgFrametime.toFixed(2).toString()
+      renderTimeLabel.innerText = this.accumulationCount.toFixed(2).toString()
     }
 
     this.requestId = requestAnimationFrame(() => this.renderLoop())

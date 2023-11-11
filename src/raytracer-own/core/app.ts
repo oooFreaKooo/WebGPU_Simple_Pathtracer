@@ -90,7 +90,7 @@ export class Application {
     const scene9 = createScene9() // Monkeys with random materials
 
     // Create objects in the scene
-    await this.scene.createObjects(scene5)
+    await this.scene.createObjects(cornelbox)
 
     // Build the BVH after creating all the objects
     await this.scene.prepareBVH()
