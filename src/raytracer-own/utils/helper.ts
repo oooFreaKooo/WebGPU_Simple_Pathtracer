@@ -90,6 +90,85 @@ export function linearToSRGB(x: number) {
   return 1.055 * Math.pow(x, 1.0 / 2.4) - 0.055
 }
 
+export function createCornellBox(): ObjectProperties[] {
+  const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
+  const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
+  const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
+  const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
+  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.05, specularChance: 1.0 })
+  return [
+    // Ground
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: whiteMaterial,
+      position: [0.0, 0.0, 0.0],
+      scale: [0.5, 0.5, 0.5],
+    },
+    // Ceiling
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: whiteMaterial,
+      position: [0.0, 5.0, 0.0],
+      scale: [0.5, 0.5, 0.5],
+      rotation: [180.0, 0.0, 0.0],
+    },
+    // Left wall
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: redMaterial,
+      position: [-2.5, 2.5, 0.0],
+      scale: [0.5, 1.0, 0.5],
+      rotation: [180.0, 0.0, 90.0],
+    },
+    // Right wall
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: greenMaterial,
+      position: [2.5, 2.5, 0.0],
+      scale: [0.5, 1.0, 0.5],
+      rotation: [0.0, 180.0, 90.0],
+    },
+    // Back wall
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: whiteMaterial,
+      position: [0.0, 2.5, 2.5],
+      scale: [0.5, 1.0, 0.5],
+      rotation: [90.0, 180.0, 0.0],
+    },
+    // Front wall
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: blueMaterial,
+      position: [0.0, 2.5, -2.5],
+      scale: [0.5, 1.0, 0.5],
+      rotation: [90.0, 0.0, 0.0],
+    },
+    // Lamp
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: glowMaterial,
+      position: [0.0, 4.95, 0.0],
+      scale: [0.85, 0.025, 0.85],
+    },
+    // Sphere
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: mirrorMaterial,
+      position: [-1.0, 1.65, 0.75],
+      rotation: [0.0, -20.5, 0.0],
+      scale: [0.75, 1.65, 0.75],
+    },
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: whiteMaterial,
+      position: [1.0, 0.75, -0.5],
+      rotation: [0.0, 20.5, 0.0],
+      scale: [0.75, 0.75, 0.75],
+    },
+  ]
+}
 export function createCornellBox2(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
@@ -147,90 +226,10 @@ export function createCornellBox2(): ObjectProperties[] {
     }, */
     // Lamp
     {
-      modelPath: "./src/assets/models/plane.obj",
-      material: glowMaterial,
-      position: [0.0, 4.9, 0.0],
-      scale: [0.15, 1.0, 0.15],
-    },
-    // Sphere
-    {
-      modelPath: "./src/assets/models/cube.obj",
-      material: mirrorMaterial,
-      position: [-1.0, 1.65, 0.75],
-      rotation: [0.0, -17.5, 0.0],
-      scale: [0.75, 1.65, 0.75],
-    },
-    {
-      modelPath: "./src/assets/models/cube.obj",
-      material: whiteMaterial,
-      position: [1.0, 0.75, -0.5],
-      rotation: [0.0, 17.5, 0.0],
-      scale: [0.75, 0.75, 0.75],
-    },
-  ]
-}
-
-export function createCornellBox(): ObjectProperties[] {
-  const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
-  const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
-  const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
-  const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
-  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
-  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.05, specularChance: 1.0 })
-  return [
-    // Ground
-    {
-      modelPath: "./src/assets/models/cube.obj",
-      material: whiteMaterial,
-      position: [0.0, 0.0, 0.0],
-      scale: [2.5, 0.1, 2.5],
-    },
-    // Ceiling
-    {
-      modelPath: "./src/assets/models/cube.obj",
-      material: whiteMaterial,
-      position: [0.0, 5.0, 0.0],
-      scale: [2.5, 0.1, 2.5],
-      rotation: [180.0, 0.0, 0.0],
-    },
-    // Left wall
-    {
-      modelPath: "./src/assets/models/cube.obj",
-      material: redMaterial,
-      position: [-2.5, 2.5, 0.0],
-      scale: [2.5, 0.1, 2.5],
-      rotation: [180.0, 0.0, 90.0],
-    },
-    // Right wall
-    {
-      modelPath: "./src/assets/models/cube.obj",
-      material: greenMaterial,
-      position: [2.5, 2.5, 0.0],
-      scale: [2.5, 0.1, 2.5],
-      rotation: [0.0, 180.0, 90.0],
-    },
-    // Back wall
-    {
-      modelPath: "./src/assets/models/cube.obj",
-      material: whiteMaterial,
-      position: [0.0, 2.5, 2.5],
-      scale: [2.5, 0.1, 2.5],
-      rotation: [90.0, 180.0, 0.0],
-    },
-    // Front wall
-    /*     {
-      modelPath: "./src/assets/models/plane.obj",
-      material: blueMaterial,
-      position: [0.0, 2.5, -2.5],
-      scale: [0.5, 1.0, 0.5],
-      rotation: [90.0, 0.0, 0.0],
-    }, */
-    // Lamp
-    {
       modelPath: "./src/assets/models/cube.obj",
       material: glowMaterial,
-      position: [0.0, 4.9, 0.0],
-      scale: [0.75, 0.05, 0.75],
+      position: [0.0, 4.95, 0.0],
+      scale: [0.85, 0.025, 0.85],
     },
     // Sphere
     {
@@ -249,6 +248,79 @@ export function createCornellBox(): ObjectProperties[] {
     },
   ]
 }
+export function createCornellBox3(): ObjectProperties[] {
+  const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
+  const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
+  const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
+  const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
+  const mirrorMaterial = new Material({ albedo: [0.0, 0.0, 0.0], specularRoughness: 0.02, specularChance: 1.0 })
+  const glossyMaterial = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.05, specularChance: 1.0 })
+  return [
+    // Ground
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: blueMaterial,
+      position: [0.0, 0.0, 0.0],
+      scale: [0.5, 0.5, 0.5],
+    },
+    // Ceiling
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: redMaterial,
+      position: [0.0, 5.0, 0.0],
+      scale: [0.5, 0.5, 0.5],
+      rotation: [180.0, 0.0, 0.0],
+    },
+    // Left wall
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: mirrorMaterial,
+      position: [-2.5, 2.5, 0.0],
+      scale: [0.5, 1.0, 0.5],
+      rotation: [180.0, 0.0, 90.0],
+    },
+    // Right wall
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: mirrorMaterial,
+      position: [2.5, 2.5, 0.0],
+      scale: [0.5, 1.0, 0.5],
+      rotation: [0.0, 180.0, 90.0],
+    },
+    // Back wall
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: mirrorMaterial,
+      position: [0.0, 2.5, 2.5],
+      scale: [0.5, 1.0, 0.5],
+      rotation: [90.0, 180.0, 0.0],
+    },
+    // Front wall
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: mirrorMaterial,
+      position: [0.0, 2.5, -2.5],
+      scale: [0.5, 1.0, 0.5],
+      rotation: [90.0, 0.0, 0.0],
+    },
+    // Lamp
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: glowMaterial,
+      position: [0.0, 4.95, 0.0],
+      scale: [0.85, 0.025, 0.85],
+    },
+    // Donut
+    {
+      modelPath: "./src/assets/models/donut.obj",
+      material: glossyMaterial,
+      position: [0.0, 1.0, 0.0],
+      rotation: [0.0, 0.0, 0.0],
+      scale: [1.0, 1.0, 1.0],
+    },
+  ]
+}
 // Refraction Roughness Test
 export function createScene1(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
@@ -262,7 +334,7 @@ export function createScene1(): ObjectProperties[] {
     refractionColor: [0.0, 0.0, 0.0],
     refractionChance: 1.0,
     refractionRoughness: 0.0,
-    ior: 1.1,
+    ior: 1.12,
   })
 
   const numSpheres = 9
@@ -335,24 +407,23 @@ export function createScene1(): ObjectProperties[] {
 export function createScene2(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
 
   const glassBalls: Material = new Material({
     specularChance: 0.02,
     specularColor: [0.8, 0.8, 0.8],
     specularRoughness: 0.0,
     refractionChance: 1.0,
-    refractionRoughness: 0.1,
-    refractionColor: [1.5, 0.75, 0.25],
-    ior: 1.1,
+    refractionRoughness: 0.0,
+    ior: 1.0,
   })
 
-  const numSpheres = 3
+  const numSpheres = 9
   const ior_test: ObjectProperties[] = []
 
   for (let i = 0; i < numSpheres; i++) {
     const positionX = -4.0 + i
-    const ior = 1.2 + (0.05 * i) / (numSpheres - 1)
+    const ior = 1 + (0.15 * i) / (numSpheres - 1)
 
     ior_test.push({
       modelPath: "./src/assets/models/sphere.obj",
@@ -503,7 +574,7 @@ export function createScene3(): ObjectProperties[] {
 export function createScene4(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
 
   const glassBalls: Material = new Material({
     albedo: [0.9, 0.1, 0.1],
@@ -517,8 +588,8 @@ export function createScene4(): ObjectProperties[] {
 
   for (let i = 0; i < numSpheres; i++) {
     const positionX = -4.0 + i
-    const refl = (0.05 * i) / (numSpheres - 1)
-    const roughness = 1.0 - i / (numSpheres - 1)
+    const refl = (0.15 * i) / numSpheres
+    const roughness = 1.0 - i / numSpheres
     refl_test.push({
       modelPath: "./src/assets/models/sphere.obj",
       material: {
@@ -759,7 +830,7 @@ export function createScene6(): ObjectProperties[] {
 
 // Cornell Box wall Test
 export function createScene7(): ObjectProperties[] {
-  const gridSize = 25
+  const gridSize = 5
   const spacing = 7.5
 
   const objects: ObjectProperties[] = []
@@ -778,7 +849,7 @@ export function createScene7(): ObjectProperties[] {
       const offsetY = startY + j * spacing
 
       // Get the objects for a single Cornell box
-      const cornellBox = createCornellBox()
+      const cornellBox = createCornellBox2()
 
       // Adjust the positions of all objects in the Cornell box
       for (const obj of cornellBox) {
@@ -794,7 +865,7 @@ export function createScene7(): ObjectProperties[] {
   return objects
 }
 
-// Dragons
+// Dragon
 export function createScene8(): ObjectProperties[] {
   // create the Materials you want to use
   const grey = new Material({ albedo: [0.84, 0.89, 0.82] })
@@ -802,7 +873,6 @@ export function createScene8(): ObjectProperties[] {
   const mirror = new Material({ specularRoughness: 0.1, specularChance: 1.0 })
   const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
   const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
-  const lightSourceStrong = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 0.7], emissionStrength: 25.0 })
   const lightWeak = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 0.85], emissionStrength: 2.5 })
   const gold = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.5 })
   const glass = new Material({
@@ -811,14 +881,6 @@ export function createScene8(): ObjectProperties[] {
     ior: 1.25, // index of refraction
     refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
     refractionColor: [0.2, 0.1, 0.0], // color absobtion of refractive objects
-    refractionRoughness: 0.0, // self explanatory
-  })
-  const glassLamp = new Material({
-    specularChance: 0.02, // how reflective, 1.0 is 100%
-    specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
-    ior: 1.1, // index of refraction
-    refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
-    refractionColor: [0.0, 0.1, 0.1], // color absobtion of refractive objects
     refractionRoughness: 0.0, // self explanatory
   })
 
@@ -853,12 +915,18 @@ export function createScene8(): ObjectProperties[] {
     },
     {
       modelPath: "./src/assets/models/lamp_piece3.obj",
-      material: lightSourceStrong,
+      material: lightSource,
       position: [0.0, 0.0, -3],
       scale: [3.0, 3.0, 3.0],
       rotation: [0, 0.0, 0.0],
     },
     {
+      modelPath: "./src/assets/models/dragon.obj",
+      material: gold,
+      position: [0.0, 0.0, 1.0],
+      scale: [0.75, 0.75, 0.75],
+    },
+    /*     {
       modelPath: "./src/assets/models/statue.obj",
       material: gold,
       position: [0.0, 0.0, 1.0],
@@ -876,8 +944,8 @@ export function createScene8(): ObjectProperties[] {
       material: glass,
       position: [0.0, 1, 1.0],
       scale: [1.5, 1.5, 1.5],
-    },
-    /*     {
+    }, */
+    {
       modelPath: "./src/assets/models/plane.obj",
       material: lightSource,
       position: [-8.0, 6.0, 0.0],
@@ -886,11 +954,11 @@ export function createScene8(): ObjectProperties[] {
     },
     {
       modelPath: "./src/assets/models/plane.obj",
-      material: grey,
+      material: lightSource,
       position: [8.0, 6.0, 0.0],
       scale: [0.25, 0.25, 0.25],
       rotation: [65.0, 90.0, 0.0],
-    }, */
+    },
     {
       modelPath: "./src/assets/models/cube.obj",
       material: lightSource,
@@ -935,23 +1003,34 @@ function randomMaterial(): Material {
 // Random Material Monkeys
 export function createScene9(): ObjectProperties[] {
   const spheres: ObjectProperties[] = []
-  const gridSize = 15
+  const gridSize = 10
+  const halfGridSize = gridSize / 2
+  const spacing = 5 // Assuming you want a fixed spacing, replace with randomInRange(5, 5) if needed
 
-  let positionY = 0
-  let positionZ = 0
+  for (let i = -halfGridSize; i <= halfGridSize; i++) {
+    for (let k = -halfGridSize; k <= halfGridSize; k++) {
+      // Skip the center position if you don't want an object at the exact center
+      if (i === 0 && k === 0) continue
 
-  for (let i = 0; i < gridSize; i++) {
-    positionZ = 0
-    for (let k = 0; k < gridSize; k++) {
       spheres.push({
         modelPath: "./src/assets/models/monkey.obj",
         material: new Material(randomMaterial()),
-        position: [1.0, positionY, positionZ],
+        position: [i * spacing, 1.0, k * spacing],
         scale: [1.0, 1.0, 1.0],
       })
-      positionZ += randomInRange(5, 5) // Random spacing if needed
     }
-    positionY += randomInRange(5, 5)
   }
+  spheres.push({
+    modelPath: "./src/assets/models/sphere.obj",
+    material: new Material({ emissionColor: [1.0, 1.0, 1.0], emissionStrength: 10 }),
+    position: [0.0, 50.0, 0.0],
+    scale: [25.0, 25.0, 25.0],
+  })
+  spheres.push({
+    modelPath: "./src/assets/models/plane.obj",
+    material: new Material({ specularRoughness: 0.25, specularChance: 1.0 }),
+    position: [0.0, -2.0, 0.0],
+    scale: [6.0, 1.0, 6.0],
+  })
   return spheres
 }

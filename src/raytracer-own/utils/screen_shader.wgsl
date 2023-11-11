@@ -1,10 +1,10 @@
 @group(0) @binding(0) var mySampler : sampler;
 @group(0) @binding(1) var myTexture : texture_2d<f32>;
 
-const RADIUS : i32 = 3;
-const SIGMA_SPACE : f32 = 2.00;
+const RADIUS : i32 = 1;
+const SIGMA_SPACE : f32 = 5.0;
 const SIGMA_COLOR : f32 = 0.3;
-
+const EXPOSURE: f32 = 2.0;
 
 //  bilateral filter for smoother image
 @fragment
@@ -29,7 +29,7 @@ fn frag_main(@location(0) TexCoord: vec2<f32>) -> @location(0) vec4<f32> {
         }
     }
 
-    return result / weight_sum;
+    return (central_color) * EXPOSURE;
 }
 
 fn weight_function(distance: f32, difference: f32) -> f32 {

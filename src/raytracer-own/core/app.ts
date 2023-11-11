@@ -13,6 +13,8 @@ import {
   createScene8,
   createScene9,
   createScene7,
+  createCornellBox2,
+  createCornellBox3,
 } from "../utils/helper"
 
 export class Application {
@@ -73,7 +75,9 @@ export class Application {
     ]
 
     // Preset scenes that I made for testing
-    const cornelbox = createCornellBox()
+    const cornelbox = createCornellBox() // with front wall
+    const cornelbox2 = createCornellBox2() // without front wall
+    const cornelbox3 = createCornellBox3() // mirrored walls
 
     const scene1 = createScene1() // Refraction Roughness Test
     const scene2 = createScene2() // IOR Test
@@ -86,12 +90,11 @@ export class Application {
     const scene9 = createScene9() // Monkeys with random materials
 
     // Create objects in the scene
-    //await this.scene.createObjects(cornelbox)
-    await this.scene.createObjects(scene1)
+    await this.scene.createObjects(scene5)
 
     // Build the BVH after creating all the objects
-    //await this.scene.prepareBVH()
     await this.scene.prepareBVH()
+
     // Initialize the renderer
     await this.renderer.Initialize()
   }
