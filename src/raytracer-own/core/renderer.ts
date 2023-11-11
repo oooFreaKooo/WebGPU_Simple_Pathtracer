@@ -1,19 +1,11 @@
 import raytracer_kernel from "../utils/raytracer_kernel.wgsl"
 import screen_shader from "../utils/screen_shader.wgsl"
 import { Scene } from "./scene"
-import { Deg2Rad, addEventListeners, linearToSRGB } from "../utils/helper"
+import { Deg2Rad, addEventListeners, linearToSRGB, setTexture } from "../utils/helper"
 import { CubeMapMaterial } from "./material"
 
 const frameTimeLabel: HTMLElement = <HTMLElement>document.getElementById("frame-time")
 const renderTimeLabel: HTMLElement = <HTMLElement>document.getElementById("render-time")
-const bouncesElement = document.getElementById("bounces")
-const bouncesValueElement = document.getElementById("bouncesValue")
-const samplesElement = document.getElementById("samples")
-const samplesValueElement = document.getElementById("samplesValue")
-const fovElement = document.getElementById("fov")
-const fovValueElement = document.getElementById("fovValue")
-const skyTextureCheckbox = document.getElementById("skyTexture") as HTMLInputElement
-const backfaceCullingCheckbox = document.getElementById("backfaceCulling") as HTMLInputElement
 
 export class Renderer {
   private canvas: HTMLCanvasElement
@@ -71,9 +63,7 @@ export class Renderer {
     }
 
     const requiredLimits: Record<string, number> = {}
-
     requiredLimits["maxStorageBufferBindingSize"] = 1e9 // 1 GB
-    requiredLimits["maxComputeInvocationsPerWorkgroup"] = 1024
     // device: wrapper around GPU functionality
     // Function calls are made through the device
     this.device = <GPUDevice>await this.adapter?.requestDevice({
@@ -113,14 +103,15 @@ export class Renderer {
       },
     })
 
-    // Two bind groups to accumulate compute passes
+    // We need to ping-pong the bindgroups because read-write storage textures are
+    // missing and we can't have the same texture bound as both a read texture and storage texture
     this.computeBindGroup = [
       this.device.createBindGroup({
         layout: this.ray_tracing_pipeline.getBindGroupLayout(0),
         entries: [
           {
             binding: 0,
-            resource: this.textureA.createView(),
+            resource: this.textureA.createView(), // flip A and B
           },
           {
             binding: 1,
@@ -183,7 +174,7 @@ export class Renderer {
         entries: [
           {
             binding: 0,
-            resource: this.textureB.createView(),
+            resource: this.textureB.createView(), // flip A and B
           },
           {
             binding: 1,
@@ -298,72 +289,26 @@ export class Renderer {
     ]
   }
 
-  private prepareScene() {
-    if (bouncesElement) {
-      bouncesElement.addEventListener("input", (event) => {
-        this.scene.maxBounces = parseFloat((<HTMLInputElement>event.target).value)
-        if (bouncesValueElement) {
-          bouncesValueElement.textContent = this.scene.maxBounces.toString()
-        }
-        this.updateSettings()
-        this.scene.camera.cameraIsMoving = true
-      })
-    }
-
-    if (samplesElement) {
-      samplesElement.addEventListener("input", (event) => {
-        this.scene.samples = parseFloat((<HTMLInputElement>event.target).value)
-        if (samplesValueElement) {
-          samplesValueElement.textContent = this.scene.samples.toString()
-        }
-        this.updateSettings()
-        this.scene.camera.cameraIsMoving = true
-      })
-    }
-    if (fovElement) {
-      fovElement.addEventListener("input", (event) => {
-        this.scene.camera.fov = parseFloat((<HTMLInputElement>event.target).value)
-        if (fovValueElement) {
-          fovValueElement.textContent = this.scene.camera.fov.toString()
-        }
-        this.updateSettings()
-        console.log(this.scene.camera.fov)
-        this.scene.camera.cameraIsMoving = true
-      })
-    }
-    if (backfaceCullingCheckbox) {
-      backfaceCullingCheckbox.addEventListener("change", () => {
-        const value = backfaceCullingCheckbox.checked ? 1.0 : 0.0
-        this.scene.enableCulling = value
-        this.updateSettings()
-        this.scene.camera.cameraIsMoving = true
-      })
-    }
-
-    if (skyTextureCheckbox) {
-      skyTextureCheckbox.addEventListener("change", () => {
-        const value = skyTextureCheckbox.checked ? 1.0 : 0.0
-        this.scene.enableSkytexture = value
-        this.updateSettings()
-        this.scene.camera.cameraIsMoving = true
-      })
-    }
+  private updateScene() {
     if (this.scene.camera.cameraIsMoving) {
       this.updateCamera()
     }
 
     this.updateSceneVariables()
 
-    //addEventListeners(this)
+    addEventListeners(this)
 
     if (this.loaded) {
+      // everything below will only load once
       return
     }
     this.loaded = true
+
     this.updateSettings()
     this.updateMaterialData()
     this.updateTriangleData()
     this.updateNodeData()
+
     const uploadTimeLabel: HTMLElement = <HTMLElement>document.getElementById("triangles")
     uploadTimeLabel.innerText = this.scene.triangles.length.toFixed(2).toString()
 
@@ -374,11 +319,99 @@ export class Renderer {
     this.device.queue.writeBuffer(this.triangleIndexBuffer, 0, triangleIndexData, 0, this.scene.triangles.length)
   }
 
-  // We need to ping-pong the accumulation buffers because read-write storage textures are
-  // missing and we can't have the same texture bound as both a read texture and storage texture
+  totalFrametime = 0
+  totalFrames = 0
+  requestId: number | null = null
+
+  async renderLoop() {
+    const start: number = performance.now()
+    this.accumulationCount++
+    this.updateScene()
+
+    if (this.scene.camera.cameraIsMoving) {
+      this.accumulationCount = 0
+      this.scene.camera.cameraIsMoving = false
+
+      this.totalFrametime = 0
+      this.totalFrames = 0
+    }
+
+    const encoder = this.device.createCommandEncoder()
+
+    // Raytracing
+    const ray_trace_pass = encoder.beginComputePass()
+    ray_trace_pass.setPipeline(this.ray_tracing_pipeline)
+    ray_trace_pass.setBindGroup(0, this.computeBindGroup[this.accumulationCount % 2])
+    ray_trace_pass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8)
+    ray_trace_pass.end()
+
+    // Output render
+    const renderpass = encoder.beginRenderPass({
+      colorAttachments: [
+        {
+          view: this.context.getCurrentTexture().createView(),
+          loadOp: "clear",
+          clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          storeOp: "store",
+        },
+      ],
+    })
+    renderpass.setPipeline(this.render_output_pipeline)
+    renderpass.setBindGroup(0, this.renderOutputBindGroup[this.accumulationCount % 2])
+    renderpass.draw(6, 1)
+    renderpass.end()
+
+    // Submit the command buffer
+    this.device.queue.submit([encoder.finish()])
+
+    await this.device.queue.onSubmittedWorkDone()
+
+    const end: number = performance.now()
+    this.frametime = end - start
+
+    // Accumulate frame time and frame count
+    this.totalFrametime += this.frametime
+    this.totalFrames += 1
+
+    const avgFrametime = this.totalFrametime / this.totalFrames
+    const avgFps: number = 1000 / avgFrametime
+
+    if (frameTimeLabel) {
+      frameTimeLabel.innerText = avgFps.toFixed(2).toString()
+    }
+    if (renderTimeLabel) {
+      renderTimeLabel.innerText = avgFrametime.toFixed(2).toString()
+    }
+
+    this.requestId = requestAnimationFrame(() => this.renderLoop())
+  }
+
+  async createSkyTexture() {
+    let textureID = 0 // 0 = space, 2 = mars, 3 = town, 4 = garden
+    const urls = [
+      "./src/assets/textures/skybox/right.png",
+      "./src/assets/textures/skybox/left.png",
+      "./src/assets/textures/skybox/top.png",
+      "./src/assets/textures/skybox/bottom.png",
+      "./src/assets/textures/skybox/front.png",
+      "./src/assets/textures/skybox/back.png",
+    ]
+
+    // modifies the urls with the ID
+    const modifiedUrls = urls.map((url) => {
+      const parts = url.split(".")
+      const newUrl = `${parts[0]}${parts[1]}${textureID}.${parts[2]}`
+      return newUrl
+    })
+
+    this.sky_texture = new CubeMapMaterial()
+    await this.sky_texture.initialize(this.device, modifiedUrls)
+  }
+
   private createTextureBuffer() {
     // Two textures for ping pong swap to accumulate compute passes
     const textureSize = { width: this.canvas.width, height: this.canvas.height }
+
     this.textureA = this.device.createTexture({
       size: textureSize,
       format: this.format,
@@ -412,69 +445,7 @@ export class Renderer {
     this.triangleBuffer = this.device.createBuffer(triangleBufferDescriptor)
   }
 
-  private createMaterialBuffer() {
-    const materialBufferDescriptor: GPUBufferDescriptor = {
-      size: 144 * this.scene.objectMeshes.length,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.materialBuffer = this.device.createBuffer(materialBufferDescriptor)
-  }
-
-  private createNodeBuffer() {
-    const nodeBufferDescriptor: GPUBufferDescriptor = {
-      size: 32 * this.scene.nodesUsed,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.nodeBuffer = this.device.createBuffer(nodeBufferDescriptor)
-  }
-
-  private createTriangleIndexBuffer() {
-    const triangleIndexBufferDescriptor: GPUBufferDescriptor = {
-      size: 4 * this.scene.triangles.length,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.triangleIndexBuffer = this.device.createBuffer(triangleIndexBufferDescriptor)
-  }
-
-  async createSkyTexture() {
-    let textureID = 0
-    const urls = [
-      "./src/assets/textures/skybox/right.png",
-      "./src/assets/textures/skybox/left.png",
-      "./src/assets/textures/skybox/top.png",
-      "./src/assets/textures/skybox/bottom.png",
-      "./src/assets/textures/skybox/front.png",
-      "./src/assets/textures/skybox/back.png",
-    ]
-
-    // Modify the URLs to include the textureID
-    const modifiedUrls = urls.map((url) => {
-      const parts = url.split(".")
-      const newUrl = `${parts[0]}${parts[1]}${textureID}.${parts[2]}`
-      //textureID++ // Increment the textureID for the next URL
-      return newUrl
-    })
-
-    this.sky_texture = new CubeMapMaterial()
-    await this.sky_texture.initialize(this.device, modifiedUrls)
-  }
-
-  updateNodeData() {
-    var nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
-    for (let i = 0; i < this.scene.nodesUsed; i++) {
-      nodeData_a[8 * i] = this.scene.nodes[i].aabbMin[0]
-      nodeData_a[8 * i + 1] = this.scene.nodes[i].aabbMin[1]
-      nodeData_a[8 * i + 2] = this.scene.nodes[i].aabbMin[2]
-      nodeData_a[8 * i + 3] = this.scene.nodes[i].leftFirst
-      nodeData_a[8 * i + 4] = this.scene.nodes[i].aabbMax[0]
-      nodeData_a[8 * i + 5] = this.scene.nodes[i].aabbMax[1]
-      nodeData_a[8 * i + 6] = this.scene.nodes[i].aabbMax[2]
-      nodeData_a[8 * i + 7] = this.scene.nodes[i].triCount
-    }
-    this.device.queue.writeBuffer(this.nodeBuffer, 0, nodeData_a, 0, 8 * this.scene.nodesUsed)
-  }
-
-  updateTriangleData() {
+  private updateTriangleData() {
     const triangleDataSize = 24
 
     const triangleData: Float32Array = new Float32Array(triangleDataSize * this.scene.triangles.length)
@@ -503,6 +474,14 @@ export class Renderer {
     }
 
     this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.scene.triangles.length)
+  }
+
+  private createMaterialBuffer() {
+    const materialBufferDescriptor: GPUBufferDescriptor = {
+      size: 144 * this.scene.objectMeshes.length,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    }
+    this.materialBuffer = this.device.createBuffer(materialBufferDescriptor)
   }
 
   private updateMaterialData() {
@@ -544,6 +523,37 @@ export class Renderer {
     }
 
     this.device.queue.writeBuffer(this.materialBuffer, 0, materialData, 0, materialDataSize * this.scene.objectMeshes.length)
+  }
+
+  private createNodeBuffer() {
+    const nodeBufferDescriptor: GPUBufferDescriptor = {
+      size: 32 * this.scene.nodesUsed,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    }
+    this.nodeBuffer = this.device.createBuffer(nodeBufferDescriptor)
+  }
+
+  private createTriangleIndexBuffer() {
+    const triangleIndexBufferDescriptor: GPUBufferDescriptor = {
+      size: 4 * this.scene.triangles.length,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    }
+    this.triangleIndexBuffer = this.device.createBuffer(triangleIndexBufferDescriptor)
+  }
+
+  updateNodeData() {
+    var nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
+    for (let i = 0; i < this.scene.nodesUsed; i++) {
+      nodeData_a[8 * i] = this.scene.nodes[i].aabbMin[0]
+      nodeData_a[8 * i + 1] = this.scene.nodes[i].aabbMin[1]
+      nodeData_a[8 * i + 2] = this.scene.nodes[i].aabbMin[2]
+      nodeData_a[8 * i + 3] = this.scene.nodes[i].leftFirst
+      nodeData_a[8 * i + 4] = this.scene.nodes[i].aabbMax[0]
+      nodeData_a[8 * i + 5] = this.scene.nodes[i].aabbMax[1]
+      nodeData_a[8 * i + 6] = this.scene.nodes[i].aabbMax[2]
+      nodeData_a[8 * i + 7] = this.scene.nodes[i].triCount
+    }
+    this.device.queue.writeBuffer(this.nodeBuffer, 0, nodeData_a, 0, 8 * this.scene.nodesUsed)
   }
 
   private createSceneVariablesBuffer() {
@@ -610,7 +620,7 @@ export class Renderer {
     }
     this.settingsBuffer = this.device.createBuffer(descriptor)
   }
-  private updateSettings() {
+  updateSettings() {
     const settingsData = {
       fov: Deg2Rad(this.scene.camera.fov),
       maxBounces: this.scene.maxBounces,
@@ -634,72 +644,5 @@ export class Renderer {
       0,
       6,
     )
-  }
-
-  totalFrametime = 0
-  totalFrames = 0
-  requestId: number | null = null
-
-  async renderLoop() {
-    const start: number = performance.now()
-    this.accumulationCount++
-    this.prepareScene()
-
-    if (this.scene.camera.cameraIsMoving) {
-      this.accumulationCount = 0
-      this.scene.camera.cameraIsMoving = false
-
-      this.totalFrametime = 0
-      this.totalFrames = 0
-    }
-
-    const encoder = this.device.createCommandEncoder()
-
-    // Raytracing
-    const ray_trace_pass = encoder.beginComputePass()
-    ray_trace_pass.setPipeline(this.ray_tracing_pipeline)
-    ray_trace_pass.setBindGroup(0, this.computeBindGroup[this.accumulationCount % 2])
-    ray_trace_pass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8)
-    ray_trace_pass.end()
-
-    // Output render
-    const renderpass = encoder.beginRenderPass({
-      colorAttachments: [
-        {
-          view: this.context.getCurrentTexture().createView(),
-          loadOp: "clear",
-          clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          storeOp: "store",
-        },
-      ],
-    })
-    renderpass.setPipeline(this.render_output_pipeline)
-    renderpass.setBindGroup(0, this.renderOutputBindGroup[this.accumulationCount % 2])
-    renderpass.draw(6, 1)
-    renderpass.end()
-
-    // Submit the command buffer
-    this.device.queue.submit([encoder.finish()])
-
-    await this.device.queue.onSubmittedWorkDone()
-
-    const end: number = performance.now()
-    this.frametime = end - start
-
-    // Accumulate frame time and frame count
-    this.totalFrametime += this.frametime
-    this.totalFrames += 1
-
-    const avgFrametime = this.totalFrametime / this.totalFrames
-    const avgFps: number = 1000 / avgFrametime
-
-    if (frameTimeLabel) {
-      frameTimeLabel.innerText = avgFps.toFixed(2).toString()
-    }
-    if (renderTimeLabel) {
-      renderTimeLabel.innerText = avgFrametime.toFixed(2).toString()
-    }
-
-    this.requestId = requestAnimationFrame(() => this.renderLoop())
   }
 }

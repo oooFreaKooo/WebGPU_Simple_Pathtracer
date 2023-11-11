@@ -14,8 +14,8 @@ export class Node {
 }
 
 export class AABB {
-  private bmax: vec3 = vec3.fromValues(-Infinity, -Infinity, -Infinity)
-  private bmin: vec3 = vec3.fromValues(Infinity, Infinity, Infinity)
+  bmax: vec3 = vec3.fromValues(-Infinity, -Infinity, -Infinity)
+  bmin: vec3 = vec3.fromValues(Infinity, Infinity, Infinity)
 
   area(): number {
     const e = vec3.create()

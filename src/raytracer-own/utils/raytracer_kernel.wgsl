@@ -1,7 +1,7 @@
 struct Node {
-    minCorner: vec3<f32>,
+    aabbMin: vec3<f32>,
     leftChild: f32,
-    maxCorner: vec3<f32>,
+    aabbMax: vec3<f32>,
     primitiveCount: f32,
 }
 
@@ -80,7 +80,7 @@ struct SurfacePoint {
     dist: f32,
     normal: vec3f,
     hit: bool,
-    front_face: bool,
+    from_inside: bool,
 }
 
 @group(0) @binding(0) var outputTex : texture_storage_2d<rgba16float, write>;
@@ -90,15 +90,13 @@ struct SurfacePoint {
 @group(0) @binding(4) var<storage, read> tree : BVH;
 @group(0) @binding(5) var<storage, read> triangleLookup : ObjectIndices;
 @group(0) @binding(6) var skyTexture : texture_cube<f32>;
-@group(0) @binding(7) var textureSampler : sampler;
+@group(0) @binding(7) var skySampler : sampler;
 @group(0) @binding(8) var<storage, read> mesh : MeshData;
 @group(0) @binding(9) var<uniform> settings : Settings;
 @group(0) @binding(10) var<uniform> scene : SceneVariables;
 
-
 const EPSILON : f32 = 0.00001;
 const PI : f32 = 3.14159265358979323846;
-
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
@@ -124,17 +122,14 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
         let horizontal_coefficient: f32 = FOV * screen_sampled_jittered.x / f32(screen_size.x);
         let vertical_coefficient: f32 = FOV * screen_sampled_jittered.y / (f32(screen_size.y) * settings.aspectRatio);
         myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
-        accumulatedColor = accumulatedColor + vec4(trace(myRay, seed + i), 1.0);
-        let currentBrightness: f32 = (accumulatedColor.r + accumulatedColor.g + accumulatedColor.b) / 3.0;
+        accumulatedColor += vec4(trace(myRay, seed + i), 1.0);
     }
 
     let newImage = accumulatedColor / settings.numSamples;
-
-    var textureSky = textureSampleLevel(skyTexture, textureSampler, myRay.direction, 0.0).xyz;
     let accumulated = textureLoad(inputTex, screen_pos, 0);
 
     // weighted average between the new and the accumulated image
-    let result_color = scene.weight * newImage + (1.0 - scene.weight) * accumulated;
+    let result_color = saturate(scene.weight * newImage + (1.0 - scene.weight) * accumulated);
 
     textureStore(outputTex, screen_pos, result_color);
 }
@@ -151,7 +146,7 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let hit = traverse(ray);
 
         if !hit.hit && settings.SKY_TEXTURE == 1.0 {
-            accumulatedColor += energy * textureSampleLevel(skyTexture, textureSampler, ray.direction, 0.0).xyz;
+            accumulatedColor += energy * textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz;
             break;
         } else if !hit.hit {
             accumulatedColor += energy * vec3(0.0);
@@ -161,22 +156,28 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         let material = hit.material;
         var originalEnergy = energy;
 
-        energy *= select(vec3(1.0), exp(-material.refractionColor * hit.dist), hit.front_face);
+        // do absorption if we are hitting from inside the object
+        energy *= select(vec3(1.0), exp(-material.refractionColor * hit.dist), hit.from_inside);
 
-        let newSeed = vec2(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
-        let randomFloat: f32 = random(newSeed);
+        // get pseudo random numbers
+        let globalSeed = vec2<f32>(hit.position.zx + vec2<f32>(hit.position.y, seed + f32(bounce)));
+        let randomFloat = random(globalSeed);
+
+
         let rayDirNorm = normalize(ray.direction);
 
+        let n1 = select(1.0, material.ior, hit.from_inside);
+        let n2 = select(1.0, material.ior, !hit.from_inside);
 
-        let n1 = select(1.0, material.ior, !hit.front_face);
-        let n2 = select(1.0, material.ior, hit.front_face);
-
+        // get the pre-fresnel chances
         var specularChance = material.specularChance;
         var refractionChance = material.refractionChance;
-        var rayProbability = 1.0;
 
-        if specularChance > 0.5 {
-            specularChance = fresnelReflect(n1, n2, hit.normal, rayDirNorm, material.specularChance, 1.0);
+        // take fresnel into account for specularChance and adjust other chances. specular takes priority.
+        // chanceMultiplier makes sure we keep diffuse / refraction ratio the same.
+        var rayProbability = 1.0;
+        if specularChance > 0.0 {
+            specularChance = FresnelReflectAmount(n1, n2, hit.normal, rayDirNorm, material.specularChance, 1.0);
             let chanceMultiplier = (1.0 - specularChance) / (1.0 - material.specularChance);
             refractionChance *= chanceMultiplier;
         }
@@ -186,25 +187,31 @@ fn trace(camRay: Ray, seed: f32) -> vec3f {
         if (specularChance > 0.0) && (randomFloat < specularChance) {
             isSpecular = 1.0;
             rayProbability = specularChance;
-        } else if (refractionChance > 0.0) && (randomFloat < (specularChance + refractionChance)) {
+        } else if refractionChance > 0.0 && randomFloat < specularChance + refractionChance {
             isRefractive = 1.0;
             rayProbability = refractionChance;
         } else {
             rayProbability = 1.0 - (specularChance + refractionChance);
         }
 
-        rayProbability = max(rayProbability, 0.01);
+        // numerical problems can cause rayProbability to become small enough to cause a divide by zero.
+        rayProbability = max(rayProbability, 0.001);
 
-        ray.origin = hit.position + hit.normal * select(0.01, -0.01, isRefractive == 1.0);
+        // update the ray position
+        ray.origin = select((ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON, (ray.origin + ray.direction * hit.dist) - hit.normal * EPSILON, isRefractive == 1.0);
 
-
-        let diffuseDir = CosineWeightedHemisphereSample(hit.normal, newSeed);
+        // Calculate a new ray direction.
+        // Diffuse uses a normal oriented cosine weighted hemisphere sample.
+        // Perfectly smooth specular uses the reflection ray.
+        // Rough (glossy) specular lerps from the smooth specular to the rough diffuse by the material roughness squared
+        // Squaring the roughness is just a convention to make roughness feel more linear perceptually.
+        let diffuseDir = CosineWeightedHemisphereSample(hit.normal, globalSeed);
         var specularDir = reflect(rayDirNorm, hit.normal);
         specularDir = normalize(mix(specularDir, diffuseDir, material.specularRoughness * material.specularRoughness));
 
-        let refractionRatio = select(material.ior, 1.0 / material.ior, hit.front_face);
+        let refractionRatio = select(material.ior, 1.0 / material.ior, hit.from_inside);
         var refractDir = refract(rayDirNorm, hit.normal, refractionRatio);
-        let randomDirection: vec3<f32> = CosineWeightedHemisphereSample(-hit.normal, newSeed);
+        let randomDirection: vec3<f32> = CosineWeightedHemisphereSample(-hit.normal, globalSeed);
         refractDir = normalize(mix(refractDir, randomDirection, material.refractionRoughness * material.refractionRoughness));
 
         ray.direction = mix(mix(diffuseDir, specularDir, isSpecular), refractDir, isRefractive);
@@ -237,14 +244,25 @@ fn refract(uv: vec3<f32>, n: vec3<f32>, etai_over_etat: f32) -> vec3<f32> {
     let r_out_parallel = -sqrt(abs(1.0 - dot(r_out_perp, r_out_perp))) * n;
     return r_out_perp + r_out_parallel;
 }
-// https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-shading/reflection-refraction-fresnel.html
 
-fn fresnelReflect(n1: f32, n2: f32, normal: vec3<f32>, rayDir: vec3<f32>, minReflectivity: f32, maxReflectivity: f32) -> f32 {
+fn FresnelReflectAmount(n1: f32, n2: f32, normal: vec3<f32>, incident: vec3<f32>, minReflectivity: f32, maxReflectivity: f32) -> f32 {
+    // Schlick approximation
     let r0 = pow(((n1 - n2) / (n1 + n2)), 2.0);
-    let cosTheta = min(dot(-rayDir, normal), 1.0);
-    let reflectance = r0 + (1.0 - r0) * pow(1.0 - cosTheta, 5.0);
+    var cosX: f32 = -dot(normal, incident);
+    if n1 > n2 {
+        let n: f32 = n1 / n2;
+        let sinT2: f32 = n * n * (1.0 - cosX * cosX);
+        // Total internal reflection
+        if sinT2 > 1.0 {
+            return maxReflectivity;
+        }
+        cosX = sqrt(1.0 - sinT2);
+    }
+    let x: f32 = pow(1.0 - cosX, 5.0);
+    let ret: f32 = r0 + (1.0 - r0) * x;
 
-    return mix(minReflectivity, maxReflectivity, reflectance);
+    // Adjust reflect multiplier for object reflectivity
+    return mix(minReflectivity, maxReflectivity, ret);
 }
 
 
@@ -417,9 +435,9 @@ fn hit_triangle(
 
     // Determine if the ray hits the front face
     if dot(ray.direction, surfacePoint.normal) < 0.0 {
-        surfacePoint.front_face = true;
+        surfacePoint.from_inside = true;
     } else {
-        surfacePoint.front_face = false;
+        surfacePoint.from_inside = false;
         surfacePoint.normal = -surfacePoint.normal; // invert the normal for back face
     }
     return surfacePoint;
@@ -431,8 +449,8 @@ fn hit_aabb(ray: Ray, node: Node) -> f32 {
     //Inverse Richtung des strahls berechnen um divisionen im code zu vermeiden (rechenzeit vebessern)
     var inverseDir: vec3<f32> = vec3(1.0) / ray.direction;
     //Berechnung der t werte (bei welchen Wert(distanz) trifft unser Strahl unsere bounding box achse?)
-    var t1: vec3<f32> = (node.minCorner - ray.origin) * inverseDir;
-    var t2: vec3<f32> = (node.maxCorner - ray.origin) * inverseDir;
+    var t1: vec3<f32> = (node.aabbMin - ray.origin) * inverseDir;
+    var t2: vec3<f32> = (node.aabbMax - ray.origin) * inverseDir;
     //Sicherstellen dass tMin immer den kleineren und tMax den größeren Wert für jede Achse enthält. (zB bei negativer Stahrrichtung)
     var tMin: vec3<f32> = min(t1, t2);
     var tMax: vec3<f32> = max(t1, t2);

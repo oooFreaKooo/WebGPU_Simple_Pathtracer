@@ -120,7 +120,7 @@ export class Scene {
 
   private subdivide(nodeIdx: number): void {
     const node = this.nodes[nodeIdx]
-
+    if (node.triCount <= 2) return
     // Determine the optimal plane to split the node triangles, aiming to minimize ray intersection tests
     const { bestAxis, bestPos, bestCost } = this.findBestSplitPlane(node)
 
@@ -173,7 +173,8 @@ export class Scene {
   // This function determines the best split plane for a given node in a spatial data structure
   // The goal is to find an optimal axis and position to split the nodes triangles, minimizing the cost
   private findBestSplitPlane(node: Node): { bestAxis: number; bestPos: number; bestCost: number } {
-    const BINS = 8
+    // Dynamic binning based on the number of triangles
+    const BINS = Math.ceil(Math.sqrt(node.triCount))
     let bestCost = Infinity
     let bestAxis = -1
     let bestPos = 0
@@ -244,6 +245,8 @@ export class Scene {
 
     return { bestAxis, bestPos, bestCost }
   }
+
+  // Additional methods for grid creation, triangle placement, and cost evaluation would be implemented here
 
   // https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
 

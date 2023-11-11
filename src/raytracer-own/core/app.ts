@@ -37,7 +37,7 @@ export class Application {
     const glass = new Material({
       specularChance: 0.02, // how reflective, 1.0 is 100%
       specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
-      ior: 1.15, // index of refraction
+      ior: 1.25, // index of refraction
       refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
       refractionColor: [0.0, 0.0, 0.0], // color absobtion of refractive objects
       refractionRoughness: 0.0, // self explanatory
@@ -49,20 +49,26 @@ export class Application {
         modelPath: "./src/assets/models/plane.obj",
         material: grey,
         position: [0.0, 0.0, 0.0],
-        scale: [0.5, 0.5, 0.5],
+        scale: [3.5, 3.5, 3.5],
       },
       {
         modelPath: "./src/assets/models/plane.obj",
         material: lightSource,
-        position: [0.0, 2.5, 2.5],
-        scale: [0.15, 0.15, 0.15],
-        rotation: [90.0, 180.0, 0.0],
+        position: [0.0, 6.5, 6.5],
+        scale: [0.55, 0.55, 0.55],
+        rotation: [125.0, 180.0, 0.0],
       },
       {
-        modelPath: "./src/assets/models/sphere.obj",
+        modelPath: "./src/assets/models/dragon.obj",
         material: gold,
-        position: [0.0, 2.0, 0.0],
-        scale: [1.35, 1.35, 1.35],
+        position: [0.0, 0.0, 0.0],
+        scale: [0.55, 0.55, 0.55],
+      },
+      {
+        modelPath: "./src/assets/models/cube.obj",
+        material: glass,
+        position: [0.0, 1.0, 0.0],
+        scale: [2.0, 2.0, 2.0],
       },
     ]
 
@@ -81,7 +87,7 @@ export class Application {
 
     // Create objects in the scene
     //await this.scene.createObjects(cornelbox)
-    await this.scene.createObjects(cornelbox)
+    await this.scene.createObjects(scene1)
 
     // Build the BVH after creating all the objects
     //await this.scene.prepareBVH()

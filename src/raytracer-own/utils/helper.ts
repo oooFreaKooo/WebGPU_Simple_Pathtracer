@@ -15,14 +15,73 @@ export function Deg2Rad(theta: number): number {
   return (theta * Math.PI) / 180
 }
 
+export async function setTexture(textureUrl: string) {
+  const res = await fetch(textureUrl)
+  const img = await res.blob()
+  const options: ImageBitmapOptions = { imageOrientation: "flipY" }
+  const imageBitmap = await createImageBitmap(img, options)
+  return imageBitmap
+}
+
+const bouncesElement = document.getElementById("bounces")
+const bouncesValueElement = document.getElementById("bouncesValue")
+const samplesElement = document.getElementById("samples")
+const samplesValueElement = document.getElementById("samplesValue")
+const fovElement = document.getElementById("fov")
+const fovValueElement = document.getElementById("fovValue")
+const skyTextureCheckbox = document.getElementById("skyTexture") as HTMLInputElement
+const backfaceCullingCheckbox = document.getElementById("backfaceCulling") as HTMLInputElement
+
 export function addEventListeners(instance: Renderer) {
-  document.querySelector<HTMLInputElement>("#emissionStrength")!.addEventListener("input", (event) => {
-    const value = parseFloat((event.target as HTMLInputElement).value)
-    for (let mesh of instance.scene.objectMeshes) {
-      mesh.material.emissionStrength = value
-    }
-    instance.updateTriangleData()
-  })
+  if (bouncesElement) {
+    bouncesElement.addEventListener("input", (event) => {
+      instance.scene.maxBounces = parseFloat((<HTMLInputElement>event.target).value)
+      if (bouncesValueElement) {
+        bouncesValueElement.textContent = instance.scene.maxBounces.toString()
+      }
+      instance.updateSettings()
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
+
+  if (samplesElement) {
+    samplesElement.addEventListener("input", (event) => {
+      instance.scene.samples = parseFloat((<HTMLInputElement>event.target).value)
+      if (samplesValueElement) {
+        samplesValueElement.textContent = instance.scene.samples.toString()
+      }
+      instance.updateSettings()
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
+  if (fovElement) {
+    fovElement.addEventListener("input", (event) => {
+      instance.scene.camera.fov = parseFloat((<HTMLInputElement>event.target).value)
+      if (fovValueElement) {
+        fovValueElement.textContent = instance.scene.camera.fov.toString()
+      }
+      instance.updateSettings()
+      console.log(instance.scene.camera.fov)
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
+  if (backfaceCullingCheckbox) {
+    backfaceCullingCheckbox.addEventListener("change", () => {
+      const value = backfaceCullingCheckbox.checked ? 1.0 : 0.0
+      instance.scene.enableCulling = value
+      instance.updateSettings()
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
+
+  if (skyTextureCheckbox) {
+    skyTextureCheckbox.addEventListener("change", () => {
+      const value = skyTextureCheckbox.checked ? 1.0 : 0.0
+      instance.scene.enableSkytexture = value
+      instance.updateSettings()
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
 }
 export function linearToSRGB(x: number) {
   if (x <= 0.0031308) {
@@ -31,7 +90,7 @@ export function linearToSRGB(x: number) {
   return 1.055 * Math.pow(x, 1.0 / 2.4) - 0.055
 }
 
-export function createCornellBox(): ObjectProperties[] {
+export function createCornellBox2(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
   const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
@@ -111,6 +170,85 @@ export function createCornellBox(): ObjectProperties[] {
   ]
 }
 
+export function createCornellBox(): ObjectProperties[] {
+  const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
+  const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
+  const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
+  const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
+  const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.05, specularChance: 1.0 })
+  return [
+    // Ground
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: whiteMaterial,
+      position: [0.0, 0.0, 0.0],
+      scale: [2.5, 0.1, 2.5],
+    },
+    // Ceiling
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: whiteMaterial,
+      position: [0.0, 5.0, 0.0],
+      scale: [2.5, 0.1, 2.5],
+      rotation: [180.0, 0.0, 0.0],
+    },
+    // Left wall
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: redMaterial,
+      position: [-2.5, 2.5, 0.0],
+      scale: [2.5, 0.1, 2.5],
+      rotation: [180.0, 0.0, 90.0],
+    },
+    // Right wall
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: greenMaterial,
+      position: [2.5, 2.5, 0.0],
+      scale: [2.5, 0.1, 2.5],
+      rotation: [0.0, 180.0, 90.0],
+    },
+    // Back wall
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: whiteMaterial,
+      position: [0.0, 2.5, 2.5],
+      scale: [2.5, 0.1, 2.5],
+      rotation: [90.0, 180.0, 0.0],
+    },
+    // Front wall
+    /*     {
+      modelPath: "./src/assets/models/plane.obj",
+      material: blueMaterial,
+      position: [0.0, 2.5, -2.5],
+      scale: [0.5, 1.0, 0.5],
+      rotation: [90.0, 0.0, 0.0],
+    }, */
+    // Lamp
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: glowMaterial,
+      position: [0.0, 4.9, 0.0],
+      scale: [0.75, 0.05, 0.75],
+    },
+    // Sphere
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: mirrorMaterial,
+      position: [-1.0, 1.65, 0.75],
+      rotation: [0.0, -20.5, 0.0],
+      scale: [0.75, 1.65, 0.75],
+    },
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: whiteMaterial,
+      position: [1.0, 0.75, -0.5],
+      rotation: [0.0, 20.5, 0.0],
+      scale: [0.75, 0.75, 0.75],
+    },
+  ]
+}
 // Refraction Roughness Test
 export function createScene1(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
@@ -659,26 +797,26 @@ export function createScene7(): ObjectProperties[] {
 // Dragons
 export function createScene8(): ObjectProperties[] {
   // create the Materials you want to use
-  const grey = new Material({ albedo: [0.64, 0.59, 0.62] })
+  const grey = new Material({ albedo: [0.84, 0.89, 0.82] })
   const shiny = new Material({ albedo: [1.0, 0.5, 0.5], specularRoughness: 0.1, specularChance: 0.52 })
   const mirror = new Material({ specularRoughness: 0.1, specularChance: 1.0 })
-  const mirrorBlurry = new Material({ specularRoughness: 0.25, specularChance: 1.0 })
-  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 10.0 })
-  const lightSourceStrong = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 50.0 })
+  const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
+  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const lightSourceStrong = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 0.7], emissionStrength: 25.0 })
   const lightWeak = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 0.85], emissionStrength: 2.5 })
   const gold = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.5 })
   const glass = new Material({
     specularChance: 0.02, // how reflective, 1.0 is 100%
     specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
-    ior: 1.15, // index of refraction
+    ior: 1.25, // index of refraction
     refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
-    refractionColor: [0.0, 0.0, 0.0], // color absobtion of refractive objects
+    refractionColor: [0.2, 0.1, 0.0], // color absobtion of refractive objects
     refractionRoughness: 0.0, // self explanatory
   })
   const glassLamp = new Material({
     specularChance: 0.02, // how reflective, 1.0 is 100%
     specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
-    ior: 1.0, // index of refraction
+    ior: 1.1, // index of refraction
     refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
     refractionColor: [0.0, 0.1, 0.1], // color absobtion of refractive objects
     refractionRoughness: 0.0, // self explanatory
@@ -688,13 +826,13 @@ export function createScene8(): ObjectProperties[] {
   const objectsToLoad: ObjectProperties[] = [
     {
       modelPath: "./src/assets/models/plane.obj",
-      material: mirrorBlurry,
+      material: grey,
       position: [0.0, 0.0, 0.0],
-      scale: [1.0, 1.0, 1.0],
+      scale: [2.0, 2.0, 2.0],
     },
     {
       modelPath: "./src/assets/models/plane.obj",
-      material: shiny,
+      material: mirrorBlurry,
       rotation: [90.0, 0.0, 90.0],
       position: [0.0, 0.0, 5],
       scale: [1.0, 1.0, 1.0],
@@ -721,10 +859,23 @@ export function createScene8(): ObjectProperties[] {
       rotation: [0, 0.0, 0.0],
     },
     {
-      modelPath: "./src/assets/models/dragon.obj",
+      modelPath: "./src/assets/models/statue.obj",
       material: gold,
-      position: [0.0, 0.0, 1.5],
-      scale: [0.64, 0.64, 0.64],
+      position: [0.0, 0.0, 1.0],
+      scale: [1.2, 1.2, 1.2],
+      rotation: [-90, 180.0, 0.0],
+    },
+    {
+      modelPath: "./src/assets/models/sphere.obj",
+      material: glass,
+      position: [0.0, 1, 1.0],
+      scale: [2, 2, 2],
+    },
+    {
+      modelPath: "./src/assets/models/cube.obj",
+      material: glass,
+      position: [0.0, 1, 1.0],
+      scale: [1.5, 1.5, 1.5],
     },
     /*     {
       modelPath: "./src/assets/models/plane.obj",
