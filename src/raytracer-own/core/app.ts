@@ -15,6 +15,10 @@ import {
   createScene7,
   createCornellBox2,
   createCornellBox3,
+  createScene10,
+  createScene11,
+  createScene12,
+  createScene13,
 } from "../utils/helper"
 
 export class Application {
@@ -88,9 +92,12 @@ export class Application {
     const scene7 = createScene7() // Cornell Boxes Wall
     const scene8 = createScene8() // Dragon
     const scene9 = createScene9() // Monkeys with random materials
-
+    const scene10 = createScene10() // Lamp with glass donut
+    const scene11 = createScene11() // Lamp with glass of water
+    const scene12 = createScene12() // All material types
+    const scene13 = createScene13()
     // Create objects in the scene
-    await this.scene.createObjects(cornelbox)
+    await this.scene.createObjects(scene13)
 
     // Build the BVH after creating all the objects
     await this.scene.prepareBVH()

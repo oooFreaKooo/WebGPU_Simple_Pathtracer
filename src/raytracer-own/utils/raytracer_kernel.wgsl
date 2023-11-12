@@ -113,7 +113,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     myRay.origin = camera.cameraPos;
     //var seed = u32(scene.time * 0.00025);
 
-    var seed = (u32(screen_pos.x) * 1973u + u32(screen_pos.y) * 9277u + u32(scene.time * 0.02) * 26699u) | 1u;
+    var seed = (u32(screen_pos.x) * 1973u + u32(screen_pos.y) * 9277u + u32(scene.time) * 26699u) | 1u;
 
 
     let jitterScale: f32 = 3.0;
@@ -121,7 +121,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     var accumulatedColor: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 
     for (var i: u32 = 0u; i < u32(settings.numSamples); i = i + 1u) {
-        let jitter: vec2<f32> = vec2<f32>(RandomFloat01(&seed), (RandomFloat01(&seed))) * jitterScale - 0.5;
+        let jitter: vec2<f32> = vec2<f32>(RandomFloat01(&seed), (RandomFloat01(&seed))) * jitterScale ;
         let screen_sampled_jittered: vec2<f32> = vec2<f32>(screen_pos) + jitter - halfScreenSize;
         let horizontal_coefficient: f32 = FOV * screen_sampled_jittered.x / f32(screen_size.x);
         let vertical_coefficient: f32 = FOV * screen_sampled_jittered.y / (f32(screen_size.y) * settings.aspectRatio);
