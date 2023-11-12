@@ -2,9 +2,10 @@ import { Application } from "./raytracer-own/core/app"
 
 async function mainFunc() {
   const canvas = document.createElement("canvas")
-  canvas.width = window.innerWidth
-  canvas.height = window.innerHeight
-
+  //canvas.width = window.innerWidth
+  //canvas.height = window.innerHeight
+  canvas.width = 1920
+  canvas.height = 1080
   // Get the .time-container from the html file
   const timeContainer = document.querySelector(".time-container")
 

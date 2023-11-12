@@ -319,73 +319,6 @@ export class Renderer {
     this.device.queue.writeBuffer(this.triangleIndexBuffer, 0, triangleIndexData, 0, this.scene.triangles.length)
   }
 
-  totalFrametime = 0
-  totalFrames = 0
-  requestId: number | null = null
-
-  async renderLoop() {
-    const start: number = performance.now()
-    this.accumulationCount++
-    this.updateScene()
-
-    if (this.scene.camera.cameraIsMoving) {
-      this.accumulationCount = 0
-      this.scene.camera.cameraIsMoving = false
-
-      this.totalFrametime = 0
-      this.totalFrames = 0
-    }
-
-    const encoder = this.device.createCommandEncoder()
-
-    // Raytracing
-    const ray_trace_pass = encoder.beginComputePass()
-    ray_trace_pass.setPipeline(this.ray_tracing_pipeline)
-    ray_trace_pass.setBindGroup(0, this.computeBindGroup[this.accumulationCount % 2])
-    ray_trace_pass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8)
-    ray_trace_pass.end()
-
-    // Output render
-    const renderpass = encoder.beginRenderPass({
-      colorAttachments: [
-        {
-          view: this.context.getCurrentTexture().createView(),
-          loadOp: "clear",
-          clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          storeOp: "store",
-        },
-      ],
-    })
-    renderpass.setPipeline(this.render_output_pipeline)
-    renderpass.setBindGroup(0, this.renderOutputBindGroup[this.accumulationCount % 2])
-    renderpass.draw(6, 1)
-    renderpass.end()
-
-    // Submit the command buffer
-    this.device.queue.submit([encoder.finish()])
-
-    await this.device.queue.onSubmittedWorkDone()
-
-    const end: number = performance.now()
-    this.frametime = end - start
-
-    // Accumulate frame time and frame count
-    this.totalFrametime += this.frametime
-    this.totalFrames += 1
-
-    const avgFrametime = this.totalFrametime / this.totalFrames
-    const avgFps: number = 1000 / avgFrametime
-
-    if (frameTimeLabel) {
-      frameTimeLabel.innerText = avgFps.toFixed(2).toString()
-    }
-    if (renderTimeLabel) {
-      renderTimeLabel.innerText = this.accumulationCount.toFixed(2).toString()
-    }
-
-    this.requestId = requestAnimationFrame(() => this.renderLoop())
-  }
-
   async createSkyTexture() {
     let textureID = 0 // 0 = space, 2 = mars, 3 = town, 4 = garden
     const urls = [
@@ -644,5 +577,72 @@ export class Renderer {
       0,
       6,
     )
+  }
+
+  totalFrametime = 0
+  totalFrames = 0
+  requestId: number | null = null
+
+  async renderLoop() {
+    const start: number = performance.now()
+    this.accumulationCount++
+    this.updateScene()
+
+    if (this.scene.camera.cameraIsMoving) {
+      this.accumulationCount = 0
+      this.scene.camera.cameraIsMoving = false
+
+      this.totalFrametime = 0
+      this.totalFrames = 0
+    }
+
+    const encoder = this.device.createCommandEncoder()
+
+    // Raytracing
+    const ray_trace_pass = encoder.beginComputePass()
+    ray_trace_pass.setPipeline(this.ray_tracing_pipeline)
+    ray_trace_pass.setBindGroup(0, this.computeBindGroup[this.accumulationCount % 2])
+    ray_trace_pass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8)
+    ray_trace_pass.end()
+
+    // Output render
+    const renderpass = encoder.beginRenderPass({
+      colorAttachments: [
+        {
+          view: this.context.getCurrentTexture().createView(),
+          loadOp: "clear",
+          clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          storeOp: "store",
+        },
+      ],
+    })
+    renderpass.setPipeline(this.render_output_pipeline)
+    renderpass.setBindGroup(0, this.renderOutputBindGroup[this.accumulationCount % 2])
+    renderpass.draw(6, 1)
+    renderpass.end()
+
+    // Submit the command buffer
+    this.device.queue.submit([encoder.finish()])
+
+    await this.device.queue.onSubmittedWorkDone()
+
+    const end: number = performance.now()
+    this.frametime = end - start
+
+    // Accumulate frame time and frame count
+    this.totalFrametime += this.frametime
+    this.totalFrames += 1
+
+    const avgFrametime = this.totalFrametime / this.totalFrames
+    const avgFps: number = 1000 / avgFrametime
+
+    if (frameTimeLabel) {
+      frameTimeLabel.innerText = avgFps.toFixed(2).toString()
+    }
+    if (renderTimeLabel) {
+      renderTimeLabel.innerText = this.accumulationCount.toFixed(2).toString()
+    }
+
+    this.requestId = requestAnimationFrame(() => this.renderLoop())
   }
 }

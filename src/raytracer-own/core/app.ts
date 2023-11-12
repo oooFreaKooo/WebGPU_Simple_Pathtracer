@@ -97,7 +97,7 @@ export class Application {
     const scene12 = createScene12() // All material types
     const scene13 = createScene13()
     // Create objects in the scene
-    await this.scene.createObjects(scene13)
+    await this.scene.createObjects(cornelbox)
 
     // Build the BVH after creating all the objects
     await this.scene.prepareBVH()
