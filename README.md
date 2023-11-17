@@ -23,7 +23,7 @@ To get started with this project, follow these simple steps:
    Next, clone the forked repository to your local machine using the following command:
 
    ```bash
-   [git clone https://github.com/YOUR_USERNAME/webgpu-pathtracer.git](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer.git)
+   [git clone https://github.com/oooFreaKooo/webgpu-pathtracer.git](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer.git)
    ```
 
 3. **Install Dependencies**
