@@ -1,8 +1,8 @@
 struct Node {
     aabbMin: vec3<f32>,
-    leftChild: f32,
+    leftFirst: f32,
     aabbMax: vec3<f32>,
-    primitiveCount: f32,
+    triCount: f32,
 }
 
 struct BVH {
@@ -62,7 +62,7 @@ struct ObjectData {
 }
 
 struct ObjectIndices {
-    primitiveIndices: array<f32>,
+    idx: array<f32>,
 }
 
 struct Settings {
@@ -88,7 +88,7 @@ struct SurfacePoint {
 @group(0) @binding(2) var<uniform> camera : CameraData;
 @group(0) @binding(3) var<storage, read> objects : ObjectData;
 @group(0) @binding(4) var<storage, read> tree : BVH;
-@group(0) @binding(5) var<storage, read> triangleLookup : ObjectIndices;
+@group(0) @binding(5) var<storage, read> triIdx : ObjectIndices;
 @group(0) @binding(6) var skyTexture : texture_cube<f32>;
 @group(0) @binding(7) var skySampler : sampler;
 @group(0) @binding(8) var<storage, read> mesh : MeshData;
@@ -96,32 +96,33 @@ struct SurfacePoint {
 @group(0) @binding(10) var<uniform> scene : SceneVariables;
 
 const EPSILON : f32 = 0.00001;
-const PI : f32 = 3.14159265358979323846;
+const PI  = 3.14159265358979323846;
+const TWO_PI: f32 = 6.28318530718;
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
-    let screen_size: vec2i = vec2<i32 >(textureDimensions(outputTex));
-    let screen_pos: vec2i = vec2<i32>(GlobalInvocationID.xy);
+    let screen_size = vec2<i32 >(textureDimensions(outputTex));
+    let screen_pos = vec2<i32>(GlobalInvocationID.xy);
 
-    let FOV: f32 = settings.cameraFOV;
+    let FOV = settings.cameraFOV;
     let halfScreenSize: vec2<f32> = vec2<f32 >(screen_size) * 0.5;
 
-    let forwards: vec3f = camera.cameraForwards;
-    let right: vec3f = camera.cameraRight;
-    let up: vec3f = camera.cameraUp;
-    var myRay: Ray;
-    myRay.origin = camera.cameraPos;
-    //var seed = u32(scene.time * 0.00025);
-
-    var seed = (u32(screen_pos.x) * 1973u + u32(screen_pos.y) * 9277u + u32(scene.time) * 26699u) | 1u;
+    let forwards = camera.cameraForwards;
+    let right = camera.cameraRight;
+    let up = camera.cameraUp;
 
 
-    let jitterScale: f32 = 3.0;
+    var pixelIndex = u32(screen_pos.y) * u32(screen_size.x) + u32(screen_pos.x);
+    var seed = pixelIndex + u32(scene.time) * 1193u;
 
-    var accumulatedColor: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    let jitterScale = 1.0 / f32(settings.numSamples);
+
+    var accumulatedColor = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 
     for (var i: u32 = 0u; i < u32(settings.numSamples); i = i + 1u) {
-        let jitter: vec2<f32> = vec2<f32>(RandomFloat01(&seed), (RandomFloat01(&seed))) * jitterScale ;
+        var myRay: Ray;
+        myRay.origin = camera.cameraPos;
+        let jitter: vec2<f32> = vec2<f32>(RandomFloat01(&seed), RandomFloat01(&seed)) * jitterScale;
         let screen_sampled_jittered: vec2<f32> = vec2<f32>(screen_pos) + jitter - halfScreenSize;
         let horizontal_coefficient: f32 = FOV * screen_sampled_jittered.x / f32(screen_size.x);
         let vertical_coefficient: f32 = FOV * screen_sampled_jittered.y / (f32(screen_size.y) * settings.aspectRatio);
@@ -137,7 +138,6 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
 
     textureStore(outputTex, screen_pos, result_color);
 }
-
 
 //https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-camera/
 fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
@@ -236,9 +236,9 @@ fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
     return accumulatedColor;
 }
 
+//https://simonstechblog.blogspot.com/2018/06/simple-gpu-path-tracer.html
 fn wang_hash(seed: ptr<function, u32>) -> u32 {
-    let newSeed = seed;
-    *seed = (*newSeed ^ 61u) ^ (*seed >> 16u);
+    *seed = (*seed ^ 61u) ^ (*seed >> 16u);
     *seed *= 9u;
     *seed = *seed ^ (*seed >> 4u);
     *seed *= 0x27d4eb2du;
@@ -259,8 +259,9 @@ fn RandomUnitVector(state: ptr<function, u32>) -> vec3<f32> {
 }
 
 
-// https://raytracing.github.io/books/RayTracingInOneWeekend.html#dielectrics/refraction
 
+
+// https://raytracing.github.io/books/RayTracingInOneWeekend.html#dielectrics/refraction
 fn refract(e1: vec3<f32>, e2: vec3<f32>, e3: f32) -> vec3<f32> {
     let k: f32 = 1.0 - e3 * e3 * (1.0 - dot(e2, e1) * dot(e2, e1));
     if k < 0.0 {
@@ -300,10 +301,10 @@ fn traverse(ray: Ray) -> SurfacePoint {
     var stackLocation: u32 = 0u;
 
     while true {
-        let primitiveCount: u32 = u32(currentNode.primitiveCount);
-        let contents: u32 = u32(currentNode.leftChild);
+        let triCount: u32 = u32(currentNode.triCount);
+        let contents: u32 = u32(currentNode.leftFirst);
 
-        if primitiveCount == 0u {
+        if triCount == 0u {
             var child1: Node = tree.nodes[contents];
             var child2: Node = tree.nodes[contents + 1u];
 
@@ -335,10 +336,10 @@ fn traverse(ray: Ray) -> SurfacePoint {
                 }
             }
         } else {
-            for (var i: u32 = 0u; i < primitiveCount; i++) {
+            for (var i: u32 = 0u; i < triCount; i++) {
                 let newSurfacePoint: SurfacePoint = hit_triangle(
                     ray,
-                    objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])],
+                    objects.triangles[u32(triIdx.idx[i + contents])],
                     0.0001,
                     nearestHit,
                     surfacePoint,
@@ -363,7 +364,7 @@ fn traverse(ray: Ray) -> SurfacePoint {
     return surfacePoint;
 }
 
-//https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
+
 // Möller–Trumbore intersection algorithm
 fn hit_triangle(
     ray: Ray,
@@ -414,8 +415,8 @@ fn hit_triangle(
     }
 
     //Berechne die normale am Schnittpunkt mit Interpolation der Normalen der Dreiecksecken
+    //https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
     let normal = normalize(tri.normal_b * u + tri.normal_c * v + tri.normal_a * (1.0 - u - v));
-    //let normal = normalize(cross(edge_1, edge_2));
     surfacePoint.normal = normalize((transpose(mesh.materials[u32(tri.objectID)].inverseModel) * vec4(normal, 0.0)).xyz);
 
     surfacePoint.material = mesh.materials[u32(tri.objectID)];

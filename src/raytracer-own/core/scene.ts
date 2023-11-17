@@ -33,7 +33,7 @@ export class Scene {
 
   // scene settings
   private initialize() {
-    this.camera = new Camera([0.01, 1.5, -6.0]) // camera position
+    this.camera = new Camera([0.01, 2.5, -7]) // camera position
     this.cameraControls = new Controls(this.canvas, this.camera) // create controls
   }
 
@@ -80,11 +80,6 @@ export class Scene {
     this.buildBVH()
   }
 
-  // https://download.hrz.tu-darmstadt.de/pub/FB20/GCC/paper/rsah_gi2016.pdf
-  // http://www.dominikwodniok.de/publications/Wodniok_CAG2017.pdf
-  //https://meistdan.github.io/publications/bvh_star/paper.pdf
-  // https://jcgt.org/published/0011/04/01/paper-lowres.pdf - COST
-  // https://www.sci.utah.edu/~wald/Publications/2007/ParallelBVHBuild/fastbuild.pdf - BINNING
   private buildBVH() {
     // measures how long it took to build
     console.time("Subdivision Time")
@@ -116,8 +111,8 @@ export class Scene {
     }
   }
 
+  // https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
   // Recursively subdivide a node to optimize ray-triangle intersection tests
-
   private subdivide(nodeIdx: number): void {
     const node = this.nodes[nodeIdx]
     if (node.triCount <= 2) return
@@ -175,6 +170,7 @@ export class Scene {
   private findBestSplitPlane(node: Node): { bestAxis: number; bestPos: number; bestCost: number } {
     // Dynamic binning based on the number of triangles
     const BINS = Math.ceil(Math.sqrt(node.triCount))
+
     let bestCost = Infinity
     let bestAxis = -1
     let bestPos = 0
@@ -245,10 +241,6 @@ export class Scene {
 
     return { bestAxis, bestPos, bestCost }
   }
-
-  // Additional methods for grid creation, triangle placement, and cost evaluation would be implemented here
-
-  // https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
 
   private calculateNodeCost(node: Node): number {
     const e = vec3.subtract(vec3.create(), node.aabbMax, node.aabbMin)

@@ -19,6 +19,8 @@ import {
   createScene11,
   createScene12,
   createScene13,
+  createCornellBox4,
+  createScene14,
 } from "../utils/helper"
 
 export class Application {
@@ -41,9 +43,9 @@ export class Application {
     const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
     const gold = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.5 })
     const glass = new Material({
-      specularChance: 0.02, // how reflective, 1.0 is 100%
+      specularChance: 0.05, // how reflective, 1.0 is 100%
       specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
-      ior: 1.25, // index of refraction
+      ior: 1.6, // index of refraction
       refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
       refractionColor: [0.0, 0.0, 0.0], // color absobtion of refractive objects
       refractionRoughness: 0.0, // self explanatory
@@ -52,12 +54,27 @@ export class Application {
     // create an array of objects you want to use
     const objectsToLoad: ObjectProperties[] = [
       {
-        modelPath: "./src/assets/models/plane.obj",
-        material: grey,
-        position: [0.0, 0.0, 0.0],
-        scale: [3.5, 3.5, 3.5],
+        modelPath: "./src/assets/models/sphere.obj",
+        material: lightSource,
+        position: [0.0, 0.76, -1.0],
+        rotation: [0.0, 0.0, 0.0],
+        scale: [1.5, 1.5, 1.5],
       },
       {
+        modelPath: "./src/assets/models/sphere.obj",
+        material: lightSource,
+        position: [-1.25, 0.76, 0.75],
+        rotation: [0.0, 0.0, 0.0],
+        scale: [1.5, 1.5, 1.5],
+      },
+      {
+        modelPath: "./src/assets/models/sphere.obj",
+        material: lightSource,
+        position: [1.25, 0.76, 0.75],
+        rotation: [0.0, 0.0, 0.0],
+        scale: [1.5, 1.5, 1.5],
+      },
+      /*       {
         modelPath: "./src/assets/models/plane.obj",
         material: lightSource,
         position: [0.0, 6.5, 6.5],
@@ -75,13 +92,14 @@ export class Application {
         material: glass,
         position: [0.0, 1.0, 0.0],
         scale: [2.0, 2.0, 2.0],
-      },
+      }, */
     ]
 
     // Preset scenes that I made for testing
     const cornelbox = createCornellBox() // with front wall
     const cornelbox2 = createCornellBox2() // without front wall
     const cornelbox3 = createCornellBox3() // mirrored walls
+    const cornelbox4 = createCornellBox4() // empty
 
     const scene1 = createScene1() // Refraction Roughness Test
     const scene2 = createScene2() // IOR Test
@@ -96,9 +114,10 @@ export class Application {
     const scene11 = createScene11() // Lamp with glass of water
     const scene12 = createScene12() // All material types
     const scene13 = createScene13()
+    const scene14 = createScene14()
     // Create objects in the scene
     await this.scene.createObjects(cornelbox)
-
+    //await this.scene.createObjects(objectsToLoad)
     // Build the BVH after creating all the objects
     await this.scene.prepareBVH()
 

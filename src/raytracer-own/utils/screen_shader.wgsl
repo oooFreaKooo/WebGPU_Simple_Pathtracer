@@ -8,11 +8,15 @@ const XAA_EDGE_THRESHOLD: f32 = 1.0 / 8.0;
 const FXAA_SUBPIX_TRIM: f32 = 1.0 / 4.0;
 const FXAA_SUBPIX_TRIM_SCALE: f32 = 1.0;
 const FXAA_SUBPIX_CAP: f32= 3.0 / 2.0;
-// Main fragment shader function
+
 @fragment
 fn frag_main(@location(0) TexCoord: vec2<f32>) -> @location(0) vec4<f32> {
-    let resolution = vec2<f32>(f32(textureDimensions(myTexture).x), f32(textureDimensions(myTexture).y));
-    return fxaa(TexCoord, resolution) * EXPOSURE;
+    // with FXAA
+    //let resolution = vec2<f32>(f32(textureDimensions(myTexture).x), f32(textureDimensions(myTexture).y));
+    //return fxaa(TexCoord, resolution) * EXPOSURE;
+    // without FXAA
+    let color = textureSample(myTexture, mySampler, TexCoord) * EXPOSURE;
+    return color;
 }
 
 fn FxaaLuma(rgb: vec3<f32>) -> f32 {

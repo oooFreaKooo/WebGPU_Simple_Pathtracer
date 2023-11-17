@@ -57,17 +57,20 @@ export class Renderer {
   async setupDevice() {
     // adapter: wrapper around (physical) GPU.
     // Describes features and limits
-    this.adapter = <GPUAdapter>await navigator.gpu?.requestAdapter()
+    this.adapter = <GPUAdapter>await navigator.gpu?.requestAdapter({
+      powerPreference: "high-performance",
+    })
     if (!this.adapter) {
       throw Error("Couldn't request WebGPU adapter.")
     }
+    const requiredLimits = {
+      maxStorageBufferBindingSize: 1e9, // 1 GB
+    }
 
-    const requiredLimits: Record<string, number> = {}
-    requiredLimits["maxStorageBufferBindingSize"] = 1e9 // 1 GB
     // device: wrapper around GPU functionality
     // Function calls are made through the device
-    this.device = <GPUDevice>await this.adapter?.requestDevice({
-      requiredLimits, // include the required limits in the requestDevice options
+    this.device = <GPUDevice>await this.adapter.requestDevice({
+      requiredLimits, // include the required limits
     })
 
     // context: similar to Vulkan instance (or OpenGL context)
@@ -76,7 +79,7 @@ export class Renderer {
     this.context.configure({
       device: this.device,
       format: this.format,
-      alphaMode: "premultiplied",
+      alphaMode: "opaque",
     })
   }
 
@@ -103,19 +106,18 @@ export class Renderer {
       },
     })
 
-    // We need to ping-pong the bindgroups because read-write storage textures are
-    // missing and we can't have the same texture bound as both a read texture and storage texture
+    // TODO: Replace the ping pong method because october 2023 webGPU update allows read-write storage textures (experimental)
     this.computeBindGroup = [
       this.device.createBindGroup({
         layout: this.ray_tracing_pipeline.getBindGroupLayout(0),
         entries: [
           {
             binding: 0,
-            resource: this.textureA.createView(), // flip A and B
+            resource: this.textureA.createView(), // ping-pong Texture A
           },
           {
             binding: 1,
-            resource: this.textureB.createView(),
+            resource: this.textureB.createView(), // ping-pong Texture B
           },
           {
             binding: 2,
@@ -174,7 +176,7 @@ export class Renderer {
         entries: [
           {
             binding: 0,
-            resource: this.textureB.createView(), // flip A and B
+            resource: this.textureB.createView(),
           },
           {
             binding: 1,
