@@ -179,11 +179,10 @@ fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
         // calculate whether we are going to do a diffuse, specular, or refractive ray
         var isSpecular: f32 = 0.0;
         var isRefractive: f32 = 0.0;
-        let randomFloat = RandomFloat01(seed);
-        if (specularChance > 0.0) && (randomFloat < specularChance) {
+        if (specularChance > 0.0) && (RandomFloat01(seed) < specularChance) {
             isSpecular = 1.0;
             rayProbability = specularChance;
-        } else if refractionChance > 0.0 && randomFloat < specularChance + refractionChance {
+        } else if refractionChance > 0.0 && RandomFloat01(seed) < specularChance + refractionChance {
             isRefractive = 1.0;
             rayProbability = refractionChance;
         } else {
@@ -227,7 +226,7 @@ fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
         energy /= rayProbability;
 
         let p = max(energy.r, max(energy.g, energy.b));
-        if randomFloat >= p {
+        if RandomFloat01(seed) >= p {
             break;
         }
         energy *= (1.0 / p);
