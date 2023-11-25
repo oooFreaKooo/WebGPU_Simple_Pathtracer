@@ -31,6 +31,8 @@ const fovElement = document.getElementById("fov")
 const fovValueElement = document.getElementById("fovValue")
 const skyTextureCheckbox = document.getElementById("skyTexture") as HTMLInputElement
 const backfaceCullingCheckbox = document.getElementById("backfaceCulling") as HTMLInputElement
+const jitterElement = document.getElementById("jitter")
+const jitterValueElement = document.getElementById("jitterValue")
 
 export function addEventListeners(instance: Renderer) {
   if (bouncesElement) {
@@ -59,6 +61,16 @@ export function addEventListeners(instance: Renderer) {
       instance.scene.camera.fov = parseFloat((<HTMLInputElement>event.target).value)
       if (fovValueElement) {
         fovValueElement.textContent = instance.scene.camera.fov.toString()
+      }
+      instance.updateSettings()
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
+  if (jitterElement) {
+    jitterElement.addEventListener("input", (event) => {
+      instance.scene.jitterScale = parseFloat((<HTMLInputElement>event.target).value)
+      if (jitterValueElement) {
+        jitterValueElement.textContent = instance.scene.jitterScale.toString()
       }
       instance.updateSettings()
       instance.scene.camera.cameraIsMoving = true
@@ -94,7 +106,7 @@ export function createCornellBox(): ObjectProperties[] {
   const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
   const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
   const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
-  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 1.5 })
   const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.05, specularChance: 1.0 })
   return [
     // Ground
@@ -388,7 +400,7 @@ export function createCornellBox4(): ObjectProperties[] {
 export function createScene1(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const glassBalls: Material = new Material({
     specularChance: 0.02,
@@ -470,7 +482,7 @@ export function createScene1(): ObjectProperties[] {
 export function createScene2(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const glassBalls: Material = new Material({
     specularChance: 0.02,
@@ -551,7 +563,7 @@ export function createScene2(): ObjectProperties[] {
 export function createScene3(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const glassBalls: Material = new Material({
     specularChance: 0.02,
@@ -637,7 +649,7 @@ export function createScene3(): ObjectProperties[] {
 export function createScene4(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const glassBalls: Material = new Material({
     albedo: [0.9, 0.1, 0.1],
@@ -716,7 +728,7 @@ export function createScene4(): ObjectProperties[] {
 export function createScene5(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const glassBalls: Material = new Material({
     specularChance: 1.0,
@@ -935,7 +947,7 @@ export function createScene8(): ObjectProperties[] {
   const shiny = new Material({ albedo: [1.0, 0.5, 0.5], specularRoughness: 0.1, specularChance: 0.52 })
   const mirror = new Material({ specularRoughness: 0.1, specularChance: 1.0 })
   const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
-  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
   const lightWeak = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 0.85], emissionStrength: 2.5 })
   const gold = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.5 })
   const glass = new Material({
@@ -1065,7 +1077,7 @@ export function createScene10(): ObjectProperties[] {
   const shiny = new Material({ albedo: [1.0, 0.5, 0.5], specularRoughness: 0.1, specularChance: 0.52 })
   const mirror = new Material({ specularRoughness: 0.0, specularChance: 1.0 })
   const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
-  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
   const lightWeak = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 0.85], emissionStrength: 2.5 })
   const gold = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.5 })
   const lightSource2 = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 50.0 })
@@ -1169,7 +1181,7 @@ export function createScene11(): ObjectProperties[] {
   const shiny = new Material({ albedo: [1.0, 0.5, 0.5], specularRoughness: 0.1, specularChance: 0.52 })
   const mirror = new Material({ specularRoughness: 0.0, specularChance: 1.0 })
   const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
-  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
   const lightWeak = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 0.85], emissionStrength: 2.5 })
   const gold = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.5 })
   const lightSource2 = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 50.0 })
@@ -1849,7 +1861,7 @@ export function createScene14(): ObjectProperties[] {
   }
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const planes: ObjectProperties[] = [
     // Ground

@@ -7,7 +7,7 @@ const FXAA_EDGE_THRESHOLD_MIN: f32 = 1.0 / 16.0;
 const XAA_EDGE_THRESHOLD: f32 = 1.0 / 8.0;
 const FXAA_SUBPIX_TRIM: f32 = 1.0 / 4.0;
 const FXAA_SUBPIX_TRIM_SCALE: f32 = 1.0;
-const FXAA_SUBPIX_CAP: f32= 3.0 / 2.0;
+const FXAA_SUBPIX_CAP: f32= 3.0 / 8.0;
 
 @fragment
 fn frag_main(@location(0) TexCoord: vec2<f32>) -> @location(0) vec4<f32> {

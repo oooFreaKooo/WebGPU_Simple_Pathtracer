@@ -16,10 +16,10 @@ struct Ray {
 }
 
 struct CameraData {
-    cameraPos: vec3<f32>,
-    cameraForwards: vec3<f32>,
-    cameraRight: vec3<f32>,
-    cameraUp: vec3<f32>,
+    pos: vec3<f32>,
+    forward: vec3<f32>,
+    right: vec3<f32>,
+    up: vec3<f32>,
 }
 
 
@@ -30,14 +30,14 @@ struct SceneVariables {
 
 struct Material {
     albedo: vec3f,
-    specularChance: f32,
-    specularColor: vec3f,
-    specularRoughness: f32,
+    specChance: f32,
+    specColor: vec3f,
+    specRoughness: f32,
     emissionColor: vec3f,
     emissionStrength: f32,
-    refractionColor: vec3f,
-    refractionChance: f32,
-    refractionRoughness: f32,
+    refrColor: vec3f,
+    refrChance: f32,
+    refrRoughness: f32,
     ior: f32, //Index of Refraction
     inverseModel: mat4x4<f32>,
 }
@@ -72,6 +72,19 @@ struct Settings {
     BACKFACE_CULLING: f32,
     SKY_TEXTURE: f32,
     aspectRatio: f32,
+    jitterScale: f32,
+    numLights: f32,
+}
+
+struct LightData {
+    position: vec3f,
+    color: vec3f,
+    size: vec3f,
+    intensity: f32,
+}
+
+struct Light {
+    lights: array<LightData>,
 }
 
 struct SurfacePoint {
@@ -85,15 +98,16 @@ struct SurfacePoint {
 
 @group(0) @binding(0) var outputTex : texture_storage_2d<rgba16float, write>;
 @group(0) @binding(1) var inputTex : texture_2d<f32>;
-@group(0) @binding(2) var<uniform> camera : CameraData;
+@group(0) @binding(2) var<uniform> cam : CameraData;
 @group(0) @binding(3) var<storage, read> objects : ObjectData;
 @group(0) @binding(4) var<storage, read> tree : BVH;
 @group(0) @binding(5) var<storage, read> triIdx : ObjectIndices;
 @group(0) @binding(6) var skyTexture : texture_cube<f32>;
 @group(0) @binding(7) var skySampler : sampler;
 @group(0) @binding(8) var<storage, read> mesh : MeshData;
-@group(0) @binding(9) var<uniform> settings : Settings;
+@group(0) @binding(9) var<uniform> setting : Settings;
 @group(0) @binding(10) var<uniform> scene : SceneVariables;
+@group(0) @binding(11) var<storage, read> lightsource : Light;
 
 const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
@@ -102,139 +116,170 @@ const TWO_PI: f32 = 6.28318530718;
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     let screen_size = vec2<i32 >(textureDimensions(outputTex));
-    let screen_pos = vec2<i32>(GlobalInvocationID.xy);
+    let pixel_pos = vec2<i32>(GlobalInvocationID.xy);
 
-    let FOV = settings.cameraFOV;
+
     let halfScreenSize: vec2<f32> = vec2<f32 >(screen_size) * 0.5;
 
-    let forwards = camera.cameraForwards;
-    let right = camera.cameraRight;
-    let up = camera.cameraUp;
-
-
-    var pixelIndex = u32(screen_pos.y) * u32(screen_size.x) + u32(screen_pos.x);
+    var pixelIndex = u32(pixel_pos.y) * u32(screen_size.x) + u32(pixel_pos.x);
     var seed = pixelIndex + u32(scene.time) * 1193u;
-
-    let jitterScale = 1.0 / f32(settings.numSamples);
-
     var accumulatedColor = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 
-    for (var i: u32 = 0u; i < u32(settings.numSamples); i = i + 1u) {
+    for (var i: u32 = 0u; i < u32(setting.numSamples); i = i + 1u) {
         var myRay: Ray;
-        myRay.origin = camera.cameraPos;
-        let jitter: vec2<f32> = vec2<f32>(RandomFloat01(&seed), RandomFloat01(&seed)) * jitterScale;
-        let screen_sampled_jittered: vec2<f32> = vec2<f32>(screen_pos) + jitter - halfScreenSize;
-        let horizontal_coefficient: f32 = FOV * screen_sampled_jittered.x / f32(screen_size.x);
-        let vertical_coefficient: f32 = FOV * screen_sampled_jittered.y / (f32(screen_size.y) * settings.aspectRatio);
-        myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
+        myRay.origin = cam.pos;
+        let jitter: vec2<f32> = vec2<f32>(RandomFloat01(&seed), RandomFloat01(&seed)) * setting.jitterScale;
+        let screen_jittered: vec2<f32> = vec2<f32>(pixel_pos) + jitter - halfScreenSize;
+        let horizontal_coeff: f32 = setting.cameraFOV * screen_jittered.x / f32(screen_size.x);
+        let vertical_coeff: f32 = setting.cameraFOV * screen_jittered.y / (f32(screen_size.y) * setting.aspectRatio);
+        myRay.direction = normalize(cam.forward + horizontal_coeff * cam.right + vertical_coeff * cam.up);
         accumulatedColor += vec4(trace(myRay, &seed), 1.0);
     }
 
-    let newImage = accumulatedColor / settings.numSamples;
-    let accumulated = textureLoad(inputTex, screen_pos, 0);
+    let newImage = accumulatedColor / setting.numSamples;
+    let accumulated = textureLoad(inputTex, pixel_pos, 0);
 
     // weighted average between the new and the accumulated image
-    let result_color = saturate(scene.weight * newImage + (1.0 - scene.weight) * accumulated);
+    let result_color = scene.weight * newImage + (1.0 - scene.weight) * accumulated;
 
-    textureStore(outputTex, screen_pos, result_color);
+    textureStore(outputTex, pixel_pos, result_color);
 }
 
-//https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-camera/
+
+//https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-cam/
 fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
     var ray = camRay;
     var accumulatedColor: vec3f = vec3(0.0, 0.0, 0.0);
     var energy = vec3(1.0, 1.0, 1.0);
-    var skyColor: vec3f;
-    var regularBounces: u32 = 0u;
-    for (var bounce: u32 = 0u; bounce < u32(settings.maxBounces); bounce++) {
+    var regularBounces: u32 = 1u;
+
+    for (var bounce: u32 = 0u; bounce < u32(setting.maxBounces); bounce++) {
+
         let hit = traverse(ray);
 
         if !hit.hit {
-            accumulatedColor += energy * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, settings.SKY_TEXTURE == 1.0);
+            accumulatedColor += energy * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, setting.SKY_TEXTURE == 1.0);
             break;
-        }
-
-        let material = hit.material;
-        var originalEnergy = energy;
-
-        // do absorption if we are hitting from inside the object
-        energy *= select(vec3(1.0), exp(-material.refractionColor * hit.dist), hit.from_front);
-
-        let n1 = select(1.0, material.ior, !hit.from_front);
-        let n2 = select(1.0, material.ior, hit.from_front);
-
-        // get the pre-fresnel chances
-        var specularChance = material.specularChance;
-        var refractionChance = material.refractionChance;
-
-        // take fresnel into account for specularChance and adjust other chances. specular takes priority.
-        // chanceMultiplier makes sure we keep diffuse / refraction ratio the same.
-        var rayProbability = 1.0;
-        if specularChance > 0.0 {
-            specularChance = FresnelReflectAmount(n1, n2, hit.normal, ray.direction, material.specularChance, 1.0);
-            let chanceMultiplier = (1.0 - specularChance) / (1.0 - material.specularChance);
-            refractionChance *= chanceMultiplier;
-        }
-
-        // calculate whether we are going to do a diffuse, specular, or refractive ray
-        var isSpecular: f32 = 0.0;
-        var isRefractive: f32 = 0.0;
-        let randomFloat = RandomFloat01(seed);
-        if (specularChance > 0.0) && (randomFloat < specularChance) {
-            isSpecular = 1.0;
-            rayProbability = specularChance;
-        } else if refractionChance > 0.0 && randomFloat < specularChance + refractionChance {
-            isRefractive = 1.0;
-            rayProbability = refractionChance;
+        } else if hit.material.emissionStrength > 0.0 {
+            accumulatedColor = energy * hit.material.emissionColor * hit.material.emissionStrength;
+            break;
         } else {
-            rayProbability = 1.0 - (specularChance + refractionChance);
-            regularBounces += 1u;
-        }
 
-        if regularBounces >= 4u && isSpecular == 0.0 { // Stop if max bounces for regular materials is reached
+            var originalEnergy = energy;
+
+            // Absorption if inside the object
+            energy *= select(vec3(1.0), exp(-hit.material.refrColor * hit.dist), hit.from_front);
+
+            let n1 = select(1.0, hit.material.ior, !hit.from_front);
+            let n2 = select(1.0, hit.material.ior, hit.from_front);
+
+            // Pre-fresnel chances
+            var specChance = hit.material.specChance;
+            var refrChance = hit.material.refrChance;
+
+            // Fresnel effect
+            if specChance > 0.1 {
+                //specChance = FresnelReflectAmount(n1, n2, hit.normal, ray.direction, specChance, 1.0);
+                let chanceMultiplier = (1.0 - specChance) / (1.0 - hit.material.specChance);
+                refrChance *= chanceMultiplier;
+            }
+
+            // Ray type determination
+            var isSpecular: f32 = 0.0;
+            var isRefractive: f32 = 0.0;
+            if (specChance > 0.0) && (RandomFloat01(seed) < specChance) {
+                isSpecular = 1.0;
+            } else if refrChance > 0.0 && RandomFloat01(seed) < specChance + refrChance {
+                isRefractive = 1.0;
+            } else {
+                regularBounces += 1u;
+            }
+
+            // Max bounces for diffuse objects
+            if regularBounces >= 4u && isSpecular == 0.0 { 
+                break;
+            }
+
+            // Ray position update
+            ray.origin = select(
+                (ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON,
+                (ray.origin + ray.direction * hit.dist) - hit.normal * EPSILON,
+                isRefractive == 1.0
+            );
+        
+            // New ray direction
+            let diffuseDir = normalize(hit.normal + RandomUnitVector(seed));
+            var specularDir = reflect(ray.direction, hit.normal);
+            var refractDir = refract(ray.direction, hit.normal, select(hit.material.ior, 1.0 / hit.material.ior, hit.from_front));
+
+            specularDir = normalize(mix(specularDir, diffuseDir, hit.material.specRoughness * hit.material.specRoughness));
+            refractDir = normalize(mix(refractDir, normalize(-hit.normal + RandomUnitVector(seed)), hit.material.refrRoughness * hit.material.refrRoughness));
+            ray.direction = mix(mix(diffuseDir, specularDir, isSpecular), refractDir, isRefractive);
+
+            accumulatedColor += energy * hit.material.emissionColor * hit.material.emissionStrength;
+
+            // Update energy
+            if isRefractive == 0.0 {
+                energy = originalEnergy;
+                energy *= hit.material.albedo + hit.material.specColor * isSpecular;
+            }
+
+            // Russian roulette
+            let rr_prob = max(energy.r, max(energy.g, energy.b));
+            if RandomFloat01(seed) >= rr_prob {
             break;
+            }
+            energy /= rr_prob;
+                        // Next Event Estimation (NEE)
+            if isSpecular == 0.0 && isRefractive == 0.0 {
+                for (var i: u32 = 0u; i < u32(setting.numLights); i++) {
+                    let lightContribution = sampleLight(lightsource.lights[i], hit, seed);
+                    accumulatedColor += energy * lightContribution * hit.material.albedo;
+                }
+            }
+            accumulatedColor /= rr_prob;
         }
-        // numerical problems can cause rayProbability to become small enough to cause a divide by zero.
-        rayProbability = max(rayProbability, 0.001);
-
-        // update the ray position
-        ray.origin = select((ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON, (ray.origin + ray.direction * hit.dist) - hit.normal * 0.01, isRefractive == 1.0);
-
-        // Calculate a new ray direction.
-        // Diffuse uses a normal oriented cosine weighted hemisphere sample.
-        // Perfectly smooth specular uses the reflection ray.
-        // Rough (glossy) specular lerps from the smooth specular to the rough diffuse by the material roughness squared
-        // Squaring the roughness is just a convention to make roughness feel more linear perceptually.
-        let bounces = min(1u, bounce);
-        let diffuseDir = normalize(hit.normal + RandomUnitVector(seed));
-        //let diffuseDir = CosineWeightedRandomUnitVector(hit.normal, seed);
-
-        var specularDir = reflect(ray.direction, hit.normal);
-        specularDir = normalize(mix(specularDir, diffuseDir, material.specularRoughness * material.specularRoughness));
-
-        var refractDir = refract(ray.direction, hit.normal, select(material.ior, 1.0 / material.ior, hit.from_front));
-        refractDir = normalize(mix(refractDir, normalize(-hit.normal + RandomUnitVector(seed)), material.refractionRoughness * material.refractionRoughness));
-        ray.direction = mix(mix(diffuseDir, specularDir, isSpecular), refractDir, isRefractive);
-
-
-        accumulatedColor += energy * material.emissionColor * material.emissionStrength;
-
-        if isRefractive == 0.0 {
-            energy = originalEnergy;
-            energy *= material.albedo + material.specularColor * isSpecular;
-        }
-
-        energy /= rayProbability;
-
-        let p = max(energy.r, max(energy.g, energy.b));
-        if randomFloat >= p {
-            break;
-        }
-        energy *= (1.0 / p);
     }
 
     return accumulatedColor;
 }
+
+fn sampleLight(light: LightData, hit: SurfacePoint, seed: ptr<function, u32>) -> vec3f {
+    let samples = 4u; // Number of samples for area light approximation
+    var totalLightContribution = vec3(0.0, 0.0, 0.0);
+
+    for (var i: u32 = 0u; i < samples; i++) {
+        // Random point on the light source area
+        let lightPoint = light.position + vec3(
+            (RandomFloat01(seed) - 0.5) * light.size.x,
+            (RandomFloat01(seed) - 0.5) * light.size.y,
+            (RandomFloat01(seed) - 0.5) * light.size.z,
+        );
+
+        // Compute the vector from the surface point to the sampled light point
+        let lightVec = lightPoint - hit.position;
+        let lightDir = normalize(lightVec);
+
+        // Calculate the dot product of the light direction and the surface normal
+        let dotNL = max(dot(hit.normal, lightDir), 0.0);
+
+        // Calculate the distance to the light source
+        let dist = length(lightVec);
+
+        // Calculate the attenuation based on the inverse square law
+        let attenuation = 1.0 / (dist * dist);
+
+        // Light contribution considering only the Lambertian term and attenuation
+        let lightContribution = dotNL * attenuation;
+
+
+        totalLightContribution += light.color * lightContribution * light.intensity;
+    }
+
+    // Average the light contribution over the number of samples
+    return totalLightContribution / f32(samples);
+}
+
 
 //https://simonstechblog.blogspot.com/2018/06/simple-gpu-path-tracer.html
 fn wang_hash(seed: ptr<function, u32>) -> u32 {
@@ -258,9 +303,6 @@ fn RandomUnitVector(state: ptr<function, u32>) -> vec3<f32> {
     return vec3<f32>(x, y, z);
 }
 
-
-
-
 // https://raytracing.github.io/books/RayTracingInOneWeekend.html#dielectrics/refraction
 fn refract(e1: vec3<f32>, e2: vec3<f32>, e3: f32) -> vec3<f32> {
     let k: f32 = 1.0 - e3 * e3 * (1.0 - dot(e2, e1) * dot(e2, e1));
@@ -272,24 +314,30 @@ fn refract(e1: vec3<f32>, e2: vec3<f32>, e3: f32) -> vec3<f32> {
 }
 
 fn FresnelReflectAmount(n1: f32, n2: f32, normal: vec3<f32>, incident: vec3<f32>, minReflectivity: f32, maxReflectivity: f32) -> f32 {
-    // Schlick approximation
     let r0 = pow(((n1 - n2) / (n1 + n2)), 2.0);
+
     var cosX: f32 = -dot(normal, incident);
+    cosX = clamp(cosX, -1.0, 1.0); // Clamping to avoid numerical issues
+
     if n1 > n2 {
         let n: f32 = n1 / n2;
-        let sinT2: f32 = n * n * (1.0 - cosX * cosX);
-        // Total internal reflection
+        var sinT2: f32 = n * n * (1.0 - cosX * cosX);
+        sinT2 = clamp(sinT2, 0.0, 1.0); // Clamping sinT2
+
         if sinT2 > 1.0 {
             return maxReflectivity;
         }
         cosX = sqrt(1.0 - sinT2);
     }
+
     let x: f32 = pow(1.0 - cosX, 5.0);
     let ret: f32 = r0 + (1.0 - r0) * x;
 
     // Adjust reflect multiplier for object reflectivity
     return mix(minReflectivity, maxReflectivity, ret);
 }
+
+
 
 fn traverse(ray: Ray) -> SurfacePoint {
     var surfacePoint: SurfacePoint;
@@ -386,7 +434,7 @@ fn hit_triangle(
     let a: f32 = dot(edge_1, h); //Skalarprodukt : Wenn a nahe 0 ist, dann ist h fast parallel zur Kante
 
 
-    if (a < EPSILON) && settings.BACKFACE_CULLING == 1.0 {
+    if (a < EPSILON) && setting.BACKFACE_CULLING == 1.0 {
         return surfacePoint;
     }
 

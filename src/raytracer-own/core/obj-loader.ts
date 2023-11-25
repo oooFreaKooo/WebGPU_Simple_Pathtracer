@@ -7,11 +7,11 @@ const MAX_VALUE = Number.POSITIVE_INFINITY
 const MIN_VALUE = Number.NEGATIVE_INFINITY
 
 export class ObjLoader {
-  private maxCorner: vec3
-  private minCorner: vec3
-  private model: mat4
+  maxCorner: vec3
+  minCorner: vec3
+  model: mat4
   private objectID: number
-  private position: vec3
+  position: vec3
   private rotation: vec3
   private scale: vec3
   private v: vec3[]
@@ -23,6 +23,7 @@ export class ObjLoader {
   constructor(material: Material, position: vec3, scale: vec3, rotation: vec3, objectID: number) {
     this.material = material
     this.objectID = objectID
+
     this.v = []
     this.vt = []
     this.vn = []
