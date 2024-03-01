@@ -1,0 +1,118 @@
+.skills {
+    margin: 5%;
+    width: 80%;
+    border: #f5a420 8px solid;
+    border-style: double;
+    border-radius: 1%;
+    position: relative;
+    overflow: hidden;
+    list-style: none;
+    font-size: 24px;
+}
+
+
+.skills-hidden {
+    opacity: 0;
+    filter: blur(5px);
+    transition: all 0.5s;
+    width: 0;
+    font-size: 24px;
+}
+
+
+.skills-show {
+    display: block;
+    opacity: 1;
+    filter: blur(0);
+    width: 95%;
+}
+
+.skills h1 {
+    text-align: center;
+    margin-top: 1.5rem;
+    margin-bottom: 0px;
+}
+
+.skills h3 {
+    margin: 5px 0 10px;
+
+}
+.skills li {
+    padding-left: 5%;
+    padding-bottom: 3%;
+    padding-top: 1%;
+}
+
+
+.bar {
+    background-color: #1a1a1a;
+    display: block;
+    height: 20px;
+    border: #f5a420 2px solid;
+    border-radius: 1%;
+    overflow: hidden;
+}
+
+.skills-show .html {
+    animation: html 3s forwards;
+}
+
+.skills-show .css {
+    animation: css 3s forwards;
+}
+
+.skills-show .javascript {
+    animation: javascript 3s forwards;
+}
+
+.skills-show .vue {
+    animation: vue 3s forwards;
+}
+
+.bar span {
+    height: 20px;
+    float: left;
+    background: linear-gradient(135deg,#f5a420  0%,  rgb(136, 255, 39) 100%);
+    width: 0%; /* Set initial width */
+}
+
+
+@keyframes html {
+    0% {
+        width: 0%;
+    }
+    100% {
+        width: 80%;
+    }
+}
+
+@keyframes css {
+    0% {
+        width: 0%;
+    }
+    100% {
+        width: 60%;
+    }
+}
+
+@keyframes javascript {
+    0% {
+        width: 0%;
+    }
+    100% {
+        width: 50%;
+    }
+}
+
+@keyframes vue {
+    0% {
+        width: 0%;
+    }
+    100% {
+        width: 50%;
+    }
+}
+.projects h2 {
+    font-size: 5vw;
+    text-align: center;
+}

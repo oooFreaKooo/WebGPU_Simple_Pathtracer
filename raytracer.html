@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>WebGPU Projekt</title>
+        <link rel="icon" href="data:;base64,iVBORwOKGO=" />
+        <style>
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            color: #c0c0c0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: "Courier New", Courier, monospace;
+        }
+
+        canvas {
+            max-width: 80%;
+            max-height: 80%;
+            width: auto;
+            height: auto;
+            border: 2px solid #333;
+            margin-top: 3%;
+        }
+
+        .inputs {
+            position: fixed;
+            top: 10%;
+            right: -5%; /* Initially hide most of the box */
+            display: flex;
+            flex-direction: column;
+            gap: 1em;
+            background: #2a2a2a;
+            padding: 1em;
+            border: 1px solid #333;
+            transition: right 0.3s; /* Smooth transition */
+        }
+        
+        .inputs:hover {
+            right: 10px; /* Show the box when hovered */
+        }
+        
+        .slider-control {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .slider-control label {
+            flex: 1;
+            font-size: 0.8em;
+        }
+
+        .slider-control input {
+            flex: 2;
+        }
+
+        .time-container {
+            display: flex;
+            justify-content: space-between;
+            width: 80%;
+            margin-top: 20px;
+            background: #2a2a2a;
+            padding: 10px;
+            border: 1px solid #333;
+        }
+
+        .time-item {
+            flex: 1;
+            text-align: center;
+            margin: 0 10px;
+        }
+
+        h3 {
+            margin: 0;
+            color: #f5a623;
+            font-size: 1.2em;
+            margin-bottom: 5px;
+        }
+
+        span {
+            font-size: 1.2em;
+        }
+        </style>
+    </head>
+
+    <body>
+        <div class="inputs">
+            <div class="control-group">
+                <span>Scene Properties</span>
+                <div class="slider-control">
+                    <label for="bounces">Bounces</label>
+                    <input id="bounces" type="range" min="1" max="32" step="1"
+                        value="8" />
+                    <span id="bouncesValue">8</span>
+                </div>
+                <div class="slider-control">
+                    <label for="samples">Samples</label>
+                    <input id="samples" type="range" min="1" max="32" step="1"
+                        value="1" />
+                    <span id="samplesValue">1</span>
+                </div>
+                <div class="slider-control">
+                    <label for="fov">FOV</label>
+                    <input id="fov" type="range" min="60" max="220" step="5"
+                        value="135" />
+                    <span id="fovValue">135</span>
+                </div>
+                <div class="slider-control">
+                    <label for="jitter">Jitter</label>
+                    <input id="jitter" type="range" min="0.1" max="10"
+                        step="0.1"
+                        value="1.0" />
+                    <span id="jitterValue">1.0</span>
+                </div>
+                <div class="checkbox-control">
+                    <label for="backfaceCulling">Backface Culling</label>
+                    <input id="backfaceCulling" type="checkbox" checked />
+                </div>
+                <div class="checkbox-control">
+                    <label for="skyTexture">Sky Texture</label>
+                    <input id="skyTexture" type="checkbox" />
+                </div>
+            </div>
+        </div>
+
+        <div class="time-container">
+            <div class="time-item">
+                <h3>Triangles:</h3>
+                <span id="triangles"></span><span> triangles</span>
+            </div>
+            <div class="time-item">
+                <h3>Accumulated Frames:</h3>
+                <span id="render-time"></span><span> frames</span>
+            </div>
+            <div class="time-item">
+                <h3>Frame Rate:</h3>
+                <span id="frame-time"></span><span> fps</span>
+            </div>
+        </div>
+        <script src="./dist/main.bundle.js"></script>
+    </body>
+
+</html>

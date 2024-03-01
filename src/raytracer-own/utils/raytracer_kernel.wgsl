@@ -73,18 +73,6 @@ struct Settings {
     SKY_TEXTURE: f32,
     aspectRatio: f32,
     jitterScale: f32,
-    numLights: f32,
-}
-
-struct LightData {
-    position: vec3f,
-    color: vec3f,
-    size: vec3f,
-    intensity: f32,
-}
-
-struct Light {
-    lights: array<LightData>,
 }
 
 struct SurfacePoint {
@@ -107,7 +95,6 @@ struct SurfacePoint {
 @group(0) @binding(8) var<storage, read> mesh : MeshData;
 @group(0) @binding(9) var<uniform> setting : Settings;
 @group(0) @binding(10) var<uniform> scene : SceneVariables;
-@group(0) @binding(11) var<storage, read> lightsource : Light;
 
 const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
@@ -179,7 +166,7 @@ fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
 
             // Fresnel effect
             if specChance > 0.1 {
-                //specChance = FresnelReflectAmount(n1, n2, hit.normal, ray.direction, specChance, 1.0);
+            //specChance = FresnelReflectAmount(n1, n2, hit.normal, ray.direction, specChance, 1.0);
                 let chanceMultiplier = (1.0 - specChance) / (1.0 - hit.material.specChance);
                 refrChance *= chanceMultiplier;
             }
@@ -196,17 +183,17 @@ fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
             }
 
             // Max bounces for diffuse objects
-            if regularBounces >= 4u && isSpecular == 0.0 { 
-                break;
+            if regularBounces >= 4u && isSpecular == 0.0 {
+            break;
             }
-
+        
             // Ray position update
             ray.origin = select(
                 (ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON,
                 (ray.origin + ray.direction * hit.dist) - hit.normal * EPSILON,
                 isRefractive == 1.0
             );
-        
+
             // New ray direction
             let diffuseDir = normalize(hit.normal + RandomUnitVector(seed));
             var specularDir = reflect(ray.direction, hit.normal);
@@ -224,62 +211,16 @@ fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
                 energy *= hit.material.albedo + hit.material.specColor * isSpecular;
             }
 
-            // Russian roulette
+        // Russian roulette
             let rr_prob = max(energy.r, max(energy.g, energy.b));
             if RandomFloat01(seed) >= rr_prob {
             break;
             }
             energy /= rr_prob;
-                        // Next Event Estimation (NEE)
-            if isSpecular == 0.0 && isRefractive == 0.0 {
-                for (var i: u32 = 0u; i < u32(setting.numLights); i++) {
-                    let lightContribution = sampleLight(lightsource.lights[i], hit, seed);
-                    accumulatedColor += energy * lightContribution * hit.material.albedo;
-                }
-            }
-            accumulatedColor /= rr_prob;
         }
     }
-
     return accumulatedColor;
 }
-
-fn sampleLight(light: LightData, hit: SurfacePoint, seed: ptr<function, u32>) -> vec3f {
-    let samples = 4u; // Number of samples for area light approximation
-    var totalLightContribution = vec3(0.0, 0.0, 0.0);
-
-    for (var i: u32 = 0u; i < samples; i++) {
-        // Random point on the light source area
-        let lightPoint = light.position + vec3(
-            (RandomFloat01(seed) - 0.5) * light.size.x,
-            (RandomFloat01(seed) - 0.5) * light.size.y,
-            (RandomFloat01(seed) - 0.5) * light.size.z,
-        );
-
-        // Compute the vector from the surface point to the sampled light point
-        let lightVec = lightPoint - hit.position;
-        let lightDir = normalize(lightVec);
-
-        // Calculate the dot product of the light direction and the surface normal
-        let dotNL = max(dot(hit.normal, lightDir), 0.0);
-
-        // Calculate the distance to the light source
-        let dist = length(lightVec);
-
-        // Calculate the attenuation based on the inverse square law
-        let attenuation = 1.0 / (dist * dist);
-
-        // Light contribution considering only the Lambertian term and attenuation
-        let lightContribution = dotNL * attenuation;
-
-
-        totalLightContribution += light.color * lightContribution * light.intensity;
-    }
-
-    // Average the light contribution over the number of samples
-    return totalLightContribution / f32(samples);
-}
-
 
 //https://simonstechblog.blogspot.com/2018/06/simple-gpu-path-tracer.html
 fn wang_hash(seed: ptr<function, u32>) -> u32 {
@@ -302,6 +243,9 @@ fn RandomUnitVector(state: ptr<function, u32>) -> vec3<f32> {
     let y: f32 = r * sin(a);
     return vec3<f32>(x, y, z);
 }
+
+
+
 
 // https://raytracing.github.io/books/RayTracingInOneWeekend.html#dielectrics/refraction
 fn refract(e1: vec3<f32>, e2: vec3<f32>, e3: f32) -> vec3<f32> {

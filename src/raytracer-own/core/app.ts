@@ -22,6 +22,8 @@ import {
   createCornellBox4,
   createScene14,
 } from "../utils/helper"
+const { EventEmitter } = require("events")
+const eventEmitter = new EventEmitter()
 
 export class Application {
   private canvas: HTMLCanvasElement
@@ -116,10 +118,11 @@ export class Application {
     const scene13 = createScene13()
     const scene14 = createScene14()
     // Create objects in the scene
-    await this.scene.createObjects(scene10)
+    await this.scene.createObjects(scene8)
     //await this.scene.createObjects(objectsToLoad)
     // Build the BVH after creating all the objects
-    await this.scene.prepareBVH()
+    eventEmitter.on("BVH", async () => await this.scene.prepareBVH())
+    eventEmitter.emit("BVH")
 
     // Initialize the renderer
     await this.renderer.Initialize()

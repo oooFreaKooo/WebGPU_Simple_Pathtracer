@@ -5,7 +5,6 @@ import { ObjLoader } from "./obj-loader"
 import { Triangle } from "./triangle"
 import { AABB, Bin, Node } from "./node"
 import { ObjectProperties } from "../utils/helper"
-import { Light } from "./light"
 
 const MAX_VALUE = Number.POSITIVE_INFINITY
 const MIN_VALUE = Number.NEGATIVE_INFINITY
@@ -27,8 +26,6 @@ export class Scene {
   maxBounces: number = 8
   samples: number = 1
   jitterScale: number = 1
-  lightCount: number = 0
-  lightData: Light[] = []
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -53,19 +50,6 @@ export class Scene {
 
       // push the object into an array
       this.objectMeshes.push(objectMesh)
-
-      // Check for emissive materials and add light sources
-      if (objectMesh.material.emissionStrength > 0.0) {
-        // Calculate object size
-        const size = new Float32Array([
-          objectMesh.maxCorner[0] - objectMesh.minCorner[0],
-          objectMesh.maxCorner[1] - objectMesh.minCorner[1],
-          objectMesh.maxCorner[2] - objectMesh.minCorner[2],
-        ])
-        const light = new Light(objectMesh.position, objectMesh.material.emissionColor, size, objectMesh.material.emissionStrength)
-        this.lightData.push(light)
-        this.lightCount++
-      }
 
       // make sure next object gets a new ID
       this.objectIDCount++

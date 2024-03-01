@@ -1,0 +1,78 @@
+section {
+    font-family: 'Archivo Narrow', sans-serif;
+    color: #f5a420;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    width: 100vw;
+    min-height: 85vh;
+    position: relative;
+}
+@media (max-width: 768px) {
+    section {
+        min-height: 75vh;
+    }
+
+}
+#first-section {
+    background: linear-gradient(to top, rgba(245, 164, 32, 0) 95%, #f5a3205b 100%);
+    min-height: 30vh;
+}
+
+
+.second-section {
+    background-image: linear-gradient(
+        45deg,
+        #f5a420,
+        rgba(26, 26, 26, 0.5)
+    ) 
+}
+.second-section img {
+    filter: brightness(0);
+}
+.second-section p {
+    filter: brightness(0);
+}
+.hidden {
+    opacity: 0;
+    filter: blur(15px);
+    transition: all 1s;
+}
+
+.show {
+    opacity: 1;
+    filter: blur(0);
+}
+
+.see-more {
+    font-family: 'Archivo Narrow', sans-serif;
+    color: #f5a420;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    opacity: 0;
+    z-index: 100;
+    animation: jump 2s linear infinite, fadeIn 1s ease 4s forwards;
+}
+.see-more a {
+    color: #f5a420; 
+    text-decoration: none;
+    font-family: 'Archivo Narrow', sans-serif;
+}
+
+.see-more a:hover {
+    color: #f5a420;
+    text-decoration: none;
+}
+
+
+@keyframes jump {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+

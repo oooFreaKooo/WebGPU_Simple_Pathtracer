@@ -1,0 +1,82 @@
+.wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    height: 100%;
+    width: 80%;
+    margin: 15%;
+    margin-top: 200px;
+
+}
+
+.wrapper .static-text {
+    color: #fff;
+    font-size: 5vw;
+    font-weight: 400;
+    text-transform: uppercase;
+    margin-left: 16px;
+    
+}
+.wrapper .dynamic-text {
+    margin-left: 24px;
+    overflow: hidden;
+}
+
+.dynamic-text li {
+    font-size: 3vw;
+    list-style: square;
+    font-weight: 300;
+    
+}
+@media (max-width: 768px) {
+    .dynamic-text li {
+        font-size: 5vw;
+    }
+    .wrapper .static-text {
+        font-size: 9vw;
+    }
+}
+.dynamic-text li span {
+    position: absolute;
+}
+
+
+.dynamic-text li span::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    height: 100%;
+    width: 100%;
+    background: #1a1a1a;
+    border-left: 2px solid #f5a420;
+
+}
+
+.dynamic-text li.animate-typing span::after {
+    animation: typing 1.5s steps(36) forwards, blink 0s step-end infinite;
+}
+
+@keyframes typing {
+    100% {
+        left: 100%;
+    }
+}
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+.dynamic-text li:nth-child(1).animate-typing span::after {
+    animation: typing 1.5s steps(36) 0.5s forwards, blink 1s step-end infinite 1.5s;
+}
+
+.dynamic-text li:nth-child(2).animate-typing span::after {
+    animation: typing 1.5s steps(36) 1.5s forwards, blink 1s step-end infinite 2.5s;
+}
+
+.dynamic-text li:nth-child(3).animate-typing span::after {
+    animation: typing 1.5s steps(36) 3.5s forwards, blink 1s step-end infinite 4.5s;
+}
+
+.dynamic-text li:nth-child(4).animate-typing span::after {
+    animation: typing 1.5s steps(36) 4.5s forwards, blink 1s step-end infinite 5.5s;
+}

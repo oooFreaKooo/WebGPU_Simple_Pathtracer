@@ -28,7 +28,6 @@ export class Renderer {
   private triangleIndexBuffer: GPUBuffer
   private sky_texture: CubeMapMaterial
   private sceneVariablesBuffer: GPUBuffer
-  private lightBuffer: GPUBuffer
 
   // Pipeline objects
   private ray_tracing_pipeline: GPUComputePipeline
@@ -61,7 +60,6 @@ export class Renderer {
     this.adapter = <GPUAdapter>await navigator.gpu?.requestAdapter({
       powerPreference: "high-performance",
     })
-
     if (!this.adapter) {
       throw Error("Couldn't request WebGPU adapter.")
     }
@@ -93,7 +91,6 @@ export class Renderer {
     this.createMaterialBuffer()
     this.createTriangleBuffer()
     this.createNodeBuffer()
-    this.createLightBuffer()
     this.createSettingsBuffer()
     this.createTriangleIndexBuffer()
     await this.createSkyTexture()
@@ -172,12 +169,6 @@ export class Renderer {
               buffer: this.sceneVariablesBuffer,
             },
           },
-          {
-            binding: 11,
-            resource: {
-              buffer: this.lightBuffer,
-            },
-          },
         ],
       }),
       this.device.createBindGroup({
@@ -239,12 +230,6 @@ export class Renderer {
             binding: 10,
             resource: {
               buffer: this.sceneVariablesBuffer,
-            },
-          },
-          {
-            binding: 11,
-            resource: {
-              buffer: this.lightBuffer,
             },
           },
         ],
@@ -325,7 +310,6 @@ export class Renderer {
     this.updateMaterialData()
     this.updateTriangleData()
     this.updateNodeData()
-    this.updateLightData()
 
     const uploadTimeLabel: HTMLElement = <HTMLElement>document.getElementById("triangles")
     uploadTimeLabel.innerText = this.scene.triangles.length.toFixed(2).toString()
@@ -476,12 +460,35 @@ export class Renderer {
     this.device.queue.writeBuffer(this.materialBuffer, 0, materialData, 0, materialDataSize * this.scene.objectMeshes.length)
   }
 
+  private createNodeBuffer() {
+    const nodeBufferDescriptor: GPUBufferDescriptor = {
+      size: 32 * this.scene.nodesUsed,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    }
+    this.nodeBuffer = this.device.createBuffer(nodeBufferDescriptor)
+  }
+
   private createTriangleIndexBuffer() {
     const triangleIndexBufferDescriptor: GPUBufferDescriptor = {
       size: 4 * this.scene.triangles.length,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     }
     this.triangleIndexBuffer = this.device.createBuffer(triangleIndexBufferDescriptor)
+  }
+
+  updateNodeData() {
+    var nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
+    for (let i = 0; i < this.scene.nodesUsed; i++) {
+      nodeData_a[8 * i] = this.scene.nodes[i].aabbMin[0]
+      nodeData_a[8 * i + 1] = this.scene.nodes[i].aabbMin[1]
+      nodeData_a[8 * i + 2] = this.scene.nodes[i].aabbMin[2]
+      nodeData_a[8 * i + 3] = this.scene.nodes[i].leftFirst
+      nodeData_a[8 * i + 4] = this.scene.nodes[i].aabbMax[0]
+      nodeData_a[8 * i + 5] = this.scene.nodes[i].aabbMax[1]
+      nodeData_a[8 * i + 6] = this.scene.nodes[i].aabbMax[2]
+      nodeData_a[8 * i + 7] = this.scene.nodes[i].triCount
+    }
+    this.device.queue.writeBuffer(this.nodeBuffer, 0, nodeData_a, 0, 8 * this.scene.nodesUsed)
   }
 
   private createSceneVariablesBuffer() {
@@ -557,7 +564,6 @@ export class Renderer {
       skytexture: this.scene.enableSkytexture,
       aspectRatio: this.canvas.width / this.canvas.height,
       jitterScale: this.scene.jitterScale,
-      numLights: this.scene.lightCount,
     }
 
     this.device.queue.writeBuffer(
@@ -571,62 +577,10 @@ export class Renderer {
         settingsData.skytexture,
         settingsData.aspectRatio,
         settingsData.jitterScale,
-        settingsData.numLights,
       ]),
       0,
-      8,
+      7,
     )
-  }
-
-  private createNodeBuffer() {
-    const nodeBufferDescriptor: GPUBufferDescriptor = {
-      size: 32 * this.scene.nodesUsed,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.nodeBuffer = this.device.createBuffer(nodeBufferDescriptor)
-  }
-
-  private updateNodeData() {
-    var nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
-    for (let i = 0; i < this.scene.nodesUsed; i++) {
-      nodeData_a[8 * i] = this.scene.nodes[i].aabbMin[0]
-      nodeData_a[8 * i + 1] = this.scene.nodes[i].aabbMin[1]
-      nodeData_a[8 * i + 2] = this.scene.nodes[i].aabbMin[2]
-      nodeData_a[8 * i + 3] = this.scene.nodes[i].leftFirst
-      nodeData_a[8 * i + 4] = this.scene.nodes[i].aabbMax[0]
-      nodeData_a[8 * i + 5] = this.scene.nodes[i].aabbMax[1]
-      nodeData_a[8 * i + 6] = this.scene.nodes[i].aabbMax[2]
-      nodeData_a[8 * i + 7] = this.scene.nodes[i].triCount
-    }
-    this.device.queue.writeBuffer(this.nodeBuffer, 0, nodeData_a, 0, 8 * this.scene.nodesUsed)
-  }
-
-  private createLightBuffer() {
-    const descriptor: GPUBufferDescriptor = {
-      size: 48 * this.scene.lightCount,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.lightBuffer = this.device.createBuffer(descriptor)
-  }
-
-  private updateLightData() {
-    let lightDataSize = 12
-    var lightData: Float32Array = new Float32Array(lightDataSize * this.scene.lightCount)
-    for (let i = 0; i < this.scene.lightCount; i++) {
-      lightData[lightDataSize * i + 0] = this.scene.lightData[i].position[0]
-      lightData[lightDataSize * i + 1] = this.scene.lightData[i].position[1]
-      lightData[lightDataSize * i + 2] = this.scene.lightData[i].position[2]
-      lightData[lightDataSize * i + 3] = 0.0
-      lightData[lightDataSize * i + 4] = this.scene.lightData[i].color[0]
-      lightData[lightDataSize * i + 5] = this.scene.lightData[i].color[1]
-      lightData[lightDataSize * i + 6] = this.scene.lightData[i].color[2]
-      lightData[lightDataSize * i + 7] = 0.0
-      lightData[lightDataSize * i + 8] = this.scene.lightData[i].size[0]
-      lightData[lightDataSize * i + 9] = this.scene.lightData[i].size[1]
-      lightData[lightDataSize * i + 10] = this.scene.lightData[i].size[2]
-      lightData[lightDataSize * i + 11] = this.scene.lightData[i].intensity
-    }
-    this.device.queue.writeBuffer(this.lightBuffer, 0, lightData, 0, lightDataSize * this.scene.lightCount)
   }
 
   totalFrametime = 0
