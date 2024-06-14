@@ -55,6 +55,9 @@ export class Renderer {
   }
 
   async setupDevice() {
+    if (!navigator.gpu.wgslLanguageFeatures.has("readonly_and_readwrite_storage_textures")) {
+      throw new Error("Read-only and read-write storage textures are not available")
+    }
     // adapter: wrapper around (physical) GPU.
     // Describes features and limits
     this.adapter = <GPUAdapter>await navigator.gpu?.requestAdapter({
@@ -65,6 +68,11 @@ export class Renderer {
     }
     const requiredLimits = {
       maxStorageBufferBindingSize: 1e9, // 1 GB
+      maxComputeWorkgroupStorageSize: 16384, // 16 KB
+      maxComputeInvocationsPerWorkgroup: 1024,
+      maxComputeWorkgroupSizeX: 256,
+      maxComputeWorkgroupSizeY: 256,
+      maxComputeWorkgroupSizeZ: 64,
     }
 
     // device: wrapper around GPU functionality
