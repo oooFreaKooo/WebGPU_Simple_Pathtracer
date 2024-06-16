@@ -31,35 +31,72 @@
         }
 
         .inputs {
-            position: fixed;
-            top: 10%;
-            right: -5%; /* Initially hide most of the box */
+            position: absolute;
             display: flex;
             flex-direction: column;
+            display: none;
             gap: 1em;
             background: #2a2a2a;
             padding: 1em;
             border: 1px solid #333;
-            transition: right 0.3s; /* Smooth transition */
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            cursor: move;
+            z-index: 1000;
         }
-        
-        .inputs:hover {
-            right: 10px; /* Show the box when hovered */
-        }
-        
-        .slider-control {
+        .slider-control, .checkbox-control {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 0.5em;
         }
 
-        .slider-control label {
+        .slider-control label, .checkbox-control label {
             flex: 1;
             font-size: 0.8em;
+            color: #fff;
         }
 
-        .slider-control input {
+        .slider-control input[type="range"] {
             flex: 2;
+        }
+
+        .slider-control span, .checkbox-control input {
+            flex: 1;
+            font-size: 0.8em;
+            color: #fff;
+        }
+
+        .control-group span {
+            font-size: 1em;
+            color: #f7f308;
+            margin-bottom: 0.5em;
+            display: block;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            background: #ff4d4d;
+            border: none;
+            color: white;
+            padding: 0.2em 0.5em;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+        .settings-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #2a2a2a;
+            border: 1px solid #333;
+            color: white;
+            padding: 0.5em 1em;
+            cursor: pointer;
+            border-radius: 5px;
+            z-index: 1001;
         }
 
         .time-container {
@@ -92,7 +129,10 @@
     </head>
 
     <body>
-        <div class="inputs">
+        <button class="settings-btn" id="settingsBtn">Settings</button>
+
+        <div class="inputs" id="draggable">
+            <button class="close-btn" id="closeBtn">X</button>
             <div class="control-group">
                 <span>Scene Properties</span>
                 <div class="slider-control">
@@ -116,8 +156,7 @@
                 <div class="slider-control">
                     <label for="jitter">Jitter</label>
                     <input id="jitter" type="range" min="0.1" max="10"
-                        step="0.1"
-                        value="1.0" />
+                        step="0.1" value="1.0" />
                     <span id="jitterValue">1.0</span>
                 </div>
                 <div class="checkbox-control">
@@ -146,6 +185,63 @@
             </div>
         </div>
         <script src="./dist/main.bundle.js"></script>
+        <script>
+            const settingsBtn = document.getElementById('settingsBtn');
+            const closeBtn = document.getElementById('closeBtn');
+            const draggable = document.getElementById('draggable');
+    
+            settingsBtn.addEventListener('click', () => {
+                draggable.style.display = 'flex';
+            });
+    
+            closeBtn.addEventListener('click', () => {
+                draggable.style.display = 'none';
+            });
+    
+            let isDragging = false;
+            let startX, startY, initialX, initialY;
+    
+            draggable.addEventListener('mousedown', (e) => {
+                if (e.target === closeBtn) return;
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                initialX = draggable.offsetLeft;
+                initialY = draggable.offsetTop;
+                draggable.style.cursor = 'grabbing';
+            });
+    
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const dx = e.clientX - startX;
+                    const dy = e.clientY - startY;
+                    draggable.style.left = initialX + dx + 'px';
+                    draggable.style.top = initialY + dy + 'px';
+                }
+            });
+    
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                draggable.style.cursor = 'move';
+            });
+    
+            // Update range input values display
+            const bounces = document.getElementById('bounces');
+            const bouncesValue = document.getElementById('bouncesValue');
+            bounces.addEventListener('input', () => bouncesValue.textContent = bounces.value);
+    
+            const samples = document.getElementById('samples');
+            const samplesValue = document.getElementById('samplesValue');
+            samples.addEventListener('input', () => samplesValue.textContent = samples.value);
+    
+            const fov = document.getElementById('fov');
+            const fovValue = document.getElementById('fovValue');
+            fov.addEventListener('input', () => fovValue.textContent = fov.value);
+    
+            const jitter = document.getElementById('jitter');
+            const jitterValue = document.getElementById('jitterValue');
+            jitter.addEventListener('input', () => jitterValue.textContent = jitter.value);
+        </script>
     </body>
 
 </html>
