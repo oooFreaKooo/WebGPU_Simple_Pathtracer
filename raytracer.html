@@ -1,151 +1,275 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>WebGPU Projekt</title>
-        <link rel="icon" href="data:;base64,iVBORwOKGO=" />
-        <style>
-        html,
-        body {
-            margin: 0;
-            width: 100%;
-            height: 100%;
-            background: #1a1a1a;
-            color: #c0c0c0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-family: "Courier New", Courier, monospace;
-        }
 
-        canvas {
-            max-width: 80%;
-            max-height: 80%;
-            width: auto;
-            height: auto;
-            border: 2px solid #333;
-            margin-top: 3%;
-        }
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Roman Koller - Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap"
+      rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geostar&display=swap"
+      rel="stylesheet">
+    <link rel="stylesheet" href="styles/general.css">
+    <link rel="stylesheet" href="styles/header.css">
+    <link rel="stylesheet" href="styles/cards.css">
+    <link rel="stylesheet" href="styles/particles.css">
+    <link rel="stylesheet" href="styles/text.css">
+    <link rel="stylesheet" href="styles/sections.css">
+    <link rel="stylesheet" href="styles/typewriter.css">
+    <link rel="stylesheet" href="styles/skills.css">
+    <link rel="stylesheet" href="styles/projects.css">
+    <script defer src="assets/scripts/sections.js"></script>
+    <script defer src="assets/scripts/typewriter.js"></script>
+    <script defer src="assets/scripts/cards.js"></script>
+    <script type="module"
+      src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
+    <script
+      src="https://unpkg.com/@studio-freight/lenis@1.0.33/dist/lenis.min.js"></script>
+  </head>
 
-        .inputs {
-            position: fixed;
-            top: 10%;
-            right: -5%; /* Initially hide most of the box */
-            display: flex;
-            flex-direction: column;
-            gap: 1em;
-            background: #2a2a2a;
-            padding: 1em;
-            border: 1px solid #333;
-            transition: right 0.3s; /* Smooth transition */
-        }
-        
-        .inputs:hover {
-            right: 10px; /* Show the box when hovered */
-        }
-        
-        .slider-control {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+  <body>
+    <nav>
+      <ul class="sidebar">
+        <li onclick=hideSidebar()><a href="#"><svg
+              xmlns="http://www.w3.org/2000/svg" height="24"
+              viewBox="0 -960 960 960" width="24"><path
+                d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z" /></svg></a></li>
+        <li><a href="html/about.html">About</a></li>
+        <li><a href="html/projects.html">Projects</a></li>
+        <li><a href="html/contact.html">Contact</a></li>
+      </ul>
+      <ul>
+        <li><a href="index.html"><span class="logo-1"> Roman Koller </span>.
+            <span class="logo-2"> _ </span></a></li>
+        <li class="hide-nav"><a href="html/about.html">About</a></li>
+        <li class="hide-nav"><a href="html/projects.html">Projects</a></li>
+        <li class="hide-nav"><a href="html/contact.html">Contact</a></li>
+        <li class="menu-button" onclick=showSidebar()><a href="#"><svg
+              xmlns="http://www.w3.org/2000/svg" height="26"
+              viewBox="0 -960 960 960" width="26" fill="#f5a623"><path
+                d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z" /></svg></a></li>
+      </ul>
+    </nav>
+    <header>
+      <div>
+        <div id="particles-js"></div>
+      </div>
+      <script type="text/javascript" src="assets/scripts/particles.js"></script>
+      <script type="text/javascript"
+        src="assets/scripts/particle-app.js"></script>
 
-        .slider-control label {
-            flex: 1;
-            font-size: 0.8em;
-        }
+      <div class="text-box">
+        <p>HI, MY NAME IS</p>
+        <h1>ROMAN</h1>
+        <h3>I'M FOCUSED ON <span>3D-RENDERING</span> & <span>WEB
+            DEVELOPMENT</span> </h3>
+        <div class="row">
+          <a href>See My Portfolio</a>
+          <a href>Contact Me <span class="icon-arrow"> &#x27F6</span></a>
 
-        .slider-control input {
-            flex: 2;
-        }
-
-        .time-container {
-            display: flex;
-            justify-content: space-between;
-            width: 80%;
-            margin-top: 20px;
-            background: #2a2a2a;
-            padding: 10px;
-            border: 1px solid #333;
-        }
-
-        .time-item {
-            flex: 1;
-            text-align: center;
-            margin: 0 10px;
-        }
-
-        h3 {
-            margin: 0;
-            color: #f5a623;
-            font-size: 1.2em;
-            margin-bottom: 5px;
-        }
-
-        span {
-            font-size: 1.2em;
-        }
-        </style>
-    </head>
-
-    <body>
-        <div class="inputs">
-            <div class="control-group">
-                <span>Scene Properties</span>
-                <div class="slider-control">
-                    <label for="bounces">Bounces</label>
-                    <input id="bounces" type="range" min="1" max="32" step="1"
-                        value="8" />
-                    <span id="bouncesValue">8</span>
-                </div>
-                <div class="slider-control">
-                    <label for="samples">Samples</label>
-                    <input id="samples" type="range" min="1" max="32" step="1"
-                        value="1" />
-                    <span id="samplesValue">1</span>
-                </div>
-                <div class="slider-control">
-                    <label for="fov">FOV</label>
-                    <input id="fov" type="range" min="60" max="220" step="5"
-                        value="135" />
-                    <span id="fovValue">135</span>
-                </div>
-                <div class="slider-control">
-                    <label for="jitter">Jitter</label>
-                    <input id="jitter" type="range" min="0.1" max="10"
-                        step="0.1"
-                        value="1.0" />
-                    <span id="jitterValue">1.0</span>
-                </div>
-                <div class="checkbox-control">
-                    <label for="backfaceCulling">Backface Culling</label>
-                    <input id="backfaceCulling" type="checkbox" checked />
-                </div>
-                <div class="checkbox-control">
-                    <label for="skyTexture">Sky Texture</label>
-                    <input id="skyTexture" type="checkbox" />
-                </div>
-            </div>
         </div>
+      </div>
+    </header>
 
-        <div class="time-container">
-            <div class="time-item">
-                <h3>Triangles:</h3>
-                <span id="triangles"></span><span> triangles</span>
-            </div>
-            <div class="time-item">
-                <h3>Accumulated Frames:</h3>
-                <span id="render-time"></span><span> frames</span>
-            </div>
-            <div class="time-item">
-                <h3>Frame Rate:</h3>
-                <span id="frame-time"></span><span> fps</span>
-            </div>
+    <div class="see-more">
+      <a href="#first-section">
+        <p><span class="icon-arrow"> &#x25BC;</span>READ MORE HERE<span
+            class="icon-arrow"> &#x25BC;</span></p>
+      </a>
+    </div>
+
+    <!-- SECTION 1 -->
+    <section id="first-section" class="hidden">
+      <div class="text-box">
+        <h2>ABOUT</h2>
+      </div>
+    </section>
+
+    <!-- SECTION 2 -->
+    <section class="hidden">
+
+      <div class="cards">
+        <div class="cards-hidden item-1">
+          <h1>SOME FACTS</h1>
         </div>
-        <script src="./dist/main.bundle.js"></script>
+        <div class="cards-hidden item-2">
+          <img src="assets/img/student.png">
+        </div>
+        <div class="cards-hidden item-3">
+          <img src="assets/img/3d.png">
+        </div>
+        <div class="cards-hidden item-4">
+          <img src="assets/img/web.png">
+        </div>
+        <div class="cards-hidden item-5">
+          <img src="assets/img/api.png">
+        </div>
+        <div class="cards-hidden item-6">
+          <p>University Student in Computer Visualistics</p>
+        </div>
+        <div class="cards-hidden item-7">
+          <p>Exploring the World of 3D-Rendering</p>
+        </div>
+        <div class="cards-hidden item-8">
+          <p>Expanding My Skills in Web Development</p>
+        </div>
+        <div class="cards-hidden item-9">
+          <p>Learning and Experimenting with Libraries & APIs</p>
+        </div>
+      </div>
+
+      <div class="skills">
+        <h1>MY SKILLS</h1>
+        <li class="skills-hidden"><h3>HTML</h3>
+          <span class="bar "><span class="html"></span></span>
+        </li>
+        <li class="skills-hidden"><h3>CSS</h3>
+          <span class="bar"><span class="css"></span></span>
+        </li>
+        <li class="skills-hidden"><h3>JavaScript</h3>
+          <span class="bar"><span
+              class="javascript"></span></span>
+        </li>
+        <li class="skills-hidden"><h3>Vue js</h3>
+          <span class="bar"><span class="vue"></span></span>
+        </li>
+      </div>
+
+      <div class="wrapper">
+        <div class="static-text"> I'M</div>
+        <ul class="dynamic-text">
+          <li><span>Always expanding my knowledge.</span></li>
+          <li><span>Eagerly embracing new challenges.</span></li>
+          <li><span>Exploring endless possibilities.</span></li>
+          <li><span>Mastering skills with determination.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SECTION 3 -->
+    <section class="project-section" class="hidden">
+      <div class="text-box title-projects">
+        <h2>PROJECTS</h2>
+      </div>
+      <model-viewer id="triangles-hidden"
+        src="assets/models/triangles.gltf"
+        tone-mapping="commerce" auto-rotate>
+      </model-viewer>
+
+      <div class="project-wrapper">
+        <div class="project-container">
+          <input type="radio" name="slide" id="c1" checked>
+          <label for="c1" class="project-card">
+            <div class="project-row">
+              <div class="icon">1</div>
+              <div class="description">
+                <h4>WebGPU</h4>
+                <p>Simple WebGPU Pathtracer</p>
+
+              </div>
+              <div class="description">
+                <button id="startButton"><h4>[Start Demo]</h4></button>
+              </div>
+            </div>
+
+          </label>
+          <input type="radio" name="slide" id="c2">
+          <label for="c2" class="project-card">
+            <div class="project-row">
+              <div class="icon">2</div>
+              <div class="description">
+                <h4>Soon</h4>
+                <p>Coming soon</p>
+              </div>
+            </div>
+          </label>
+          <input type="radio" name="slide" id="c3">
+          <label for="c3" class="project-card">
+            <div class="project-row">
+              <div class="icon">3</div>
+              <div class="description">
+                <h4>Soon</h4>
+                <p>Coming soon</p>
+              </div>
+            </div>
+          </label>
+          <input type="radio" name="slide" id="c4">
+          <label for="c4" class="project-card">
+            <div class="project-row">
+              <div class="icon">4</div>
+              <div class="description">
+                <h4>Soon</h4>
+                <p>Coming soon</p>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- SECTION 3 -->
+      <section class="hidden">
+        <div class="cards">
+          <div class="cards-hidden item-1">
+            <h1>SOME FACTS</h1>
+          </div>
+          <div class="cards-hidden item-2">
+            <img src="assets/img/student.png">
+          </div>
+          <div class="cards-hidden item-3">
+            <img src="assets/img/3d.png">
+          </div>
+          <div class="cards-hidden item-4">
+            <img src="assets/img/web.png">
+          </div>
+          <div class="cards-hidden item-5">
+            <img src="assets/img/api.png">
+          </div>
+          <div class="cards-hidden item-6">
+            <p>University Student in Computer Visualistics</p>
+          </div>
+          <div class="cards-hidden item-7">
+            <p>Exploring the World of 3D-Rendering</p>
+          </div>
+          <div class="cards-hidden item-8">
+            <p>Expanding My Skills in Web Development</p>
+          </div>
+          <div class="cards-hidden item-9">
+            <p>Learning and Experimenting with Libraries & APIs</p>
+          </div>
+        </div>
+      </section>
+
+      <script>
+      
+        document.getElementById('startButton').addEventListener('click', function() {
+            window.location.href = 'raytracer.html';
+        });
+       
+      function showSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.style.display = 'flex';
+      }
+      function hideSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.style.display = 'none';
+      }
+      const lenis = new Lenis()
+
+lenis.on('scroll', (e) => {
+})
+
+function raf(time) {
+  lenis.raf(time)
+  requestAnimationFrame(raf)
+}
+
+requestAnimationFrame(raf)
+    </script>
     </body>
-
-</html>
+  </html>

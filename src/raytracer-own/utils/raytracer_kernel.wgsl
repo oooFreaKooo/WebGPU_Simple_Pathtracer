@@ -22,12 +22,6 @@ struct CameraData {
     up: vec3<f32>,
 }
 
-
-struct SceneVariables {
-    time: f32,
-    weight: f32,
-}
-
 struct Material {
     albedo: vec3f,
     specChance: f32,
@@ -38,7 +32,7 @@ struct Material {
     refrColor: vec3f,
     refrChance: f32,
     refrRoughness: f32,
-    ior: f32, //Index of Refraction
+    ior: f32,
     inverseModel: mat4x4<f32>,
 }
 
@@ -50,11 +44,18 @@ struct Triangle {
     normal_b: vec3f,
     corner_c: vec3f,
     normal_c: vec3f,
-    objectID: f32,
+    meshID: f32,
 }
 
 struct MeshData {
     materials: array<Material>,
+}
+
+struct Mesh {
+	num_triangles: i32,
+	offset: i32,
+	global_id: i32,
+	material_id: i32
 }
 
 struct ObjectData {
@@ -75,6 +76,24 @@ struct Settings {
     jitterScale: f32,
 }
 
+struct Uniforms {
+	screenDims: vec2f,
+	frameNum: f32,
+	resetBuffer: f32,
+}
+
+struct AABB {
+	min: vec3f,
+	right_offset: f32,
+	max: vec3f,
+
+	prim_type: f32,
+	prim_id: f32,
+	prim_count: f32,
+	skip_link: f32,
+	axis: f32,
+}
+
 struct SurfacePoint {
     material: Material,
     position: vec3f,
@@ -84,8 +103,8 @@ struct SurfacePoint {
     from_front: bool,
 }
 
-@group(0) @binding(0) var outputTex : texture_storage_2d<rgba16float, write>;
-@group(0) @binding(1) var inputTex : texture_2d<f32>;
+@group(0) @binding(0) var<uniform> uniforms : Uniforms;
+@group(0) @binding(1) var<storage, read_write> framebuffer: array<vec4f>;
 @group(0) @binding(2) var<uniform> cam : CameraData;
 @group(0) @binding(3) var<storage, read> objects : ObjectData;
 @group(0) @binding(4) var<storage, read> tree : BVH;
@@ -94,47 +113,102 @@ struct SurfacePoint {
 @group(0) @binding(7) var skySampler : sampler;
 @group(0) @binding(8) var<storage, read> mesh : MeshData;
 @group(0) @binding(9) var<uniform> setting : Settings;
-@group(0) @binding(10) var<uniform> scene : SceneVariables;
 
 const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
+const STRATIFY: bool = true;
 
-@compute @workgroup_size(8, 8)
-fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
-    let screen_size = vec2<i32 >(textureDimensions(outputTex));
-    let pixel_pos = vec2<i32>(GlobalInvocationID.xy);
+var<private> NUM_MESHES : i32;
+var<private> NUM_TRIANGLES : i32;
+var<private> NUM_AABB : i32;
+var<private> pixelCoords : vec2f;
+var<private> cam_origin : vec3f;
+var<private> randState : u32 = 0u;
 
+@compute @workgroup_size(8, 8, 1)
+fn main(
+    @builtin(workgroup_id) workgroup_id: vec3<u32>,
+    @builtin(local_invocation_id) local_invocation_id: vec3<u32>,
+    @builtin(local_invocation_index) local_invocation_index: u32,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>
+) {
+  // Calculate the global pixel index
+    let global_x = workgroup_id.x * 8u + local_invocation_id.x;
+    let global_y = workgroup_id.y * 8u + local_invocation_id.y;
+    let pixelIndex = global_y * u32(uniforms.screenDims.x) + global_x;
 
-    let halfScreenSize: vec2<f32> = vec2<f32 >(screen_size) * 0.5;
+    // Calculate the pixel coordinates
+    pixelCoords = vec2f(f32(pixelIndex) % uniforms.screenDims.x, f32(pixelIndex) / uniforms.screenDims.x);
 
-    var pixelIndex = u32(pixel_pos.y) * u32(screen_size.x) + u32(pixel_pos.x);
-    var seed = pixelIndex + u32(scene.time) * 1193u;
-    var accumulatedColor = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    // Random state initialization
+    randState = pixelIndex + u32(uniforms.frameNum) * 719393u;
+    // Accumulated color initialization
+    var accumulatedColor = framebuffer[pixelIndex];
 
-    for (var i: u32 = 0u; i < u32(setting.numSamples); i = i + 1u) {
-        var myRay: Ray;
-        myRay.origin = cam.pos;
-        let jitter: vec2<f32> = vec2<f32>(RandomFloat01(&seed), RandomFloat01(&seed)) * setting.jitterScale;
-        let screen_jittered: vec2<f32> = vec2<f32>(pixel_pos) + jitter - halfScreenSize;
-        let horizontal_coeff: f32 = setting.cameraFOV * screen_jittered.x / f32(screen_size.x);
-        let vertical_coeff: f32 = setting.cameraFOV * screen_jittered.y / (f32(screen_size.y) * setting.aspectRatio);
-        myRay.direction = normalize(cam.forward + horizontal_coeff * cam.right + vertical_coeff * cam.up);
-        accumulatedColor += vec4(trace(myRay, &seed), 1.0);
+    if STRATIFY {
+        // Stratification parameters
+        let sqrt_spp = sqrt(f32(setting.numSamples));
+        let recip_sqrt_spp = 1.0 / sqrt_spp;
+
+        // Path tracing loop with stratification
+        for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
+            for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
+                // Initialize a new ray
+                var myRay: Ray;
+                myRay.origin = cam.pos;
+
+                // Generate jitter for anti-aliasing within each stratified cell
+                let jitter = vec2<f32>(rand2D(), rand2D()) * setting.jitterScale;
+                let stratifiedSample = vec2<f32>(i + rand2D(), j + rand2D()) * recip_sqrt_spp;
+                let screen_jittered = vec2<f32>(pixelCoords) + stratifiedSample + jitter - vec2<f32>(uniforms.screenDims.xy) / 2.0;
+
+                // Calculate ray direction based on camera parameters
+                let horizontal_coeff = setting.cameraFOV * screen_jittered.x / f32(uniforms.screenDims.x);
+                let vertical_coeff = setting.cameraFOV * screen_jittered.y / (f32(uniforms.screenDims.y) * setting.aspectRatio);
+                myRay.direction = normalize(cam.forward + horizontal_coeff * cam.right + vertical_coeff * cam.up);
+
+                // Trace the ray and accumulate the color
+                accumulatedColor += vec4<f32>(trace(myRay), 1.0);
+            }
+        }
+    } else {
+        // Path tracing loop without stratification
+        for (var i: u32 = 0u; i < u32(setting.numSamples); i = i + 1u) {
+            // Initialize a new ray
+            var myRay: Ray;
+            myRay.origin = cam.pos;
+
+            // Generate jitter for anti-aliasing
+            let jitter = vec2<f32>(rand2D(), rand2D()) * setting.jitterScale;
+            let screen_jittered = vec2<f32>(pixelCoords) + jitter - vec2<f32>(uniforms.screenDims.xy) / 2.0;
+
+            // Calculate ray direction based on camera parameters
+            let horizontal_coeff = setting.cameraFOV * screen_jittered.x / f32(uniforms.screenDims.x);
+            let vertical_coeff = setting.cameraFOV * screen_jittered.y / (f32(uniforms.screenDims.y) * setting.aspectRatio);
+            myRay.direction = normalize(cam.forward + horizontal_coeff * cam.right + vertical_coeff * cam.up);
+
+            // Trace the ray and accumulate the color
+            accumulatedColor += vec4<f32>(trace(myRay), 1.0);
+        }
     }
 
-    let newImage = accumulatedColor / setting.numSamples;
-    let accumulated = textureLoad(inputTex, pixel_pos, 0);
+    // Final fragment color
+    var fragColor = accumulatedColor.xyz / f32(setting.numSamples);
 
-    // weighted average between the new and the accumulated image
-    let result_color = scene.weight * newImage + (1.0 - scene.weight) * accumulated;
+    // If resetBuffer is 0, accumulate the color
+    if uniforms.resetBuffer == 0 {
+        let weight = 1.0 / f32(uniforms.frameNum);
+        fragColor = weight * accumulatedColor.xyz + (1.0 - weight) * fragColor;
+    }
 
-    textureStore(outputTex, pixel_pos, result_color);
+    // Write the final color to the framebuffer
+    framebuffer[pixelIndex] = vec4<f32>(fragColor, 1.0);
 }
 
 
 //https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-cam/
-fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
+fn trace(camRay: Ray) -> vec3f {
     var ray = camRay;
     var accumulatedColor: vec3f = vec3(0.0, 0.0, 0.0);
     var energy = vec3(1.0, 1.0, 1.0);
@@ -174,9 +248,9 @@ fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
             // Ray type determination
             var isSpecular: f32 = 0.0;
             var isRefractive: f32 = 0.0;
-            if (specChance > 0.0) && (RandomFloat01(seed) < specChance) {
+            if (specChance > 0.0) && (rand2D() < specChance) {
                 isSpecular = 1.0;
-            } else if refrChance > 0.0 && RandomFloat01(seed) < specChance + refrChance {
+            } else if refrChance > 0.0 && rand2D() < specChance + refrChance {
                 isRefractive = 1.0;
             } else {
                 regularBounces += 1u;
@@ -195,12 +269,12 @@ fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
             );
 
             // New ray direction
-            let diffuseDir = normalize(hit.normal + RandomUnitVector(seed));
+            let diffuseDir = normalize(hit.normal + uniform_random_in_unit_sphere());
             var specularDir = reflect(ray.direction, hit.normal);
             var refractDir = refract(ray.direction, hit.normal, select(hit.material.ior, 1.0 / hit.material.ior, hit.from_front));
 
             specularDir = normalize(mix(specularDir, diffuseDir, hit.material.specRoughness * hit.material.specRoughness));
-            refractDir = normalize(mix(refractDir, normalize(-hit.normal + RandomUnitVector(seed)), hit.material.refrRoughness * hit.material.refrRoughness));
+            refractDir = normalize(mix(refractDir, normalize(-hit.normal + uniform_random_in_unit_sphere()), hit.material.refrRoughness * hit.material.refrRoughness));
             ray.direction = mix(mix(diffuseDir, specularDir, isSpecular), refractDir, isRefractive);
 
             accumulatedColor += energy * hit.material.emissionColor * hit.material.emissionStrength;
@@ -213,7 +287,7 @@ fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
 
         // Russian roulette
             let rr_prob = max(energy.r, max(energy.g, energy.b));
-            if RandomFloat01(seed) >= rr_prob {
+            if rand2D() >= rr_prob {
             break;
             }
             energy /= rr_prob;
@@ -222,30 +296,34 @@ fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
     return accumulatedColor;
 }
 
-//https://simonstechblog.blogspot.com/2018/06/simple-gpu-path-tracer.html
-fn wang_hash(seed: ptr<function, u32>) -> u32 {
-    *seed = (*seed ^ 61u) ^ (*seed >> 16u);
-    *seed *= 9u;
-    *seed = *seed ^ (*seed >> 4u);
-    *seed *= 0x27d4eb2du;
-    *seed = *seed ^ (*seed >> 15u);
-    return *seed;
-}
-fn RandomFloat01(state: ptr<function, u32>) -> f32 {
-    return f32(wang_hash(state)) / 4294967296.0;
+fn rand2D() -> f32 {
+    randState = randState * 747796405u + 2891336453u;
+    var word: u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
+    return f32((word >> 22u) ^ word) / 4294967295;
 }
 
-fn RandomUnitVector(state: ptr<function, u32>) -> vec3<f32> {
-    let z: f32 = RandomFloat01(state) * 2.0 - 1.0;
-    let a: f32 = RandomFloat01(state) * (2.0 * PI);
-    let r: f32 = sqrt(1.0 - z * z);
-    let x: f32 = r * cos(a);
-    let y: f32 = r * sin(a);
-    return vec3<f32>(x, y, z);
+fn cosine_sampling_wrt_Z() -> vec3f {
+    let r1 = rand2D();
+    let r2 = rand2D();
+
+    let phi = 2 * PI * r1;
+    let x = cos(phi) * sqrt(r2);
+    let y = sin(phi) * sqrt(r2);
+    let z = sqrt(1 - r2);
+
+    return vec3f(x, y, z);
 }
 
+fn uniform_random_in_unit_sphere() -> vec3f {
+    let phi = rand2D() * 2.0 * PI;
+    let theta = acos(2.0 * rand2D() - 1.0);
 
+    let x = sin(theta) * cos(phi);
+    let y = sin(theta) * sin(phi);
+    let z = cos(theta);
 
+    return normalize(vec3f(x, y, z));
+}
 
 // https://raytracing.github.io/books/RayTracingInOneWeekend.html#dielectrics/refraction
 fn refract(e1: vec3<f32>, e2: vec3<f32>, e3: f32) -> vec3<f32> {
@@ -409,9 +487,9 @@ fn hit_triangle(
     //Berechne die normale am Schnittpunkt mit Interpolation der Normalen der Dreiecksecken
     //https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
     let normal = normalize(tri.normal_b * u + tri.normal_c * v + tri.normal_a * (1.0 - u - v));
-    surfacePoint.normal = normalize((transpose(mesh.materials[u32(tri.objectID)].inverseModel) * vec4(normal, 0.0)).xyz);
+    surfacePoint.normal = normalize((transpose(mesh.materials[u32(tri.meshID)].inverseModel) * vec4(normal, 0.0)).xyz);
 
-    surfacePoint.material = mesh.materials[u32(tri.objectID)];
+    surfacePoint.material = mesh.materials[u32(tri.meshID)];
     surfacePoint.dist = dist;
     surfacePoint.position = ray.origin + ray.direction * dist;
     surfacePoint.hit = true; //Es gibt einen Treffer
