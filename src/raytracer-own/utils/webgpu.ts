@@ -1,14 +1,22 @@
 export function computePass(
   device: GPUDevice,
   computePipeline: GPUComputePipeline,
-  bindGroupCompute: GPUBindGroup,
+  bindGroups: {
+    uniformBindGroup: GPUBindGroup
+    frameBufferBindGroup: GPUBindGroup
+    objectBindGroup: GPUBindGroup
+    textureBindGroup: GPUBindGroup
+  },
   workGroupsX: number,
   workGroupsY: number,
 ) {
   let encoder = device.createCommandEncoder({ label: "computeEncoder" })
   let pass = encoder.beginComputePass({ label: "computePass" })
   pass.setPipeline(computePipeline)
-  pass.setBindGroup(0, bindGroupCompute)
+  pass.setBindGroup(0, bindGroups.uniformBindGroup)
+  pass.setBindGroup(1, bindGroups.frameBufferBindGroup)
+  pass.setBindGroup(2, bindGroups.objectBindGroup)
+  pass.setBindGroup(3, bindGroups.textureBindGroup)
   pass.dispatchWorkgroups(workGroupsX, workGroupsY, 1)
   pass.end()
   let commandBuffer = encoder.finish()

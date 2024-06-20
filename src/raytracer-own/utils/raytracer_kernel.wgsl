@@ -96,49 +96,63 @@ struct SurfacePoint {
     from_front: bool,
 }
 
+// Group 0: Uniforms and Settings
 @group(0) @binding(0) var<uniform> uniforms : Uniforms;
-@group(0) @binding(1) var<storage, read_write> framebuffer: array<vec4f>;
-@group(0) @binding(2) var<uniform> cam : CameraData;
-@group(0) @binding(3) var<storage, read> objects : ObjectData;
-@group(0) @binding(4) var<storage, read> tree : BVH;
-@group(0) @binding(5) var<storage, read> triIdx : ObjectIndices;
-@group(0) @binding(6) var skyTexture : texture_cube<f32>;
-@group(0) @binding(7) var skySampler : sampler;
-@group(0) @binding(8) var<storage, read> mesh : MeshData;
-@group(0) @binding(9) var<uniform> setting : Settings;
-@group(0) @binding(10) var<uniform> cam_setting : CameraSettings;
+@group(0) @binding(1) var<uniform> cam : CameraData;
+@group(0) @binding(2) var<uniform> setting : Settings;
+@group(0) @binding(3) var<uniform> cam_setting : CameraSettings;
+
+// Group 1: Framebuffer
+@group(1) @binding(0) var<storage, read_write> framebuffer: array<vec4f>;
+
+// Group 2: Object and BVH Data
+@group(2) @binding(0) var<storage, read> objects : ObjectData;
+@group(2) @binding(1) var<storage, read> tree : BVH;
+@group(2) @binding(2) var<storage, read> triIdx : ObjectIndices;
+@group(2) @binding(3) var<storage, read> mesh : MeshData;
+
+// Group 3: Textures and Samplers
+@group(3) @binding(0) var skyTexture : texture_cube<f32>;
+@group(3) @binding(1) var skySampler : sampler;
+
 
 const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
-
+const RR_Scale: f32 = 0.3;
 
 var<private> pixelCoords : vec2f;
 var<private> randState : u32 = 0u;
 
-@compute @workgroup_size(8, 8, 1)
+override WORKGROUP_SIZE_X: u32;
+override WORKGROUP_SIZE_Y: u32;
+
+@compute @workgroup_size(WORKGROUP_SIZE_X, WORKGROUP_SIZE_Y, 1)
 fn main(
-    @builtin(workgroup_id) workgroup_id: vec3<u32>,
+    @builtin(global_invocation_id) global_id: vec3u, @builtin(workgroup_id) workgroup_id: vec3<u32>,
     @builtin(local_invocation_id) local_invocation_id: vec3<u32>,
     @builtin(local_invocation_index) local_invocation_index: u32,
     @builtin(num_workgroups) num_workgroups: vec3<u32>
 ) {
-  // Calculate the global pixel index
-    let global_x = workgroup_id.x * 8u + local_invocation_id.x;
-    let global_y = workgroup_id.y * 8u + local_invocation_id.y;
-    let pixelIndex = global_y * u32(uniforms.screenDims.x) + global_x;
+    if global_id.x >= u32(uniforms.screenDims.x) * u32(uniforms.screenDims.y) {
+        return;
+    }
+
+    let dimensions = uniforms.screenDims;
+    let coord = vec2u(workgroup_id.x * WORKGROUP_SIZE_X + local_invocation_id.x, workgroup_id.y * WORKGROUP_SIZE_Y + local_invocation_id.y);
+    let idx = coord.y * u32(dimensions.x) + coord.x;
 
     // Calculate the pixel coordinates
-    pixelCoords = vec2f(f32(global_x), f32(global_y));
+    pixelCoords = vec2f(f32(coord.x), f32(coord.y));
 
     // Random state initialization
-    randState = pixelIndex + u32(uniforms.frameNum) * 719393;
+    randState = idx + u32(uniforms.frameNum) * 719393;
     
     // Accumulated color initialization
     var accumulatedColor = vec3f(0.0);
 
     // Stratification parameters
-    let sqrt_spp = sqrt(f32(setting.numSamples));
+    let sqrt_spp = sqrt(setting.numSamples);
     let recip_sqrt_spp = 1.0 / sqrt_spp;
     var sampleCount = 0.0;
     // Initialize a new ray
@@ -148,13 +162,14 @@ fn main(
     // Path tracing loop with stratification
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
+
             let lens_point = vec2<f32>(lcg_random(randState), lcg_random(randState)) * cam_setting.apertureSize;
             let jitter = (vec2<f32>(lcg_random(randState), lcg_random(randState)) - 0.5) * setting.jitterScale;
             let stratifiedSample = vec2<f32>(i + lcg_random(randState), j + lcg_random(randState)) * recip_sqrt_spp;
-            let screen_jittered = vec2<f32>(pixelCoords) + stratifiedSample + jitter - vec2<f32>(uniforms.screenDims.xy) / 2.0;
+            let screen_jittered = vec2<f32>(pixelCoords) + stratifiedSample + jitter - vec2<f32>(dimensions.xy) / 2.0;
 
-            let horizontal_coeff = cam_setting.cameraFOV * screen_jittered.x / f32(uniforms.screenDims.x);
-            let vertical_coeff = cam_setting.cameraFOV * screen_jittered.y / (f32(uniforms.screenDims.y) * setting.aspectRatio);
+            let horizontal_coeff = cam_setting.cameraFOV * screen_jittered.x / dimensions.x;
+            let vertical_coeff = cam_setting.cameraFOV * screen_jittered.y / (dimensions.y * setting.aspectRatio);
             myRay.direction = normalize(cam.forward + horizontal_coeff * cam.right + vertical_coeff * cam.up);
 
             myRay.origin += cam.right * lens_point.x + cam.up * lens_point.y;
@@ -168,16 +183,15 @@ fn main(
         }
     }
 
-
     // Final fragment color
     accumulatedColor /= sampleCount;
 
     if uniforms.resetBuffer == 0.0 {
-        accumulatedColor += framebuffer[pixelIndex].xyz;
+        accumulatedColor += framebuffer[idx].xyz;
     }
 
     // Write the final color to the framebuffer
-    framebuffer[pixelIndex] = vec4<f32>(accumulatedColor, 1.0);
+    framebuffer[idx] = vec4<f32>(accumulatedColor, 1.0);
 }
 
 
@@ -256,8 +270,8 @@ fn trace(camRay: Ray) -> vec3f {
                 energy *= hit.material.albedo + hit.material.specColor * isSpecular;
             }
 
-        // Russian roulette
-            let rr_prob = max(energy.r, max(energy.g, energy.b));
+            // Russian roulette
+            let rr_prob = max(energy.r, max(energy.g, energy.b)) * RR_Scale;
             if rand2D() >= rr_prob {
             break;
             }
@@ -276,18 +290,6 @@ fn rand2D() -> f32 {
     randState = randState * 747796405u + 2891336453u;
     var word: u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
     return f32((word >> 22u) ^ word) / 4294967295;
-}
-
-fn cosine_sampling_wrt_Z() -> vec3f {
-    let r1 = rand2D();
-    let r2 = rand2D();
-
-    let phi = 2 * PI * r1;
-    let x = cos(phi) * sqrt(r2);
-    let y = sin(phi) * sqrt(r2);
-    let z = sqrt(1 - r2);
-
-    return vec3f(x, y, z);
 }
 
 fn uniform_random_in_unit_sphere() -> vec3f {

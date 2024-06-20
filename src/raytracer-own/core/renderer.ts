@@ -3,11 +3,13 @@ import screen_shader from "../utils/screen_shader.wgsl"
 import { Scene } from "./scene"
 import { Deg2Rad, addEventListeners, linearToSRGB, setTexture } from "../utils/helper"
 import { CubeMapMaterial } from "./material"
-import { mat4 } from "gl-matrix"
 import { computePass, createRenderPassDescriptor, createVertexBuffer, renderPass } from "../utils/webgpu"
 
 const frameTimeLabel: HTMLElement = <HTMLElement>document.getElementById("frame-time")
 const renderTimeLabel: HTMLElement = <HTMLElement>document.getElementById("render-time")
+
+const COMPUTE_WORKGROUP_SIZE_X = 16
+const COMPUTE_WORKGROUP_SIZE_Y = 16
 
 export class Renderer {
   private canvas: HTMLCanvasElement
@@ -44,7 +46,10 @@ export class Renderer {
   private updatedUniformArray: Float32Array
 
   private renderOutputBindGroup: GPUBindGroup
-  private computeBindGroup: GPUBindGroup
+  private uniformBindGroup: GPUBindGroup
+  private frameBufferBindGroup: GPUBindGroup
+  private objectBindGroup: GPUBindGroup
+  private textureBindGroup: GPUBindGroup
   private frameNum = 0
 
   constructor(canvas: HTMLCanvasElement, scene: Scene) {
@@ -119,12 +124,16 @@ export class Renderer {
       compute: {
         module: this.device.createShaderModule({ code: raytracer_kernel }),
         entryPoint: "main",
+        constants: {
+          WORKGROUP_SIZE_X: COMPUTE_WORKGROUP_SIZE_X,
+          WORKGROUP_SIZE_Y: COMPUTE_WORKGROUP_SIZE_Y,
+        },
       },
     })
 
     // TODO: Replace the ping pong method because october 2023 webGPU update allows read-write storage textures (experimental)
 
-    this.computeBindGroup = this.device.createBindGroup({
+    this.uniformBindGroup = this.device.createBindGroup({
       layout: this.ray_tracing_pipeline.getBindGroupLayout(0),
       entries: [
         {
@@ -136,63 +145,83 @@ export class Renderer {
         {
           binding: 1,
           resource: {
-            buffer: this.frameBuffer,
+            buffer: this.cameraBuffer,
           },
         },
         {
           binding: 2,
           resource: {
-            buffer: this.cameraBuffer,
-          },
-        },
-        {
-          binding: 3,
-          resource: {
-            buffer: this.triangleBuffer,
-          },
-        },
-        {
-          binding: 4,
-          resource: {
-            buffer: this.nodeBuffer,
-          },
-        },
-        {
-          binding: 5,
-          resource: {
-            buffer: this.triangleIndexBuffer,
-          },
-        },
-        {
-          binding: 6,
-          resource: this.sky_texture.view,
-        },
-        {
-          binding: 7,
-          resource: this.sky_texture.sampler,
-        },
-        {
-          binding: 8,
-          resource: {
-            buffer: this.materialBuffer,
-          },
-        },
-        {
-          binding: 9,
-          resource: {
             buffer: this.settingsBuffer,
           },
         },
         {
-          binding: 10,
+          binding: 3,
           resource: {
             buffer: this.camsettingsBuffer,
           },
         },
       ],
     })
-  }
 
+    // Group 1: Framebuffer
+    this.frameBufferBindGroup = this.device.createBindGroup({
+      layout: this.ray_tracing_pipeline.getBindGroupLayout(1),
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: this.frameBuffer,
+          },
+        },
+      ],
+    })
+
+    // Group 2: Object and BVH Data
+    this.objectBindGroup = this.device.createBindGroup({
+      layout: this.ray_tracing_pipeline.getBindGroupLayout(2),
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: this.triangleBuffer,
+          },
+        },
+        {
+          binding: 1,
+          resource: {
+            buffer: this.nodeBuffer,
+          },
+        },
+        {
+          binding: 2,
+          resource: {
+            buffer: this.triangleIndexBuffer,
+          },
+        },
+        {
+          binding: 3,
+          resource: {
+            buffer: this.materialBuffer,
+          },
+        },
+      ],
+    })
+
+    // Group 3: Textures and Samplers
+    this.textureBindGroup = this.device.createBindGroup({
+      layout: this.ray_tracing_pipeline.getBindGroupLayout(3),
+      entries: [
+        {
+          binding: 0,
+          resource: this.sky_texture.view,
+        },
+        {
+          binding: 1,
+          resource: this.sky_texture.sampler,
+        },
+      ],
+    })
+  }
   async makeRenderPipeline() {
     this.render_output_pipeline = this.device.createRenderPipeline({
       layout: "auto",
@@ -607,9 +636,21 @@ export class Renderer {
     }
 
     // Compute pass
-    let workGroupsX = Math.ceil(this.canvas.width / 8)
-    let workGroupsY = Math.ceil(this.canvas.height / 8)
-    computePass(this.device, this.ray_tracing_pipeline, this.computeBindGroup, workGroupsX, workGroupsY)
+    let workGroupsX = Math.ceil(this.canvas.width / COMPUTE_WORKGROUP_SIZE_X)
+    let workGroupsY = Math.ceil(this.canvas.height / COMPUTE_WORKGROUP_SIZE_Y)
+
+    computePass(
+      this.device,
+      this.ray_tracing_pipeline,
+      {
+        uniformBindGroup: this.uniformBindGroup,
+        frameBufferBindGroup: this.frameBufferBindGroup,
+        objectBindGroup: this.objectBindGroup,
+        textureBindGroup: this.textureBindGroup,
+      },
+      workGroupsX,
+      workGroupsY,
+    )
 
     // Render pass
     renderPass(this.device, this.context, this.renderPassDescriptor, this.render_output_pipeline, this.renderOutputBindGroup, this.vertexBuffer)
