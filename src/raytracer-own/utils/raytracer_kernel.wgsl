@@ -112,8 +112,6 @@ const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
 
-const FOCUS_DISTANCE: f32 = 2.0;
-const APERTURE_SIZE: f32 = 0.02;
 
 var<private> pixelCoords : vec2f;
 var<private> randState : u32 = 0u;
@@ -150,9 +148,9 @@ fn main(
     // Path tracing loop with stratification
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
-            let lens_point = random_point_in_circle() * cam_setting.apertureSize;
-            let jitter = (vec2<f32>(rand2D(), rand2D()) - 0.5) * setting.jitterScale;
-            let stratifiedSample = vec2<f32>(i + rand2D(), j + rand2D()) * recip_sqrt_spp;
+            let lens_point = vec2<f32>(lcg_random(randState), lcg_random(randState)) * cam_setting.apertureSize;
+            let jitter = (vec2<f32>(lcg_random(randState), lcg_random(randState)) - 0.5) * setting.jitterScale;
+            let stratifiedSample = vec2<f32>(i + lcg_random(randState), j + lcg_random(randState)) * recip_sqrt_spp;
             let screen_jittered = vec2<f32>(pixelCoords) + stratifiedSample + jitter - vec2<f32>(uniforms.screenDims.xy) / 2.0;
 
             let horizontal_coeff = cam_setting.cameraFOV * screen_jittered.x / f32(uniforms.screenDims.x);
@@ -182,11 +180,6 @@ fn main(
     framebuffer[pixelIndex] = vec4<f32>(accumulatedColor, 1.0);
 }
 
-fn random_point_in_circle() -> vec2<f32> {
-    let angle = rand2D() * TWO_PI;
-    let pointOnCircle = vec2f(cos(angle), sin(angle));
-    return pointOnCircle * sqrt(rand2D());
-}
 
 //https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-cam/
 fn trace(camRay: Ray) -> vec3f {
@@ -272,6 +265,11 @@ fn trace(camRay: Ray) -> vec3f {
         }
     }
     return accumulatedColor;
+}
+
+fn lcg_random(state: u32) -> f32 {
+    var newState = state * 1664525u + 1013904223u;
+    return f32(newState & 0xFFFFFFFu) / f32(0x10000000u);
 }
 
 fn rand2D() -> f32 {
@@ -425,44 +423,38 @@ fn hit_triangle(
     surfacePoint.hit = false;
     surfacePoint.material = oldSurfacePoint.material;
 
-    //Kanten des Dreiecks vom Punkt A
     let edge_1: vec3<f32> = tri.corner_b - tri.corner_a;
     let edge_2: vec3<f32> = tri.corner_c - tri.corner_a;
 
-    //h ist das Kreuzprodukt der Richtung des Strahls und einer Kante des Dreiecks
-    let h: vec3<f32> = cross(ray.direction, edge_2); // Vektor senkrecht zu Dreiecks ebene
-    let a: f32 = dot(edge_1, h); //Skalarprodukt : Wenn a nahe 0 ist, dann ist h fast parallel zur Kante
+    let h: vec3<f32> = cross(ray.direction, edge_2);
+    let a: f32 = dot(edge_1, h);
 
 
     if (a < EPSILON) && setting.BACKFACE_CULLING == 1.0 {
         return surfacePoint;
     }
 
-    let f: f32 = 1.0 / a; // Kehrwert von a
-    let s: vec3<f32> = ray.origin - tri.corner_a; // Vektor vom Ursprung des Strahls zu einer Ecke des Dreiecks
-    let u: f32 = f * dot(s, h);//U: Parameter für baryzentrische Koordinaten
+    let f: f32 = 1.0 / a;
+    let s: vec3<f32> = ray.origin - tri.corner_a;
+    let u: f32 = f * dot(s, h);
 
-    //Wenn u außerhalb des Intervalls [0,1] liegt, gibt es keinen Treffer
     if u < 0.0 || u > 1.0 {
         return surfacePoint;
     }
 
     let q: vec3<f32> = cross(s, edge_1);
-    let v: f32 = f * dot(ray.direction, q);//Berechne den Parameter v für baryzentrische Koordinaten
+    let v: f32 = f * dot(ray.direction, q);
 
-    //Wenn v außerhalb des Intervalls [0,1-u] liegt, gibt es keinen Treffer
     if v < 0.0 || u + v > 1.0 {
         return surfacePoint;
     }
 
-    let dist: f32 = f * dot(edge_2, q); //Berechne den Abstand vom Ursprung des Strahls zum Trefferpunkt
+    let dist: f32 = f * dot(edge_2, q);
 
-    //Wenn t außerhalb des Intervalls [tMin, tMax] liegt, gibt es keinen Treffer
     if dist < tMin || dist > tMax {
         return surfacePoint;
     }
 
-    //Berechne die normale am Schnittpunkt mit Interpolation der Normalen der Dreiecksecken
     //https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
     let normal = normalize(tri.normal_b * u + tri.normal_c * v + tri.normal_a * (1.0 - u - v));
     surfacePoint.normal = normalize((transpose(mesh.materials[u32(tri.meshID)].inverseModel) * vec4(normal, 0.0)).xyz);
@@ -470,7 +462,7 @@ fn hit_triangle(
     surfacePoint.material = mesh.materials[u32(tri.meshID)];
     surfacePoint.dist = dist;
     surfacePoint.position = ray.origin + ray.direction * dist;
-    surfacePoint.hit = true; //Es gibt einen Treffer
+    surfacePoint.hit = true;
 
     // Determine if the ray hits the front face
     if dot(ray.direction, surfacePoint.normal) < 0.0 {
@@ -483,23 +475,15 @@ fn hit_triangle(
 }
 
 
-//Prüfe ob bounding box getroffen wurde
 fn hit_aabb(ray: Ray, node: Node) -> f32 {
-    //Inverse Richtung des strahls berechnen um divisionen im code zu vermeiden (rechenzeit vebessern)
     var inverseDir: vec3<f32> = vec3(1.0) / ray.direction;
-    //Berechnung der t werte (bei welchen Wert(distanz) trifft unser Strahl unsere bounding box achse?)
     var t1: vec3<f32> = (node.aabbMin - ray.origin) * inverseDir;
     var t2: vec3<f32> = (node.aabbMax - ray.origin) * inverseDir;
-    //Sicherstellen dass tMin immer den kleineren und tMax den größeren Wert für jede Achse enthält. (zB bei negativer Stahrrichtung)
     var tMin: vec3<f32> = min(t1, t2);
     var tMax: vec3<f32> = max(t1, t2);
-    //Bestimmen den größten minimalen wert (sicherstellen dass der Stahl tatsächlich in der Box ist und durch alle 3 Seiten ging)
     var t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
-    //Bestimme den kleinsten maximalen Wert (Wann der strahl unsere bounding box verlässt)
     var t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
-    //Prüfen ob der Schnittpunkt gültig ist. eintrittspunkt muss kleiner als der ausstrittspunkt sein.
-    //Und wenn t_max kleiner null ist der punkt hinter dem strahl ursprung.
     if t_min > t_max || t_max < 0.0 {
         return 99999.0;
     } else {
