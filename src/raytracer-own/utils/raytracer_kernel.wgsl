@@ -142,7 +142,7 @@ fn main(
     // Stratification parameters
     let sqrt_spp = sqrt(f32(setting.numSamples));
     let recip_sqrt_spp = 1.0 / sqrt_spp;
-
+    var sampleCount = 0.0;
     // Initialize a new ray
     var myRay: Ray;
     myRay.origin = cam.pos;
@@ -150,36 +150,36 @@ fn main(
     // Path tracing loop with stratification
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
-            // Generate jitter for anti-aliasing within each stratified cell
-            let jitter = vec2<f32>(rand2D(), rand2D()) * setting.jitterScale;
+            let lens_point = random_point_in_circle() * cam_setting.apertureSize;
+            let jitter = (vec2<f32>(rand2D(), rand2D()) - 0.5) * setting.jitterScale;
             let stratifiedSample = vec2<f32>(i + rand2D(), j + rand2D()) * recip_sqrt_spp;
             let screen_jittered = vec2<f32>(pixelCoords) + stratifiedSample + jitter - vec2<f32>(uniforms.screenDims.xy) / 2.0;
 
-            // Calculate ray direction based on camera parameters
             let horizontal_coeff = cam_setting.cameraFOV * screen_jittered.x / f32(uniforms.screenDims.x);
             let vertical_coeff = cam_setting.cameraFOV * screen_jittered.y / (f32(uniforms.screenDims.y) * setting.aspectRatio);
             myRay.direction = normalize(cam.forward + horizontal_coeff * cam.right + vertical_coeff * cam.up);
 
-            // Calculate lens effect
-            let lens_point = random_point_in_circle() * cam_setting.apertureSize;
-            let focus_point = myRay.origin + myRay.direction * cam_setting.focusDistance;
             myRay.origin += cam.right * lens_point.x + cam.up * lens_point.y;
+
+            let focus_point = cam.pos + myRay.direction * cam_setting.focusDistance;
+
             myRay.direction = normalize(focus_point - myRay.origin);
 
-            // Trace the ray and accumulate the color
             accumulatedColor += trace(myRay);
+            sampleCount += 1.0;
         }
     }
 
+
     // Final fragment color
-    var fragColor = accumulatedColor.xyz / f32(setting.numSamples);
+    accumulatedColor /= sampleCount;
 
     if uniforms.resetBuffer == 0.0 {
-        fragColor = framebuffer[pixelIndex].xyz + accumulatedColor;
+        accumulatedColor += framebuffer[pixelIndex].xyz;
     }
 
     // Write the final color to the framebuffer
-    framebuffer[pixelIndex] = vec4<f32>(fragColor, 1.0);
+    framebuffer[pixelIndex] = vec4<f32>(accumulatedColor, 1.0);
 }
 
 fn random_point_in_circle() -> vec2<f32> {
@@ -201,9 +201,6 @@ fn trace(camRay: Ray) -> vec3f {
 
         if !hit.hit {
             accumulatedColor += energy * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, setting.SKY_TEXTURE == 1.0);
-            break;
-        } else if hit.material.emissionStrength > 0.0 {
-            accumulatedColor = energy * hit.material.emissionColor * hit.material.emissionStrength;
             break;
         } else {
 
