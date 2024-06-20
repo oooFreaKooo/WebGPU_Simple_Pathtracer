@@ -1,6 +1,13 @@
 # A Simple WebGPU Pathtracer
+![dragon1](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/7f8c6265-2c88-486d-8ad9-17761430a193)
+![cornell](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/7b70e2e1-08fc-416b-be84-d895857ccb67)
+![sphereflake2](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/92c27dca-96e5-4ff2-a43c-effc1ed5baa6)
+![manyobjects](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/21047ea3-939c-4cda-8802-b2e59d3dee6d)
+![caustic1](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/3dd66f00-3575-4703-a26b-b76a4af91ded)
+
 
 Welcome to the repository of my WebGPU Pathtracer project! This project is a straightforward implementation of a pathtracer using WebGPU and TypeScript. It's designed to be a starting point for those interested in exploring the capabilities of WebGPU in rendering and graphics programming.
+
 
 ## Getting Started
 
@@ -23,7 +30,7 @@ To get started with this project, follow these simple steps:
    Next, clone the forked repository to your local machine using the following command:
 
    ```bash
-   [git clone https://github.com/YOUR_USERNAME/webgpu-pathtracer.git](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer.git)
+   [git clone https://github.com/oooFreaKooo/webgpu-pathtracer.git](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer.git)
    ```
 
 3. **Install Dependencies**
@@ -51,3 +58,7 @@ Feel free to explore and modify the code to learn more about WebGPU and path tra
 ## License
 
 This project is open-source and available to anyone. You are free to use, modify, and distribute the code in your own projects, whether personal, educational, or commercial. No attribution is required, but always appreciated!
+
+## Framework Overview
+![core_diagram2](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/c56b46b3-366a-4dee-8c80-2b72880a8517)
+
