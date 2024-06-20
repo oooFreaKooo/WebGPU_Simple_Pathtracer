@@ -10,6 +10,10 @@ export class Camera {
   right: Float32Array
   theta: number
   up: Float32Array
+
+  focusDistance: number = 4
+  apertureSize: number = 0.005
+
   constructor(position: number[]) {
     this.position = new Float32Array(position)
     this.theta = 0.0

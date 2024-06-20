@@ -27,7 +27,9 @@ export class Renderer {
   private materialBuffer: GPUBuffer
   private nodeBuffer: GPUBuffer
   private settingsBuffer: GPUBuffer
+  private camsettingsBuffer: GPUBuffer
   private triangleIndexBuffer: GPUBuffer
+  private imgOutputBuffer: GPUBuffer
   private sky_texture: CubeMapMaterial
   private uniforms: { screenDims: number[]; frameNum: number; resetBuffer: number }
   // Pipeline objects
@@ -39,7 +41,7 @@ export class Renderer {
   scene: Scene
   private frametime: number = 0
   private loaded = false
-  private accumulationCount: number = 0
+  private updatedUniformArray: Float32Array
 
   private renderOutputBindGroup: GPUBindGroup
   private computeBindGroup: GPUBindGroup
@@ -97,6 +99,7 @@ export class Renderer {
 
   async createAssets() {
     this.createUniformBuffer()
+    this.createImgOutputBuffer()
     this.createFrameBuffer()
     this.createCameraBuffer()
     this.createMaterialBuffer()
@@ -180,6 +183,12 @@ export class Renderer {
             buffer: this.settingsBuffer,
           },
         },
+        {
+          binding: 10,
+          resource: {
+            buffer: this.camsettingsBuffer,
+          },
+        },
       ],
     })
   }
@@ -230,6 +239,12 @@ export class Renderer {
             buffer: this.frameBuffer,
           },
         },
+        {
+          binding: 2,
+          resource: {
+            buffer: this.imgOutputBuffer,
+          },
+        },
       ],
     })
 
@@ -243,6 +258,17 @@ export class Renderer {
 
     addEventListeners(this)
 
+    // Create a Float32Array to hold the updated uniform data
+    this.updatedUniformArray = new Float32Array([
+      this.uniforms.screenDims[0],
+      this.uniforms.screenDims[1],
+      this.uniforms.frameNum,
+      this.uniforms.resetBuffer,
+    ])
+
+    // Write the updated data to the buffer
+    this.device.queue.writeBuffer(this.uniformBuffer, 0, this.updatedUniformArray)
+
     if (this.loaded) {
       // everything below will only load once
       return
@@ -250,6 +276,8 @@ export class Renderer {
     this.loaded = true
 
     this.updateSettings()
+    this.updateCamSettings()
+    this.updateImgSettings()
     this.updateMaterialData()
     this.updateTriangleData()
     this.updateNodeData()
@@ -311,6 +339,22 @@ export class Renderer {
     this.device.queue.writeBuffer(this.uniformBuffer, 0, uniformArray)
   }
 
+  private createImgOutputBuffer() {
+    const camDescriptor: GPUBufferDescriptor = {
+      size: 12,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    }
+    this.imgOutputBuffer = this.device.createBuffer(camDescriptor)
+  }
+
+  public updateImgSettings() {
+    const camSettings = {
+      vignetteStrength: this.scene.vignetteStrength,
+      vignetteRadius: this.scene.vignetteRadius,
+    }
+
+    this.device.queue.writeBuffer(this.imgOutputBuffer, 0, new Float32Array([camSettings.vignetteStrength, camSettings.vignetteRadius]), 0, 2)
+  }
   private createFrameBuffer() {
     let frameNum = new Float32Array(this.canvas.width * this.canvas.height * 4).fill(0)
     this.frameBuffer = this.device.createBuffer({
@@ -481,15 +525,37 @@ export class Renderer {
     )
   }
   private createSettingsBuffer() {
-    const descriptor: GPUBufferDescriptor = {
-      size: 32,
+    const camDescriptor: GPUBufferDescriptor = {
+      size: 12,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     }
-    this.settingsBuffer = this.device.createBuffer(descriptor)
+    this.camsettingsBuffer = this.device.createBuffer(camDescriptor)
+
+    const settingDescriptor: GPUBufferDescriptor = {
+      size: 28,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    }
+    this.settingsBuffer = this.device.createBuffer(settingDescriptor)
   }
+
+  public updateCamSettings() {
+    const camSettings = {
+      fov: Deg2Rad(this.scene.camera.fov),
+      focusDistance: this.scene.camera.focusDistance,
+      apertureSize: this.scene.camera.apertureSize,
+    }
+
+    this.device.queue.writeBuffer(
+      this.camsettingsBuffer,
+      0,
+      new Float32Array([camSettings.fov, camSettings.focusDistance, camSettings.apertureSize]),
+      0,
+      3,
+    )
+  }
+
   public updateSettings() {
     const settingsData = {
-      fov: Deg2Rad(this.scene.camera.fov),
       maxBounces: this.scene.maxBounces,
       samples: this.scene.samples,
       culling: this.scene.enableCulling,
@@ -502,7 +568,6 @@ export class Renderer {
       this.settingsBuffer,
       0,
       new Float32Array([
-        settingsData.fov,
         settingsData.maxBounces,
         settingsData.samples,
         settingsData.culling,
@@ -511,7 +576,7 @@ export class Renderer {
         settingsData.jitterScale,
       ]),
       0,
-      7,
+      6,
     )
   }
 
@@ -528,6 +593,7 @@ export class Renderer {
 
     // Update frame number in uniforms
     this.uniforms.frameNum = this.frameNum
+
     // Reset buffer if camera moved
     if (this.scene.camera.cameraIsMoving) {
       this.frameNum = 1
@@ -539,17 +605,6 @@ export class Renderer {
     } else {
       this.uniforms.resetBuffer = 0
     }
-
-    // Create a Float32Array to hold the updated uniform data
-    let updatedUniformArray = new Float32Array([
-      this.uniforms.screenDims[0],
-      this.uniforms.screenDims[1],
-      this.uniforms.frameNum,
-      this.uniforms.resetBuffer,
-    ])
-
-    // Write the updated data to the buffer
-    this.device.queue.writeBuffer(this.uniformBuffer, 0, updatedUniformArray)
 
     // Compute pass
     let workGroupsX = Math.ceil(this.canvas.width / 8)

@@ -148,16 +148,40 @@
                     <span id="samplesValue">1</span>
                 </div>
                 <div class="slider-control">
+                    <label for="jitter">Jitter</label>
+                    <input id="jitter" type="range" min="0.1" max="10"
+                        step="0.1" value="1.0" />
+                    <span id="jitterValue">1.0</span>
+                </div>
+                <div class="slider-control">
                     <label for="fov">FOV</label>
                     <input id="fov" type="range" min="60" max="220" step="5"
                         value="135" />
                     <span id="fovValue">135</span>
                 </div>
                 <div class="slider-control">
-                    <label for="jitter">Jitter</label>
-                    <input id="jitter" type="range" min="0.1" max="10"
-                        step="0.1" value="1.0" />
-                    <span id="jitterValue">1.0</span>
+                    <label for="focusDist">Focus Distance</label>
+                    <input id="focusDist" type="range" min="1" max="50"
+                        step="0.1" value="4.0" />
+                    <span id="focusDistValue">4.0</span>
+                </div>
+                <div class="slider-control">
+                    <label for="apertureSize">Aperture Size</label>
+                    <input id="apertureSize" type="range" min="0.001" max="0.5"
+                        step="0.001" value="0.005" />
+                    <span id="apertureSizeValue">0.005</span>
+                </div>
+                <div class="slider-control">
+                    <label for="vignetteStrength">Vignette Strength</label>
+                    <input id="vignetteStrength" type="range" min="0.0"
+                        max="1.0" step="0.1" value="0.5" />
+                    <span id="vignetteStrengthValue">0.5</span>
+                </div>
+                <div class="slider-control">
+                    <label for="vignetteRadius">Vignette Radius</label>
+                    <input id="vignetteRadius" type="range" min="0.1" max="2.0"
+                        step="0.1" value="0.75" />
+                    <span id="vignetteRadiusValue">0.75</span>
                 </div>
                 <div class="checkbox-control">
                     <label for="backfaceCulling">Backface Culling</label>

@@ -15,6 +15,8 @@ export class Scene {
   private objectIDCount: number = 0 // starting at 0
   objectMeshes: ObjLoader[] = []
   camera: Camera
+  vignetteStrength: number = 0.5
+  vignetteRadius: number = 0.75
 
   // Data for the BVH
   nodes: Node[]
