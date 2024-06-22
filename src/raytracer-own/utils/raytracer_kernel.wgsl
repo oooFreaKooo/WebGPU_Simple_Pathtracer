@@ -254,15 +254,15 @@ fn trace(camRay: Ray) -> vec3f {
             );
 
             // New ray direction
-            let diffuseDir = normalize(hit.normal + uniform_random_in_unit_sphere());
+            let diffuseDir = CosineWeightedHemisphereSample(hit.normal);
             var specularDir = reflect(ray.direction, hit.normal);
             var refractDir = refract(ray.direction, hit.normal, select(hit.material.ior, 1.0 / hit.material.ior, hit.from_front));
 
             specularDir = normalize(mix(specularDir, diffuseDir, hit.material.specRoughness * hit.material.specRoughness));
-            refractDir = normalize(mix(refractDir, normalize(-hit.normal + uniform_random_in_unit_sphere()), hit.material.refrRoughness * hit.material.refrRoughness));
+            refractDir = normalize(mix(refractDir, CosineWeightedHemisphereSample(-hit.normal), hit.material.refrRoughness * hit.material.refrRoughness));
             ray.direction = mix(mix(diffuseDir, specularDir, isSpecular), refractDir, isRefractive);
 
-            accumulatedColor += energy * hit.material.emissionColor * hit.material.emissionStrength;
+            accumulatedColor += energy * hit.material.emissionColor * hit.material.emissionStrength * vec3(2.0, 2.0, 2.0);
 
             // Update energy
             if isRefractive == 0.0 {
@@ -271,7 +271,7 @@ fn trace(camRay: Ray) -> vec3f {
             }
 
             // Russian roulette
-            let rr_prob = max(energy.r, max(energy.g, energy.b)) * RR_Scale;
+            let rr_prob = max(energy.r, max(energy.g, energy.b));
             if rand2D() >= rr_prob {
             break;
             }
@@ -290,6 +290,31 @@ fn rand2D() -> f32 {
     randState = randState * 747796405u + 2891336453u;
     var word: u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
     return f32((word >> 22u) ^ word) / 4294967295;
+}
+
+fn CosineWeightedHemisphereSample(normal: vec3<f32>) -> vec3<f32> {
+    let u = rand2D();
+    let v = rand2D() + 1.0;
+    // Spherical to Cartesian coordinates transformation
+    let sin_phi = sqrt(u);
+    let cos_phi = sqrt(1.0 - u);
+    let cos_theta = cos(2.0 * PI * v);
+    let sin_theta = sin(2.0 * PI * v);
+
+    let x = cos_theta * sin_phi;
+    let y = sin_theta * sin_phi;
+    let z = cos_phi;
+
+    //Einen up vektor erstellen der nicht parallel zur Normale ist
+    let up = select(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), (abs(normal.z) < 0.99));
+
+    //Orthonormalbasis: zwei vektoren die senkrecht zur normale stehen (kreuzprodukt)
+    let tangent = normalize(cross(up, normal));
+    let bitangent = cross(normal, tangent);
+
+    //Basisvektoren werden mit den karthesischen koordinaten kombiniert
+    let dir = tangent * x + bitangent * y + normal * z;
+    return normalize(dir);
 }
 
 fn uniform_random_in_unit_sphere() -> vec3f {
