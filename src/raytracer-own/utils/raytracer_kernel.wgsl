@@ -51,15 +51,19 @@ struct MeshData {
     materials: array<Material>,
 }
 
-struct Mesh {
-	num_triangles: i32,
-	offset: i32,
-	global_id: i32,
-	material_id: i32
-}
-
 struct ObjectData {
     triangles: array<Triangle>,
+}
+
+struct LightData {
+    position: vec3f,
+    intensity: f32,
+    color: vec3f,
+    size: vec3f,
+}
+
+struct Light {
+    lights: array<LightData>,
 }
 
 struct ObjectIndices {
@@ -73,6 +77,7 @@ struct Settings {
     SKY_TEXTURE: f32,
     aspectRatio: f32,
     jitterScale: f32,
+    numLights: f32,
 }
 
 struct CameraSettings {
@@ -110,6 +115,7 @@ struct SurfacePoint {
 @group(2) @binding(1) var<storage, read> tree : BVH;
 @group(2) @binding(2) var<storage, read> triIdx : ObjectIndices;
 @group(2) @binding(3) var<storage, read> mesh : MeshData;
+@group(2) @binding(4) var<storage, read> light : Light;
 
 // Group 3: Textures and Samplers
 @group(3) @binding(0) var skyTexture : texture_cube<f32>;
@@ -210,7 +216,6 @@ fn trace(camRay: Ray) -> vec3f {
             accumulatedColor += energy * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, setting.SKY_TEXTURE == 1.0);
             break;
         } else {
-
             var originalEnergy = energy;
 
             // Absorption if inside the object
@@ -254,15 +259,15 @@ fn trace(camRay: Ray) -> vec3f {
             );
 
             // New ray direction
-            let diffuseDir = CosineWeightedHemisphereSample(hit.normal);
+            let diffuseDir = uniform_sampling_hemisphere(hit.normal);
             var specularDir = reflect(ray.direction, hit.normal);
             var refractDir = refract(ray.direction, hit.normal, select(hit.material.ior, 1.0 / hit.material.ior, hit.from_front));
 
             specularDir = normalize(mix(specularDir, diffuseDir, hit.material.specRoughness * hit.material.specRoughness));
-            refractDir = normalize(mix(refractDir, CosineWeightedHemisphereSample(-hit.normal), hit.material.refrRoughness * hit.material.refrRoughness));
+            refractDir = normalize(mix(refractDir, uniform_sampling_hemisphere(-hit.normal), hit.material.refrRoughness * hit.material.refrRoughness));
             ray.direction = mix(mix(diffuseDir, specularDir, isSpecular), refractDir, isRefractive);
 
-            accumulatedColor += energy * hit.material.emissionColor * hit.material.emissionStrength * vec3(2.0, 2.0, 2.0);
+            accumulatedColor += energy * hit.material.emissionColor * hit.material.emissionStrength * vec3(3.0, 3.0, 3.0);
 
             // Update energy
             if isRefractive == 0.0 {
@@ -275,11 +280,61 @@ fn trace(camRay: Ray) -> vec3f {
             if rand2D() >= rr_prob {
             break;
             }
+
             energy /= rr_prob;
+
+            if length(energy) < 0.001 {
+                break;
+            }
+            
+            // Next Event Estimation (NEE)
+            if isSpecular == 0.0 && isRefractive == 0.0 {
+                var indirectLight: vec3f = vec3(0.0, 0.0, 0.0);
+                for (var i: u32 = 0u; i < u32(setting.numLights); i++) {
+                    let lightContribution = sampleLight(light.lights[i], hit);
+                    indirectLight += lightContribution * hit.material.albedo;
+                }
+                accumulatedColor += energy * indirectLight;
+            }
         }
     }
     return accumulatedColor;
 }
+
+fn sampleLight(light: LightData, hit: SurfacePoint) -> vec3f {
+    let samples = 1u; // Further reduce the number of samples for performance
+    var totalLightContribution = vec3(0.0, 0.0, 0.0);
+    let invSamples = 1.0 / f32(samples); // Precompute the inverse of samples
+
+    for (var i: u32 = 0u; i < samples; i++) {
+        let sampleDir = uniform_random_in_unit_sphere();
+
+        // Transform sampleDir to align with the surface normal
+        let tangent = normalize(cross(select(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), abs(hit.normal.x) > 0.1), hit.normal));
+        let bitangent = cross(hit.normal, tangent);
+        let lightDir = normalize(mat3x3f(tangent, bitangent, hit.normal) * sampleDir);
+
+        let lightPoint = light.position + lightDir * light.size;
+        let lightVec = lightPoint - hit.position;
+        let dotNL = max(dot(hit.normal, lightDir), 0.0);
+        let dist = length(lightVec);
+        let attenuation = 1.0 / (dist * dist);
+        let lightContribution = dotNL * attenuation;
+        let clampedLightContribution = clamp(lightContribution, 0.0, 10.0);
+
+        // Skip insignificant light contributions
+        if clampedLightContribution < 0.01 {
+            continue;
+        }
+
+        totalLightContribution += light.color * clampedLightContribution * light.intensity;
+    }
+
+    // Return the average light contribution
+    return totalLightContribution * invSamples;
+}
+
+
 
 fn lcg_random(state: u32) -> f32 {
     var newState = state * 1664525u + 1013904223u;
@@ -292,29 +347,14 @@ fn rand2D() -> f32 {
     return f32((word >> 22u) ^ word) / 4294967295;
 }
 
-fn CosineWeightedHemisphereSample(normal: vec3<f32>) -> vec3<f32> {
-    let u = rand2D();
-    let v = rand2D() + 1.0;
-    // Spherical to Cartesian coordinates transformation
-    let sin_phi = sqrt(u);
-    let cos_phi = sqrt(1.0 - u);
-    let cos_theta = cos(2.0 * PI * v);
-    let sin_theta = sin(2.0 * PI * v);
+fn cosine_sampling_hemisphere(normal: vec3f) -> vec3f {
+    return uniform_random_in_unit_sphere() + normal;
+}
 
-    let x = cos_theta * sin_phi;
-    let y = sin_theta * sin_phi;
-    let z = cos_phi;
-
-    //Einen up vektor erstellen der nicht parallel zur Normale ist
-    let up = select(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), (abs(normal.z) < 0.99));
-
-    //Orthonormalbasis: zwei vektoren die senkrecht zur normale stehen (kreuzprodukt)
-    let tangent = normalize(cross(up, normal));
-    let bitangent = cross(normal, tangent);
-
-    //Basisvektoren werden mit den karthesischen koordinaten kombiniert
-    let dir = tangent * x + bitangent * y + normal * z;
-    return normalize(dir);
+fn uniform_sampling_hemisphere(normal: vec3f) -> vec3f {
+    let on_unit_sphere = uniform_random_in_unit_sphere();
+    let sign_dot = select(1.0, 0.0, dot(on_unit_sphere, normal) > 0.0);
+    return normalize(mix(on_unit_sphere, -on_unit_sphere, sign_dot));
 }
 
 fn uniform_random_in_unit_sphere() -> vec3f {
@@ -337,32 +377,6 @@ fn refract(e1: vec3<f32>, e2: vec3<f32>, e3: f32) -> vec3<f32> {
         return e3 * e1 - (e3 * dot(e2, e1) + sqrt(k)) * e2;
     }
 }
-
-fn FresnelReflectAmount(n1: f32, n2: f32, normal: vec3<f32>, incident: vec3<f32>, minReflectivity: f32, maxReflectivity: f32) -> f32 {
-    let r0 = pow(((n1 - n2) / (n1 + n2)), 2.0);
-
-    var cosX: f32 = -dot(normal, incident);
-    cosX = clamp(cosX, -1.0, 1.0); // Clamping to avoid numerical issues
-
-    if n1 > n2 {
-        let n: f32 = n1 / n2;
-        var sinT2: f32 = n * n * (1.0 - cosX * cosX);
-        sinT2 = clamp(sinT2, 0.0, 1.0); // Clamping sinT2
-
-        if sinT2 > 1.0 {
-            return maxReflectivity;
-        }
-        cosX = sqrt(1.0 - sinT2);
-    }
-
-    let x: f32 = pow(1.0 - cosX, 5.0);
-    let ret: f32 = r0 + (1.0 - r0) * x;
-
-    // Adjust reflect multiplier for object reflectivity
-    return mix(minReflectivity, maxReflectivity, ret);
-}
-
-
 
 fn traverse(ray: Ray) -> SurfacePoint {
     var surfacePoint: SurfacePoint;

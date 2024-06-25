@@ -1,5 +1,4 @@
-import { mat4, vec3 } from "gl-matrix"
-import { Material } from "./material"
+import { vec3 } from "gl-matrix"
 
 export class Triangle {
   centroid: vec3
@@ -19,4 +18,8 @@ export class Triangle {
       (this.corners[0][2] + this.corners[1][2] + this.corners[2][2]) / 3,
     ]
   }
+}
+
+export class MeshData {
+  constructor(public triangles: Triangle[]) {}
 }
