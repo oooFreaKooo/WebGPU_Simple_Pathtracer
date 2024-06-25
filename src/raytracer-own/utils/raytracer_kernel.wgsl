@@ -126,6 +126,7 @@ const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
 const RR_Scale: f32 = 0.3;
+const NEE: bool = true;
 
 var<private> pixelCoords : vec2f;
 var<private> randState : u32 = 0u;
@@ -209,131 +210,127 @@ fn trace(camRay: Ray) -> vec3f {
     var regularBounces: u32 = 1u;
 
     for (var bounce: u32 = 0u; bounce < u32(setting.maxBounces); bounce++) {
-
         let hit = traverse(ray);
 
         if !hit.hit {
             accumulatedColor += energy * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, setting.SKY_TEXTURE == 1.0);
             break;
+        }
+
+        var originalEnergy = energy;
+
+        // Absorption if inside the object
+        energy *= select(vec3(1.0), exp(-hit.material.refrColor * hit.dist), hit.from_front);
+
+        let n1 = select(1.0, hit.material.ior, !hit.from_front);
+        let n2 = select(1.0, hit.material.ior, hit.from_front);
+
+        // Fresnel effect
+        var specChance = hit.material.specChance;
+        var refrChance = hit.material.refrChance;
+        if specChance > 0.1 {
+            let chanceMultiplier = (1.0 - specChance) / (1.0 - hit.material.specChance);
+            refrChance *= chanceMultiplier;
+        }
+
+        // Ray type determination
+        var isSpecular: f32 = 0.0;
+        var isRefractive: f32 = 0.0;
+        let randVal = rand2D();
+        if specChance > 0.0 && randVal < specChance {
+            isSpecular = 1.0;
+        } else if refrChance > 0.0 && randVal < (specChance + refrChance) {
+            isRefractive = 1.0;
         } else {
-            var originalEnergy = energy;
+            regularBounces += 1u;
+        }
 
-            // Absorption if inside the object
-            energy *= select(vec3(1.0), exp(-hit.material.refrColor * hit.dist), hit.from_front);
-
-            let n1 = select(1.0, hit.material.ior, !hit.from_front);
-            let n2 = select(1.0, hit.material.ior, hit.from_front);
-
-            // Pre-fresnel chances
-            var specChance = hit.material.specChance;
-            var refrChance = hit.material.refrChance;
-
-            // Fresnel effect
-            if specChance > 0.1 {
-            //specChance = FresnelReflectAmount(n1, n2, hit.normal, ray.direction, specChance, 1.0);
-                let chanceMultiplier = (1.0 - specChance) / (1.0 - hit.material.specChance);
-                refrChance *= chanceMultiplier;
-            }
-
-            // Ray type determination
-            var isSpecular: f32 = 0.0;
-            var isRefractive: f32 = 0.0;
-            if (specChance > 0.0) && (rand2D() < specChance) {
-                isSpecular = 1.0;
-            } else if refrChance > 0.0 && rand2D() < specChance + refrChance {
-                isRefractive = 1.0;
-            } else {
-                regularBounces += 1u;
-            }
-
-            // Max bounces for diffuse objects
-            if regularBounces >= 4u && isSpecular == 0.0 {
+        // Max bounces for diffuse objects
+        if regularBounces >= 4u && isSpecular == 0.0 {
             break;
-            }
-        
-            // Ray position update
-            ray.origin = select(
-                (ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON,
-                (ray.origin + ray.direction * hit.dist) - hit.normal * EPSILON,
-                isRefractive == 1.0
-            );
+        }
 
-            // New ray direction
-            let diffuseDir = uniform_sampling_hemisphere(hit.normal);
-            var specularDir = reflect(ray.direction, hit.normal);
-            var refractDir = refract(ray.direction, hit.normal, select(hit.material.ior, 1.0 / hit.material.ior, hit.from_front));
+        // Ray position update
+        ray.origin = select(
+            (ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON,
+            (ray.origin + ray.direction * hit.dist) - hit.normal * EPSILON,
+            isRefractive == 1.0
+        );
 
-            specularDir = normalize(mix(specularDir, diffuseDir, hit.material.specRoughness * hit.material.specRoughness));
-            refractDir = normalize(mix(refractDir, uniform_sampling_hemisphere(-hit.normal), hit.material.refrRoughness * hit.material.refrRoughness));
-            ray.direction = mix(mix(diffuseDir, specularDir, isSpecular), refractDir, isRefractive);
+        // New ray direction
+        let diffuseDir = uniform_sampling_hemisphere(hit.normal);
+        var specularDir = reflect(ray.direction, hit.normal);
+        var refractDir = refract(ray.direction, hit.normal, select(hit.material.ior, 1.0 / hit.material.ior, hit.from_front));
 
-            accumulatedColor += energy * hit.material.emissionColor * hit.material.emissionStrength * vec3(3.0, 3.0, 3.0);
+        specularDir = normalize(mix(specularDir, diffuseDir, hit.material.specRoughness * hit.material.specRoughness));
+        refractDir = normalize(mix(refractDir, uniform_sampling_hemisphere(-hit.normal), hit.material.refrRoughness * hit.material.refrRoughness));
+        ray.direction = mix(mix(diffuseDir, specularDir, isSpecular), refractDir, isRefractive);
 
-            // Update energy
-            if isRefractive == 0.0 {
-                energy = originalEnergy;
-                energy *= hit.material.albedo + hit.material.specColor * isSpecular;
-            }
+        accumulatedColor += energy * hit.material.emissionColor * hit.material.emissionStrength * vec3(3.0, 3.0, 3.0);
 
-            // Russian roulette
-            let rr_prob = max(energy.r, max(energy.g, energy.b));
-            if rand2D() >= rr_prob {
+        // Update energy
+        if isRefractive == 0.0 {
+            energy = originalEnergy * (hit.material.albedo + hit.material.specColor * isSpecular);
+        }
+
+        // Russian roulette
+        let rr_prob = max(energy.r, max(energy.g, energy.b));
+        if rand2D() >= rr_prob {
             break;
-            }
+        }
 
-            energy /= rr_prob;
+        energy /= rr_prob;
 
-            if length(energy) < 0.001 {
-                break;
+        if length(energy) < 0.001 {
+            break;
+        }
+
+        // Next Event Estimation (NEE)
+        if NEE && isSpecular == 0.0 && isRefractive == 0.0 {
+            var indirectLight: vec3f = vec3(0.0, 0.0, 0.0);
+            for (var i: u32 = 0u; i < u32(setting.numLights); i++) {
+                let lightContribution = sampleLight(light.lights[i], hit);
+                indirectLight += lightContribution * hit.material.albedo;
             }
-            
-            // Next Event Estimation (NEE)
-            if isSpecular == 0.0 && isRefractive == 0.0 {
-                var indirectLight: vec3f = vec3(0.0, 0.0, 0.0);
-                for (var i: u32 = 0u; i < u32(setting.numLights); i++) {
-                    let lightContribution = sampleLight(light.lights[i], hit);
-                    indirectLight += lightContribution * hit.material.albedo;
-                }
-                accumulatedColor += energy * indirectLight;
-            }
+            accumulatedColor += energy * indirectLight;
         }
     }
     return accumulatedColor;
 }
 
+
 fn sampleLight(light: LightData, hit: SurfacePoint) -> vec3f {
-    let samples = 1u; // Further reduce the number of samples for performance
+    let samples = 2u;
     var totalLightContribution = vec3(0.0, 0.0, 0.0);
-    let invSamples = 1.0 / f32(samples); // Precompute the inverse of samples
+    let invSamples = 1.0 / f32(samples);
 
     for (var i: u32 = 0u; i < samples; i++) {
-        let sampleDir = uniform_random_in_unit_sphere();
+        let xi = f32(i) * invSamples + rand2D() * invSamples;
+        let phi = TWO_PI * rand2D();
+        let r = sqrt(xi);
+        let sampleDir = vec3(r * cos(phi), r * sin(phi), sqrt(max(0.0, 1.0 - xi)));
 
-        // Transform sampleDir to align with the surface normal
+        // Calculate tangent and bitangent
         let tangent = normalize(cross(select(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), abs(hit.normal.x) > 0.1), hit.normal));
         let bitangent = cross(hit.normal, tangent);
         let lightDir = normalize(mat3x3f(tangent, bitangent, hit.normal) * sampleDir);
 
         let lightPoint = light.position + lightDir * light.size;
         let lightVec = lightPoint - hit.position;
-        let dotNL = max(dot(hit.normal, lightDir), 0.0);
         let dist = length(lightVec);
+        let dotNL = max(dot(hit.normal, lightDir), 0.0);
         let attenuation = 1.0 / (dist * dist);
         let lightContribution = dotNL * attenuation;
-        let clampedLightContribution = clamp(lightContribution, 0.0, 10.0);
 
-        // Skip insignificant light contributions
-        if clampedLightContribution < 0.01 {
+        if lightContribution < 0.01 {
             continue;
         }
 
-        totalLightContribution += light.color * clampedLightContribution * light.intensity;
+        totalLightContribution += light.color * clamp(lightContribution, 0.0, 10.0) * light.intensity;
     }
 
-    // Return the average light contribution
     return totalLightContribution * invSamples;
 }
-
 
 
 fn lcg_random(state: u32) -> f32 {
