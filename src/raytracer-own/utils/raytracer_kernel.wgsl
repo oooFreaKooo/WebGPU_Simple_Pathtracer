@@ -131,6 +131,7 @@ struct RayType {
 const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
+const INV_PI: f32 = 0.31830988618;
 const RR_Scale: f32 = 0.3;
 const NEE: bool = false;
 
@@ -142,7 +143,7 @@ override WORKGROUP_SIZE_Y: u32;
 
 var<workgroup> sharedAccumulatedColor: array<vec3f, 64>;
 
-@compute @workgroup_size(WORKGROUP_SIZE_X, WORKGROUP_SIZE_Y, 1)
+@compute @workgroup_size(WORKGROUP_SIZE_X, WORKGROUP_SIZE_Y)
 fn main(
     @builtin(global_invocation_id) global_id: vec3u,
     @builtin(workgroup_id) workgroup_id: vec3<u32>,
@@ -165,7 +166,7 @@ fn main(
     randState = idx + u32(uniforms.frameNum) * 719393;
 
   // Precompute constants outside the loops
-    let sqrt_spp = sqrt(setting.numSamples);
+    let sqrt_spp = sqrt(f32(setting.numSamples));
     let recip_sqrt_spp = 1.0 / sqrt_spp;
     let jitter_scale_half = setting.jitterScale * 0.5;
     let half_screen_dims = vec2<f32>(dimensions.xy) * 0.5;
@@ -183,27 +184,27 @@ fn main(
 
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
-        // Generate stratified samples
+            // Generate stratified samples
             let stratifiedSample = (vec2<f32>(i, j) + vec2<f32>(xor_shift(randState), xor_shift(randState))) * recip_sqrt_spp;
         
-        // Calculate screen jittered coordinates
+            // Calculate screen jittered coordinates
             let screen_jittered = pixelCoords + stratifiedSample - half_screen_dims;
         
-        // Calculate ray direction
+            // Calculate ray direction
             let horizontal_coeff = cam_fov * screen_jittered.x / dimensions.x;
             let vertical_coeff = cam_fov * screen_jittered.y / (dimensions.y * aspect_ratio);
             myRay.direction = normalize(cam_fwd + horizontal_coeff * cam_right + vertical_coeff * cam_up);
         
-        // Calculate lens point and origin
+            // Calculate lens point and origin
             let lens_point = vec2<f32>(xor_shift(randState), xor_shift(randState)) * cam_setting.apertureSize;
             myRay.origin = cam_pos + cam_right * lens_point.x + cam_up * lens_point.y;
         
-        // Adjust ray direction based on focus point
+            // Adjust ray direction based on focus point
             let focus_point = cam_pos + myRay.direction * focus_dist;
             myRay.direction = normalize(focus_point - myRay.origin);
         
-        // Trace the ray and accumulate color
-            sharedAccumulatedColor[local_invocation_index] += trace(myRay);
+            // Trace the ray and accumulate color
+            sharedAccumulatedColor[local_invocation_index] += trace(myRay) * recip_sqrt_spp;
             sampleCount += 1.0;
         }
     }
@@ -342,7 +343,7 @@ fn ggxDistribution(alpha: f32, NdotH: f32) -> f32 {
     let alpha2 = alpha * alpha;
     let NdotH2 = NdotH * NdotH;
     let denom = NdotH2 * (alpha2 - 1.0) + 1.0;
-    return alpha2 / (PI * denom * denom);
+    return alpha2 * INV_PI / (denom * denom);
 }
 
 
@@ -378,7 +379,6 @@ fn sampleLight(light: LightData, hit: HitPoint) -> vec3<f32> {
 }
 
 
-
 fn xor_shift(state: u32) -> f32 {
     var newState = state ^ (state << 13u);
     newState ^= (newState >> 17u);
@@ -400,7 +400,7 @@ fn uniform_sampling_hemisphere(normal: vec3f) -> vec3f {
 }
 
 fn uniform_random_in_unit_sphere() -> vec3f {
-    let phi = rand2D() * 2.0 * PI;
+    let phi = rand2D() * TWO_PI;
     let theta = acos(2.0 * rand2D() - 1.0);
 
     let x = sin(theta) * cos(phi);
