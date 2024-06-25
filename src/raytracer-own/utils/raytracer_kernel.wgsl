@@ -126,7 +126,7 @@ const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
 const RR_Scale: f32 = 0.3;
-const NEE: bool = true;
+const NEE: bool = false;
 
 var<private> pixelCoords : vec2f;
 var<private> randState : u32 = 0u;
@@ -134,9 +134,12 @@ var<private> randState : u32 = 0u;
 override WORKGROUP_SIZE_X: u32;
 override WORKGROUP_SIZE_Y: u32;
 
+var<workgroup> sharedAccumulatedColor: array<vec3f, 64>;
+
 @compute @workgroup_size(WORKGROUP_SIZE_X, WORKGROUP_SIZE_Y, 1)
 fn main(
-    @builtin(global_invocation_id) global_id: vec3u, @builtin(workgroup_id) workgroup_id: vec3<u32>,
+    @builtin(global_invocation_id) global_id: vec3u,
+    @builtin(workgroup_id) workgroup_id: vec3<u32>,
     @builtin(local_invocation_id) local_invocation_id: vec3<u32>,
     @builtin(local_invocation_index) local_invocation_index: u32,
     @builtin(num_workgroups) num_workgroups: vec3<u32>
@@ -154,50 +157,48 @@ fn main(
 
     // Random state initialization
     randState = idx + u32(uniforms.frameNum) * 719393;
-    
-    // Accumulated color initialization
-    var accumulatedColor = vec3f(0.0);
 
     // Stratification parameters
     let sqrt_spp = sqrt(setting.numSamples);
     let recip_sqrt_spp = 1.0 / sqrt_spp;
+    let jitter_scale_half = setting.jitterScale * 0.5;
+    let half_screen_dims = vec2<f32>(dimensions.xy) * 0.5;
     var sampleCount = 0.0;
+
     // Initialize a new ray
     var myRay: Ray;
-    myRay.origin = cam.pos;
 
-    // Path tracing loop with stratification
+    // Initialize shared memory
+    sharedAccumulatedColor[local_invocation_index] = vec3f(0.0);
+
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
-
-            let lens_point = vec2<f32>(lcg_random(randState), lcg_random(randState)) * cam_setting.apertureSize;
-            let jitter = (vec2<f32>(lcg_random(randState), lcg_random(randState)) - 0.5) * setting.jitterScale;
-            let stratifiedSample = vec2<f32>(i + lcg_random(randState), j + lcg_random(randState)) * recip_sqrt_spp;
-            let screen_jittered = vec2<f32>(pixelCoords) + stratifiedSample + jitter - vec2<f32>(dimensions.xy) / 2.0;
+            // Random number state update
+            let lens_point = vec2<f32>(xor_shift(randState), xor_shift(randState)) * cam_setting.apertureSize;
+            let jitter = (vec2<f32>(xor_shift(randState), xor_shift(randState)) - 0.5) * jitter_scale_half;
+            let stratifiedSample = (vec2<f32>(i, j) + vec2<f32>(xor_shift(randState), xor_shift(randState))) * recip_sqrt_spp;
+            let screen_jittered = pixelCoords + stratifiedSample + jitter - half_screen_dims;
 
             let horizontal_coeff = cam_setting.cameraFOV * screen_jittered.x / dimensions.x;
             let vertical_coeff = cam_setting.cameraFOV * screen_jittered.y / (dimensions.y * setting.aspectRatio);
-            myRay.direction = normalize(cam.forward + horizontal_coeff * cam.right + vertical_coeff * cam.up);
 
-            myRay.origin += cam.right * lens_point.x + cam.up * lens_point.y;
+            myRay.direction = normalize(cam.forward + horizontal_coeff * cam.right + vertical_coeff * cam.up);
+            myRay.origin = cam.pos + cam.right * lens_point.x + cam.up * lens_point.y;
 
             let focus_point = cam.pos + myRay.direction * cam_setting.focusDistance;
-
             myRay.direction = normalize(focus_point - myRay.origin);
 
-            accumulatedColor += trace(myRay);
+            sharedAccumulatedColor[local_invocation_index] += trace(myRay);
             sampleCount += 1.0;
         }
     }
 
-    // Final fragment color
-    accumulatedColor /= sampleCount;
+    var accumulatedColor = sharedAccumulatedColor[local_invocation_index] / sampleCount;
 
     if uniforms.resetBuffer == 0.0 {
         accumulatedColor += framebuffer[idx].xyz;
     }
 
-    // Write the final color to the framebuffer
     framebuffer[idx] = vec4<f32>(accumulatedColor, 1.0);
 }
 
@@ -333,8 +334,10 @@ fn sampleLight(light: LightData, hit: SurfacePoint) -> vec3f {
 }
 
 
-fn lcg_random(state: u32) -> f32 {
-    var newState = state * 1664525u + 1013904223u;
+fn xor_shift(state: u32) -> f32 {
+    var newState = state ^ (state << 13u);
+    newState ^= (newState >> 17u);
+    newState ^= (newState << 5u);
     return f32(newState & 0xFFFFFFFu) / f32(0x10000000u);
 }
 
@@ -381,31 +384,38 @@ fn traverse(ray: Ray) -> SurfacePoint {
     var nearestHit: f32 = 9999.0;
 
     var currentNode: Node = tree.nodes[0];
-    var stack: array<Node, 20>;
+    var stack: array<Node, 10>; // Reduced stack size
     var stackLocation: u32 = 0u;
 
-    while true {
+    loop {
         let triCount: u32 = u32(currentNode.triCount);
         let contents: u32 = u32(currentNode.leftFirst);
 
         if triCount == 0u {
-            var child1: Node = tree.nodes[contents];
-            var child2: Node = tree.nodes[contents + 1u];
+            let child1: Node = tree.nodes[contents];
+            let child2: Node = tree.nodes[contents + 1u];
 
-            var distance1: f32 = hit_aabb(ray, child1);
-            var distance2: f32 = hit_aabb(ray, child2);
+            let distance1: f32 = hit_aabb(ray, child1);
+            let distance2: f32 = hit_aabb(ray, child2);
 
-            if distance1 > distance2 {
-                let temp: f32 = distance1;
-                distance1 = distance2;
-                distance2 = temp;
+            var nearChild: Node;
+            var farChild: Node;
+            var nearDistance: f32;
+            var farDistance: f32;
 
-                var tempChild: Node = child1;
-                child1 = child2;
-                child2 = tempChild;
+            if distance1 < distance2 {
+                nearChild = child1;
+                farChild = child2;
+                nearDistance = distance1;
+                farDistance = distance2;
+            } else {
+                nearChild = child2;
+                farChild = child1;
+                nearDistance = distance2;
+                farDistance = distance1;
             }
 
-            if distance1 > nearestHit {
+            if nearDistance > nearestHit {
                 if stackLocation == 0u {
                     break;
                 } else {
@@ -413,28 +423,23 @@ fn traverse(ray: Ray) -> SurfacePoint {
                     currentNode = stack[stackLocation];
                 }
             } else {
-                currentNode = child1;
-                if distance2 < nearestHit {
-                    stack[stackLocation] = child2;
+                currentNode = nearChild;
+                if farDistance < nearestHit {
+                    stack[stackLocation] = farChild;
                     stackLocation += 1u;
                 }
             }
         } else {
-            for (var i: u32 = 0u; i < triCount; i++) {
-                let newSurfacePoint: SurfacePoint = hit_triangle(
-                    ray,
-                    objects.triangles[u32(triIdx.idx[i + contents])],
-                    0.0001,
-                    nearestHit,
-                    surfacePoint,
-                );
+            let end: u32 = contents + triCount;
+            for (var i: u32 = contents; i < end; i++) {
+                let triangle = objects.triangles[u32(triIdx.idx[i])];
+                let newSurfacePoint: SurfacePoint = hit_triangle(ray, triangle, 0.0001, nearestHit, surfacePoint);
 
                 if newSurfacePoint.hit {
                     nearestHit = newSurfacePoint.dist;
                     surfacePoint = newSurfacePoint;
                 }
             }
-
 
             if stackLocation == 0u {
                 break;
@@ -447,7 +452,6 @@ fn traverse(ray: Ray) -> SurfacePoint {
 
     return surfacePoint;
 }
-
 
 // Möller–Trumbore intersection algorithm
 fn hit_triangle(

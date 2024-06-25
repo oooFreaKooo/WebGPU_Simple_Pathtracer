@@ -8,8 +8,8 @@ import { computePass, createRenderPassDescriptor, createVertexBuffer, renderPass
 const frameTimeLabel: HTMLElement = <HTMLElement>document.getElementById("frame-time")
 const renderTimeLabel: HTMLElement = <HTMLElement>document.getElementById("render-time")
 
-const COMPUTE_WORKGROUP_SIZE_X = 16
-const COMPUTE_WORKGROUP_SIZE_Y = 16
+const COMPUTE_WORKGROUP_SIZE_X = 8
+const COMPUTE_WORKGROUP_SIZE_Y = 8
 
 export class Renderer {
   private canvas: HTMLCanvasElement
