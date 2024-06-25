@@ -107,6 +107,12 @@ struct RayType {
     regularBounces: u32,
 };
 
+struct ScatterRecord {
+	pdf: f32,
+	skip_pdf: bool,
+	skip_pdf_ray: Ray
+}
+
 // Group 0: Uniforms and Settings
 @group(0) @binding(0) var<uniform> uniforms : Uniforms;
 @group(0) @binding(1) var<uniform> cam : CameraData;
@@ -137,6 +143,7 @@ const NEE: bool = false;
 
 var<private> pixelCoords : vec2f;
 var<private> randState : u32 = 0u;
+var<private> scatterRec : ScatterRecord;
 
 override WORKGROUP_SIZE_X: u32;
 override WORKGROUP_SIZE_Y: u32;
@@ -209,21 +216,21 @@ fn main(
         }
     }
 
-    var accumulatedColor = sharedAccumulatedColor[local_invocation_index] / sampleCount;
+    var acc_radiance = sharedAccumulatedColor[local_invocation_index] / sampleCount;
 
     if uniforms.resetBuffer == 0.0 {
-        accumulatedColor += framebuffer[idx].xyz;
+        acc_radiance += framebuffer[idx].xyz;
     }
 
-    framebuffer[idx] = vec4<f32>(accumulatedColor, 1.0);
+    framebuffer[idx] = vec4<f32>(acc_radiance, 1.0);
 }
 
 
 //https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-cam/
 fn trace(camRay: Ray) -> vec3f {
     var ray = camRay;
-    var accumulatedColor: vec3f = vec3(0.0, 0.0, 0.0);
-    var energy = vec3(1.0, 1.0, 1.0);
+    var acc_radiance: vec3f = vec3(0.0, 0.0, 0.0);
+    var throughput = vec3(1.0, 1.0, 1.0);
     var regularBounces: u32 = 1u;
 
     let maxBounces = u32(setting.maxBounces);
@@ -233,15 +240,15 @@ fn trace(camRay: Ray) -> vec3f {
         let hit = traverse(ray);
 
         if !hit.hit {
-            accumulatedColor += energy * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, skyTextureEnabled);
+            acc_radiance += throughput * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, skyTextureEnabled);
             break;
         }
 
-        var originalEnergy = energy;
+        var originalEnergy = throughput;
 
         // Absorption if inside the object
         if hit.from_front {
-            energy *= exp(-hit.material.refrColor * hit.dist);
+            throughput *= exp(-hit.material.refrColor * hit.dist);
         }
 
         let n1 = select(1.0, hit.material.ior, !hit.from_front);
@@ -272,20 +279,20 @@ fn trace(camRay: Ray) -> vec3f {
         var refractDir = calculate_refract_dir(ray, hit, n1, n2);
         ray.direction = mix(mix(uniform_sampling_hemisphere(hit.normal), specularDir, rayType.isSpecular), refractDir, rayType.isRefractive);
 
-        accumulatedColor += energy * hit.material.emissionColor * hit.material.emissionStrength * vec3(3.0, 3.0, 3.0);
+        acc_radiance += throughput * hit.material.emissionColor * hit.material.emissionStrength * vec3(3.0, 3.0, 3.0);
 
-        // Update energy
+        // Update throughput
         if rayType.isRefractive == 0.0 {
-            energy = originalEnergy * (hit.material.albedo + hit.material.specColor * rayType.isSpecular);
+            throughput = originalEnergy * (hit.material.albedo + hit.material.specColor * rayType.isSpecular);
         }
 
         // Russian roulette
-        let rr_prob = max(energy.r, max(energy.g, energy.b));
-        if rand2D() >= rr_prob || length(energy) < 0.001 {
+        let rr_prob = max(throughput.r, max(throughput.g, throughput.b));
+        if rand2D() >= rr_prob || length(throughput) < 0.001 {
             break;
         }
 
-        energy /= rr_prob;
+        throughput /= rr_prob;
 
         // Next Event Estimation (NEE)
         if NEE && rayType.isSpecular == 0.0 && rayType.isRefractive == 0.0 {
@@ -293,10 +300,10 @@ fn trace(camRay: Ray) -> vec3f {
             for (var i: u32 = 0u; i < u32(setting.numLights); i++) {
                 directLight += sampleLight(light.lights[i], hit) * hit.material.albedo;
             }
-            accumulatedColor += energy * directLight;
+            acc_radiance += throughput * directLight;
         }
     }
-    return accumulatedColor;
+    return acc_radiance;
 }
 
 
