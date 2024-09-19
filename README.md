@@ -1,6 +1,7 @@
 # A Simple WebGPU Pathtracer
+
+![projektbild](https://github.com/user-attachments/assets/cba4d817-094c-4a78-8b2d-f365d7bd4f54)
 ![dragon1](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/7f8c6265-2c88-486d-8ad9-17761430a193)
-![cornell](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/7b70e2e1-08fc-416b-be84-d895857ccb67)
 ![sphereflake2](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/92c27dca-96e5-4ff2-a43c-effc1ed5baa6)
 ![manyobjects](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/21047ea3-939c-4cda-8802-b2e59d3dee6d)
 ![caustic1](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/3dd66f00-3575-4703-a26b-b76a4af91ded)
@@ -61,4 +62,5 @@ This project is open-source and available to anyone. You are free to use, modify
 
 ## Framework Overview
 ![core_diagram2](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/c56b46b3-366a-4dee-8c80-2b72880a8517)
+![img2](https://github.com/user-attachments/assets/19779169-7231-4af8-83c4-5091cb28909d)
 
