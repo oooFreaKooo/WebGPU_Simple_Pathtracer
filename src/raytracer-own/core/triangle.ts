@@ -1,13 +1,15 @@
-import { vec3 } from "gl-matrix"
+import { vec2, vec3 } from "gl-matrix"
 
 export class Triangle {
   centroid: vec3
   corners: vec3[]
   normals: vec3[]
+  texCoords: vec2[]
   objectID: number
   constructor(objectID: number = 0) {
     this.corners = []
     this.normals = []
+    this.texCoords = []
     this.objectID = objectID
   }
 
@@ -18,8 +20,4 @@ export class Triangle {
       (this.corners[0][2] + this.corners[1][2] + this.corners[2][2]) / 3,
     ]
   }
-}
-
-export class MeshData {
-  constructor(public triangles: Triangle[]) {}
 }

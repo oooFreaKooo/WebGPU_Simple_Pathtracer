@@ -21,6 +21,7 @@ import {
   createScene13,
   createCornellBox4,
   createScene14,
+  createScene15,
 } from "../utils/helper"
 const { EventEmitter } = require("events")
 const eventEmitter = new EventEmitter()
@@ -39,9 +40,8 @@ export class Application {
   async start() {
     // create the Materials you want to use
     const grey = new Material({ albedo: [0.64, 0.59, 0.62] })
-    const shiny = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.0, specularChance: 0.02 })
     const mirror = new Material({ specularRoughness: 0.0, specularChance: 1.0 })
-    const mirrorBlurry = new Material({ specularRoughness: 0.5, specularChance: 1.0 })
+    const mirrorBlurry = new Material({ specularRoughness: 0.41, specularChance: 0.62, albedo: [0.8, 0.5, 0.0] })
     const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
     const gold = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.5 })
     const glass = new Material({
@@ -52,30 +52,53 @@ export class Application {
       refractionColor: [0.0, 0.0, 0.0], // color absobtion of refractive objects
       refractionRoughness: 0.0, // self explanatory
     })
+    const glassTinted = new Material({
+      specularChance: 0.05, // how reflective, 1.0 is 100%
+      specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
+      ior: 1.6, // index of refraction
+      refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
+      refractionColor: [0.0, 0.0, 0.2], // color absobtion of refractive objects
+      refractionRoughness: 0.0, // self explanatory
+    })
+    const shiny: Material = new Material({
+      albedo: [0.6, 0.2, 0.2],
+      specularChance: 0.2,
+      specularColor: [0.8, 0.8, 0.8],
+      specularRoughness: 0.0,
+    })
 
     // create an array of objects you want to use
     const objectsToLoad: ObjectProperties[] = [
-      {
+      /*       {
         modelPath: "./src/assets/models/sphere.obj",
-        material: lightSource,
-        position: [0.0, 0.76, -1.0],
+        material: mirror,
+        position: [-1.25, 0.76, 0.64],
         rotation: [0.0, 0.0, 0.0],
         scale: [1.5, 1.5, 1.5],
       },
       {
         modelPath: "./src/assets/models/sphere.obj",
-        material: lightSource,
-        position: [-1.25, 0.76, 0.75],
+        material: glassTinted,
+        position: [-1.45, 0.5, 0.0],
         rotation: [0.0, 0.0, 0.0],
-        scale: [1.5, 1.5, 1.5],
-      },
+        scale: [1.0, 1.0, 1.0],
+      },*/
+
       {
-        modelPath: "./src/assets/models/sphere.obj",
-        material: lightSource,
-        position: [1.25, 0.76, 0.75],
-        rotation: [0.0, 0.0, 0.0],
-        scale: [1.5, 1.5, 1.5],
+        modelPath: "./src/assets/models/teapot.obj",
+        material: mirrorBlurry,
+        position: [0.9, 1.52, -0.75],
+        rotation: [0.0, -35.0, 0.0],
+        scale: [0.15, 0.15, 0.15],
       },
+      /*       {
+        modelPath: "./src/assets/models/horse.obj",
+        material: glassTinted,
+        position: [1.0, 1.5, -1.0],
+        rotation: [0.0, -78.0, 0.0],
+        scale: [1.0, 1.0, 1.0],
+      }, */
+
       /*       {
         modelPath: "./src/assets/models/plane.obj",
         material: lightSource,
@@ -117,9 +140,10 @@ export class Application {
     const scene12 = createScene12() // All material types
     const scene13 = createScene13()
     const scene14 = createScene14()
+    const scene15 = createScene15()
     // Create objects in the scene
-    await this.scene.createObjects(scene3)
-    //await this.scene.createObjects(objectsToLoad)
+    await this.scene.createObjects(scene12)
+
     // Build the BVH after creating all the objects
     eventEmitter.on("BVH", async () => await this.scene.prepareBVH())
     eventEmitter.emit("BVH")

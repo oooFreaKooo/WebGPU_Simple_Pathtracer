@@ -55,16 +55,6 @@ struct ObjectData {
     triangles: array<Triangle>,
 }
 
-struct LightData {
-    position: vec3f,
-    intensity: f32,
-    color: vec3f,
-    size: vec3f,
-}
-
-struct Light {
-    lights: array<LightData>,
-}
 
 struct ObjectIndices {
     idx: array<f32>,
@@ -113,6 +103,14 @@ struct ScatterRecord {
 	skip_pdf_ray: Ray
 }
 
+struct MLTState {
+    path: Ray,
+    throughput: vec3f,
+    radiance: vec3f,
+    weight: f32,
+    contribution: vec3f,
+};
+
 // Group 0: Uniforms and Settings
 @group(0) @binding(0) var<uniform> uniforms : Uniforms;
 @group(0) @binding(1) var<uniform> cam : CameraData;
@@ -127,7 +125,6 @@ struct ScatterRecord {
 @group(2) @binding(1) var<storage, read> tree : BVH;
 @group(2) @binding(2) var<storage, read> triIdx : ObjectIndices;
 @group(2) @binding(3) var<storage, read> mesh : MeshData;
-@group(2) @binding(4) var<storage, read> light : Light;
 
 // Group 3: Textures and Samplers
 @group(3) @binding(0) var skyTexture : texture_cube<f32>;
@@ -138,13 +135,15 @@ const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
 const INV_PI: f32 = 0.31830988618;
-const RR_Scale: f32 = 0.3;
-const NEE: bool = false;
 
 var<private> pixelCoords : vec2f;
 var<private> randState : u32 = 0u;
 var<private> scatterRec : ScatterRecord;
 
+var<workgroup> current_state: MLTState;
+var<workgroup> proposed_state: MLTState;
+var<workgroup> accumulated_radiance: vec3f;
+var<workgroup> rng_seed: u32;
 override WORKGROUP_SIZE_X: u32;
 override WORKGROUP_SIZE_Y: u32;
 
@@ -167,12 +166,12 @@ fn main(
     let idx = coord.y * u32(dimensions.x) + coord.x;
 
     // Calculate the pixel coordinates
-    pixelCoords = vec2f(f32(coord.x), f32(coord.y));
+    let pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
 
     // Random state initialization
     randState = idx + u32(uniforms.frameNum) * 719393;
 
-  // Precompute constants outside the loops
+    // Precompute constants outside the loops
     let sqrt_spp = sqrt(f32(setting.numSamples));
     let recip_sqrt_spp = 1.0 / sqrt_spp;
     let jitter_scale_half = setting.jitterScale * 0.5;
@@ -185,9 +184,15 @@ fn main(
     let focus_dist = cam_setting.focusDistance;
     let aspect_ratio = setting.aspectRatio;
 
+    rng_seed = idx + u32(uniforms.frameNum) * 719393 + local_invocation_index;
+
+
     var sampleCount = 0.0;
     var myRay: Ray;
-    sharedAccumulatedColor[local_invocation_index] = vec3f(0.0);
+    sharedAccumulatedColor[local_invocation_index] = vec3<f32>(0.0);
+
+    // Call the metropolis_light_transport function
+    metropolis_light_transport(local_invocation_index, pixelCoords);
 
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
@@ -212,6 +217,7 @@ fn main(
         
             // Trace the ray and accumulate color
             sharedAccumulatedColor[local_invocation_index] += trace(myRay) * recip_sqrt_spp;
+
             sampleCount += 1.0;
         }
     }
@@ -223,6 +229,58 @@ fn main(
     }
 
     framebuffer[idx] = vec4<f32>(acc_radiance, 1.0);
+}
+
+fn metropolis_light_transport(local_invocation_index: u32, pixelCoords: vec2<f32>) {
+
+    var acceptProb: f32;
+
+    // Initialize MLT state
+    current_state.path = generate_initial_path(pixelCoords);
+    current_state.throughput = vec3<f32>(1.0, 1.0, 1.0);
+    current_state.radiance = vec3<f32>(0.0, 0.0, 0.0);
+    current_state.weight = 1.0;
+    current_state.contribution = vec3<f32>(0.0, 0.0, 0.0);
+    accumulated_radiance = vec3<f32>(0.0, 0.0, 0.0);
+
+    for (var i: u32 = 0; i < 6; i = i + 1u) {
+
+        proposed_state = perturb(current_state, rng_seed);
+
+        acceptProb = min(1.0, luminance(proposed_state.contribution) / luminance(current_state.contribution));
+
+        if rand2D() < acceptProb {
+            current_state = proposed_state;
+            current_state.weight /= max(acceptProb, 1e-5); // Avoid division by zero
+        } else {
+            current_state.weight /= max((1.0 - acceptProb), 1e-5); // Avoid division by zero
+        }
+
+        accumulated_radiance += current_state.contribution * current_state.weight;
+    }
+
+    sharedAccumulatedColor[local_invocation_index] = accumulated_radiance / 6.0;
+}
+
+
+fn perturb(state: MLTState, seed: u32) -> MLTState {
+    var newState: MLTState = state;
+    // Apply small perturbation to the state
+    newState.path.direction += (vec3<f32>(xor_shift(seed), xor_shift(seed), xor_shift(seed)) - vec3<f32>(0.5)) * 0.1;
+    return newState;
+}
+
+
+fn luminance(color: vec3<f32>) -> f32 {
+    return dot(color, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
+
+fn generate_initial_path(pixelCoords: vec2<f32>) -> Ray {
+    var ray: Ray;
+    // Calculate initial ray direction
+    ray.origin = vec3<f32>(pixelCoords, 0.0);
+    ray.direction = vec3<f32>(0.0, 0.0, 1.0);
+    return ray;
 }
 
 
@@ -293,15 +351,6 @@ fn trace(camRay: Ray) -> vec3f {
         }
 
         throughput /= rr_prob;
-
-        // Next Event Estimation (NEE)
-        if NEE && rayType.isSpecular == 0.0 && rayType.isRefractive == 0.0 {
-            var directLight: vec3f = vec3(0.0, 0.0, 0.0);
-            for (var i: u32 = 0u; i < u32(setting.numLights); i++) {
-                directLight += sampleLight(light.lights[i], hit) * hit.material.albedo;
-            }
-            acc_radiance += throughput * directLight;
-        }
     }
     return acc_radiance;
 }
@@ -352,39 +401,6 @@ fn ggxDistribution(alpha: f32, NdotH: f32) -> f32 {
     let denom = NdotH2 * (alpha2 - 1.0) + 1.0;
     return alpha2 * INV_PI / (denom * denom);
 }
-
-
-fn sampleLight(light: LightData, hit: HitPoint) -> vec3<f32> {
-    let samples = 2u;
-    var totalLightContribution = vec3<f32>(0.0, 0.0, 0.0);
-    let invSamples = 1.0 / f32(samples);
-
-    // Calculate tangent and bitangent once
-    let tangent = normalize(cross(select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 1.0, 0.0), abs(hit.normal.x) > 0.1), hit.normal));
-    let bitangent = cross(hit.normal, tangent);
-    let normalMatrix = mat3x3<f32>(tangent, bitangent, hit.normal);
-
-    for (var i: u32 = 0u; i < samples; i++) {
-        let xi = (f32(i) + rand2D()) * invSamples;
-        let phi = TWO_PI * rand2D();
-        let r = sqrt(xi);
-        let sampleDir = vec3<f32>(r * cos(phi), r * sin(phi), sqrt(max(0.0, 1.0 - xi)));
-
-        let lightDir = normalize(normalMatrix * sampleDir);
-        let lightPoint = light.position + lightDir * light.size;
-        let lightVec = lightPoint - hit.position;
-        let dist = length(lightVec);
-        let dotNL = max(dot(hit.normal, lightDir), 0.0);
-        let attenuation = 1.0 / (dist * dist);
-        let lightContribution = dotNL * attenuation;
-
-        // Directly accumulate light contribution
-        totalLightContribution += light.color * clamp(lightContribution, 0.0, 10.0) * light.intensity * invSamples;
-    }
-
-    return totalLightContribution;
-}
-
 
 fn xor_shift(state: u32) -> f32 {
     var newState = state ^ (state << 13u);
@@ -491,7 +507,6 @@ fn traverse(ray: Ray) -> HitPoint {
 
     return surfacePoint;
 }
-
 
 // Möller–Trumbore intersection algorithm
 fn hit_triangle(
