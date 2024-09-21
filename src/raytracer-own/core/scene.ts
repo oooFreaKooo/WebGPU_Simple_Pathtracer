@@ -36,8 +36,8 @@ export class Scene {
 
   // scene settings
   private initialize() {
-    this.camera = new Camera([0.01, 2.5, -7]) // camera position
-    this.cameraControls = new Controls(this.canvas, this.camera) // create controls
+    this.camera = new Camera([0.01, 2.5, -7])
+    this.cameraControls = new Controls(this.canvas, this.camera)
   }
 
   // creates objects using the ObjLoader

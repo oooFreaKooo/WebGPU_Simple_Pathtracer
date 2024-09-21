@@ -270,12 +270,14 @@ fn trace(camRay: Ray) -> vec3f {
         }
 
         // Russian roulette
-        let rr_prob = max(throughput.r, max(throughput.g, throughput.b));
-        if rand2D() >= rr_prob || length(throughput) < 0.001 {
-            break;
+        if bounce > 2u {
+            let rr_prob = max(throughput.r, max(throughput.g, throughput.b));
+            let rr_threshold = 0.2;
+            if rand2D() >= rr_prob * rr_threshold || length(throughput) < 0.001 {
+                break;
+            }
+            throughput /= rr_prob;
         }
-
-        throughput /= rr_prob;
     }
     return acc_radiance;
 }
