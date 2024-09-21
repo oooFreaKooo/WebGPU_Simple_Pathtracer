@@ -161,7 +161,7 @@ export function createCornellBox(): ObjectProperties[] {
   const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
   const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
   const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
-  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 1.5 })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 18.0 })
   const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.05, specularChance: 1.0 })
   return [
     // Ground
@@ -198,7 +198,7 @@ export function createCornellBox(): ObjectProperties[] {
     // Back wall
     {
       modelPath: "./src/assets/models/plane.obj",
-      material: mirrorMaterial,
+      material: whiteMaterial,
       position: [0.0, 2.5, 2.5],
       scale: [0.5, 1.0, 0.5],
       rotation: [90.0, 180.0, 0.0],
@@ -206,7 +206,7 @@ export function createCornellBox(): ObjectProperties[] {
     // Front wall
     {
       modelPath: "./src/assets/models/plane.obj",
-      material: mirrorMaterial,
+      material: blueMaterial,
       position: [0.0, 2.5, -2.5],
       scale: [0.5, 1.0, 0.5],
       rotation: [90.0, 0.0, 0.0],

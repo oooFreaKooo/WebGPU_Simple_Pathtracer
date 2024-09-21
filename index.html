@@ -1,197 +1,315 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>WebGPU Projekt</title>
-        <link rel="icon" href="data:;base64,iVBORwOKGO=" />
-        <style>
-        html,
-        body {
-            margin: 0;
-            width: 100%;
-            height: 100%;
-            background: #1a1a1a;
-            color: #c0c0c0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-family: "Courier New", Courier, monospace;
-        }
+<html><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible"
+            content="IE=edge"><meta name="viewport"
+            content="width=device-width, initial-scale=1.0"><title>WebGPU
+            Projekt - Neumorphic Style with Dynamic Canvas</title><link
+            rel="icon" href="data:;base64,iVBORwOKGO="><style>
+    :root {
+        --bg-color: #e0e0e0;
+        --text-color: #333;
+        --highlight-color: #4CAF50;
+        --shadow-light: #ffffff;
+        --shadow-dark: #bebebe;
+    }
+    
+    .dark-mode {
+        --bg-color: #333;
+        --text-color: #e0e0e0;
+        --highlight-color: #4CAF50;
+        --shadow-light: #444;
+        --shadow-dark: #222;
+    }
+    
+    html, body {
+        margin: 0;
+        width: 100vw;
+        height: 100vh;
+        background: var(--bg-color);
+        color: var(--text-color);
+        flex-direction: row;
+        justify-content: flex-start;
+        align-items: center;
+        justify-content: start;
+        font-family: 'Arial', sans-serif;
+        transition: background-color 0.3s, color 0.3s;
+        padding-top: 20px;
+    }
 
-        canvas {
-            max-width: 80%;
-            max-height: 80%;
-            width: auto;
-            height: auto;
-            border: 2px solid #333;
-            margin-top: 3%;
-        }
-
-        .inputs {
-            position: absolute;
-            display: flex;
-            flex-direction: column;
-            display: none;
-            gap: 1em;
-            background: #2a2a2a;
-            padding: 1em;
-            border: 1px solid #333;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            cursor: move;
-            z-index: 1000;
-        }
-        .slider-control, .checkbox-control {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 0.5em;
-        }
-
-        .slider-control label, .checkbox-control label {
-            flex: 1;
-            font-size: 0.8em;
-            color: #fff;
-        }
-
-        .slider-control input[type="range"] {
-            flex: 2;
-        }
-
-        .slider-control span, .checkbox-control input {
-            flex: 1;
-            font-size: 0.8em;
-            color: #fff;
-        }
-
-        .control-group span {
-            font-size: 1em;
-            color: #f7f308;
-            margin-bottom: 0.5em;
-            display: block;
-        }
-
-        .close-btn {
-            position: absolute;
-            top: 5px;
-            right: 10px;
-            background: #ff4d4d;
-            border: none;
-            color: white;
-            padding: 0.2em 0.5em;
-            cursor: pointer;
-            border-radius: 3px;
-        }
-
-        .settings-btn {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background: #2a2a2a;
-            border: 1px solid #333;
-            color: white;
-            padding: 0.5em 1em;
-            cursor: pointer;
-            border-radius: 5px;
-            z-index: 1001;
-        }
-
-        .time-container {
-            display: flex;
-            justify-content: space-between;
-            width: 80%;
-            margin-top: 20px;
-            background: #2a2a2a;
-            padding: 10px;
-            border: 1px solid #333;
-        }
-
-        .time-item {
-            flex: 1;
-            text-align: center;
-            margin: 0 10px;
-        }
-
-        h3 {
-            margin: 0;
-            color: #f5a623;
-            font-size: 1.2em;
-            margin-bottom: 5px;
-        }
-
-        span {
-            font-size: 1.2em;
-        }
-        </style>
-    </head>
+    canvas {
+        max-width: 100%;
+        max-height: 80vh;
+        margin: 20px;
+        width: auto;
+        height: auto;
+        border-radius: 20px;
+        background: var(--bg-color);
+        box-shadow: 20px 20px 60px var(--shadow-dark), -20px -20px 60px var(--shadow-light);
+    }
+    
+    .control-panel {
+        position: fixed;
+        top: 50px;
+        right: 10px;
+        background: var(--bg-color);
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+        transition: transform 0.3s ease-in-out;
+        transform: translateX(calc(100% - 40px));
+        max-height: calc(100vh - 100px);
+        overflow-y: auto;
+        width: 250px;
+    }
+    
+    .control-panel.open {
+        transform: translateX(0);
+    }
+    
+    .control-panel-toggle {
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%) translateX(-100%);
+        background: var(--bg-color);
+        border: none;
+        padding: 10px;
+        cursor: pointer;
+        border-radius: 10px 0 0 10px;
+        box-shadow: -5px 0 10px var(--shadow-dark);
+    }
+    
+    .control-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .control-item label {
+        flex: 1;
+        margin-right: 10px;
+    }
+    
+    .control-item input[type="number"],
+    .control-item select {
+        width: 80px;
+        padding: 5px;
+        border: none;
+        border-radius: 5px;
+        background: var(--bg-color);
+        color: var(--text-color);
+        box-shadow: inset 2px 2px 5px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light);
+    }
+    
+    .control-group h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+        font-size: 1em;
+        color: var(--highlight-color);
+    }
+    
+    .slider-control {
+        margin-bottom: 10px;
+    }
+    
+    .custom-slider {
+        position: relative;
+        height: 20px;
+        background: var(--bg-color);
+        border-radius: 10px;
+        box-shadow: inset 2px 2px 5px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light);
+    }
+    
+    .custom-slider-thumb {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        background: var(--highlight-color);
+        border-radius: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        cursor: pointer;
+        box-shadow: 2px 2px 5px var(--shadow-dark), -2px -2px 5px var(--shadow-light);
+    }
+    
+    .custom-slider-value {
+        position: absolute;
+        top: -25px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--highlight-color);
+        color: white;
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-size: 0.8em;
+    }
+    
+    .controls {
+        width: 180px;
+        margin-top: 20px;
+    }
+    
+    .controls.left, .controls.right {
+        margin: 0;
+    }
+    
+    .checkbox-control {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5em;
+    }
+    
+    .checkbox-control label {
+        flex: 1;
+        font-size: 0.9em;
+        color: var(--text-color);
+    }
+    
+    .time-container {
+        display: flex;
+        justify-content: space-between;
+        width: 90%;
+        margin-top: 10px;
+        margin-left: auto;
+        margin-right: auto;
+        background: var(--bg-color);
+        padding: 10px;
+        border-radius: 20px;
+        box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+    }
+    
+    .time-item {
+        flex: 1;
+        text-align: center;
+        margin: 0 5px;
+    }
+    
+    h3 {
+        margin: 0;
+        color: var(--highlight-color);
+        font-size: 1em;
+        margin-bottom: 5px;
+    }
+    
+    span {
+        font-size: 1em;
+        color: var(--text-color);
+    }
+    
+    .settings-btn {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: var(--bg-color);
+        border: none;
+        color: var(--text-color);
+        padding: 0.6em 1em;
+        cursor: pointer;
+        border-radius: 10px;
+        box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+        z-index: 1001;
+        font-size: 0.9em;
+    }
+    
+    .dark-mode-switch {
+        z-index: 1001;
+    }
+    </style></head>
 
     <body>
         <button class="settings-btn" id="settingsBtn">Settings</button>
 
-        <div class="inputs" id="draggable">
-            <button class="close-btn" id="closeBtn">X</button>
+        <div class="control-panel" id="controlPanel">
+            <button class="control-panel-toggle"
+                id="controlPanelToggle">☰</button>
             <div class="control-group">
-                <span>Scene Properties</span>
-                <div class="slider-control">
-                    <label for="bounces">Bounces</label>
-                    <input id="bounces" type="range" min="1" max="32" step="1"
-                        value="8" />
-                    <span id="bouncesValue">8</span>
+                <h3>Scene Properties</h3>
+                <div class="control-item">
+                    <label for="bounces">Bounces:</label>
+                    <input type="number" id="bounces" min="1" max="32"
+                        value="8">
+                </div>
+                <div class="control-item">
+                    <label for="samples">Samples:</label>
+                    <select id="samples">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="4">4</option>
+                        <option value="8">8</option>
+                        <option value="16">16</option>
+                        <option value="32">32</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label for="jitter">Jitter:</label>
+                    <input type="number" id="jitter" min="0.1" max="10"
+                        step="0.1" value="1.0">
                 </div>
                 <div class="slider-control">
-                    <label for="samples">Samples</label>
-                    <input id="samples" type="range" min="1" max="32" step="1"
-                        value="1" />
-                    <span id="samplesValue">1</span>
+                    <label for="fov">FOV:</label>
+                    <div class="custom-slider" id="fovSlider">
+                        <div class="custom-slider-thumb" id="fovThumb">
+                            <span class="custom-slider-value"
+                                id="fovValue">135</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="control-group">
+                <h3>Camera Settings</h3>
+                <div class="control-item">
+                    <label for="focusDist">Focus Distance:</label>
+                    <input type="number" id="focusDist" min="1" max="50"
+                        step="0.1" value="4.0">
+                </div>
+                <div class="control-item">
+                    <label for="apertureSize">Aperture Size:</label>
+                    <input type="number" id="apertureSize" min="0.001" max="0.5"
+                        step="0.001" value="0.005">
                 </div>
                 <div class="slider-control">
-                    <label for="jitter">Jitter</label>
-                    <input id="jitter" type="range" min="0.1" max="10"
-                        step="0.1" value="1.0" />
-                    <span id="jitterValue">1.0</span>
+                    <label for="vignetteStrength">Vignette Strength:</label>
+                    <div class="custom-slider" id="vignetteStrengthSlider">
+                        <div class="custom-slider-thumb"
+                            id="vignetteStrengthThumb">
+                            <span class="custom-slider-value"
+                                id="vignetteStrengthValue">0.5</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="slider-control">
-                    <label for="fov">FOV</label>
-                    <input id="fov" type="range" min="60" max="220" step="5"
-                        value="135" />
-                    <span id="fovValue">135</span>
-                </div>
-                <div class="slider-control">
-                    <label for="focusDist">Focus Distance</label>
-                    <input id="focusDist" type="range" min="1" max="50"
-                        step="0.1" value="4.0" />
-                    <span id="focusDistValue">4.0</span>
-                </div>
-                <div class="slider-control">
-                    <label for="apertureSize">Aperture Size</label>
-                    <input id="apertureSize" type="range" min="0.001" max="0.5"
-                        step="0.001" value="0.005" />
-                    <span id="apertureSizeValue">0.005</span>
-                </div>
-                <div class="slider-control">
-                    <label for="vignetteStrength">Vignette Strength</label>
-                    <input id="vignetteStrength" type="range" min="0.0"
-                        max="1.0" step="0.1" value="0.5" />
-                    <span id="vignetteStrengthValue">0.5</span>
-                </div>
-                <div class="slider-control">
-                    <label for="vignetteRadius">Vignette Radius</label>
-                    <input id="vignetteRadius" type="range" min="0.1" max="2.0"
-                        step="0.1" value="0.75" />
-                    <span id="vignetteRadiusValue">0.75</span>
+                    <label for="vignetteRadius">Vignette Radius:</label>
+                    <div class="custom-slider" id="vignetteRadiusSlider">
+                        <div class="custom-slider-thumb"
+                            id="vignetteRadiusThumb">
+                            <span class="custom-slider-value"
+                                id="vignetteRadiusValue">0.75</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="checkbox-control">
                     <label for="backfaceCulling">Backface Culling</label>
-                    <input id="backfaceCulling" type="checkbox" checked />
+                    <input id="backfaceCulling" type="checkbox" checked>
                 </div>
                 <div class="checkbox-control">
                     <label for="skyTexture">Sky Texture</label>
-                    <input id="skyTexture" type="checkbox" />
+                    <input id="skyTexture" type="checkbox">
+
+                </div>
+
+                <div class="checkbox-control">
+                    <label for="darkModeToggle">Theme</label>
+                    <label id="darkModeLabel">
+                        <input type="checkbox" id="darkModeToggle">
+                    </label>
+
                 </div>
             </div>
+
+        </div>
+
+        <div class="container">
+            <div id="canvasContainer"></div>
         </div>
 
         <div class="time-container">
@@ -211,61 +329,79 @@
         <script src="./dist/main.bundle.js"></script>
         <script>
             const settingsBtn = document.getElementById('settingsBtn');
-            const closeBtn = document.getElementById('closeBtn');
-            const draggable = document.getElementById('draggable');
+            const controlPanel = document.getElementById('controlPanel');
+            const darkModeToggle = document.getElementById('darkModeToggle');
     
             settingsBtn.addEventListener('click', () => {
-                draggable.style.display = 'flex';
+                controlPanel.classList.toggle('open');
             });
     
-            closeBtn.addEventListener('click', () => {
-                draggable.style.display = 'none';
+            darkModeToggle.addEventListener('change', () => {
+                document.body.classList.toggle('dark-mode');
             });
     
-            let isDragging = false;
-            let startX, startY, initialX, initialY;
+            document.addEventListener('DOMContentLoaded', () => {
+                function createCustomSlider(containerId, min, max, step, initialValue, updateCallback) {
+                    const container = document.getElementById(containerId);
+                    const thumb = container.querySelector('.custom-slider-thumb');
+                    const valueDisplay = container.querySelector('.custom-slider-value');
     
-            draggable.addEventListener('mousedown', (e) => {
-                if (e.target === closeBtn) return;
-                isDragging = true;
-                startX = e.clientX;
-                startY = e.clientY;
-                initialX = draggable.offsetLeft;
-                initialY = draggable.offsetTop;
-                draggable.style.cursor = 'grabbing';
-            });
+                    function updateSlider(clientX) {
+                        const rect = container.getBoundingClientRect();
+                        let x = (clientX - rect.left) / rect.width;
+                        x = Math.max(0, Math.min(x, 1));
+                        const value = min + x * (max - min);
+                        const snappedValue = Math.round(value / step) * step;
     
-            document.addEventListener('mousemove', (e) => {
-                if (isDragging) {
-                    const dx = e.clientX - startX;
-                    const dy = e.clientY - startY;
-                    draggable.style.left = initialX + dx + 'px';
-                    draggable.style.top = initialY + dy + 'px';
+                        thumb.style.left = `${x * 100}%`;
+                        valueDisplay.textContent = snappedValue.toFixed(step < 1 ? 2 : 0);
+                        updateCallback(snappedValue);
+                    }
+    
+                    container.addEventListener('mousedown', function(e) {
+                        updateSlider(e.clientX);
+    
+                        function mouseMoveHandler(e) {
+                            updateSlider(e.clientX);
+                        }
+    
+                        function mouseUpHandler() {
+                            document.removeEventListener('mousemove', mouseMoveHandler);
+                            document.removeEventListener('mouseup', mouseUpHandler);
+                        }
+    
+                        document.addEventListener('mousemove', mouseMoveHandler);
+                        document.addEventListener('mouseup', mouseUpHandler);
+                    });
+    
+                    updateSlider(container.getBoundingClientRect().left + (initialValue - min) / (max - min) * container.offsetWidth);
                 }
+    
+                createCustomSlider('fovSlider', 60, 220, 5, 135, (value) => {
+                    console.log('FOV:', value);
+                });
+                createCustomSlider('vignetteStrengthSlider', 0.0, 1.0, 0.1, 0.5, (value) => {
+                    console.log('Vignette Strength:', value);
+                });
+                createCustomSlider('vignetteRadiusSlider', 0.1, 2.0, 0.1, 0.75, (value) => {
+                    console.log('Vignette Radius:', value);
+                });
+    
+                document.getElementById('bounces').addEventListener('change', (e) => {
+                    console.log('Bounces:', e.target.value);
+                });
+                document.getElementById('samples').addEventListener('change', (e) => {
+                    console.log('Samples:', e.target.value);
+                });
+                document.getElementById('jitter').addEventListener('change', (e) => {
+                    console.log('Jitter:', e.target.value);
+                });
+                document.getElementById('focusDist').addEventListener('change', (e) => {
+                    console.log('Focus Distance:', e.target.value);
+                });
+                document.getElementById('apertureSize').addEventListener('change', (e) => {
+                    console.log('Aperture Size:', e.target.value);
+                });
             });
-    
-            document.addEventListener('mouseup', () => {
-                isDragging = false;
-                draggable.style.cursor = 'move';
-            });
-    
-            // Update range input values display
-            const bounces = document.getElementById('bounces');
-            const bouncesValue = document.getElementById('bouncesValue');
-            bounces.addEventListener('input', () => bouncesValue.textContent = bounces.value);
-    
-            const samples = document.getElementById('samples');
-            const samplesValue = document.getElementById('samplesValue');
-            samples.addEventListener('input', () => samplesValue.textContent = samples.value);
-    
-            const fov = document.getElementById('fov');
-            const fovValue = document.getElementById('fovValue');
-            fov.addEventListener('input', () => fovValue.textContent = fov.value);
-    
-            const jitter = document.getElementById('jitter');
-            const jitterValue = document.getElementById('jitterValue');
-            jitter.addEventListener('input', () => jitterValue.textContent = jitter.value);
         </script>
-    </body>
-
-</html>
+    </body></html>

@@ -142,7 +142,7 @@ export class Application {
     const scene14 = createScene14()
     const scene15 = createScene15()
     // Create objects in the scene
-    await this.scene.createObjects(scene12)
+    await this.scene.createObjects(cornelbox)
 
     // Build the BVH after creating all the objects
     eventEmitter.on("BVH", async () => await this.scene.prepareBVH())

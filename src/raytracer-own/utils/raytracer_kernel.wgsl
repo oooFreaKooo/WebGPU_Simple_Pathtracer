@@ -9,12 +9,6 @@ struct BVH {
     nodes: array<Node>,
 }
 
-
-struct Ray {
-    direction: vec3<f32>,
-    origin: vec3<f32>,
-}
-
 struct CameraData {
     pos: vec3<f32>,
     forward: vec3<f32>,
@@ -35,7 +29,6 @@ struct Material {
     ior: f32,
     inverseModel: mat4x4<f32>,
 }
-
 
 struct Triangle {
     corner_a: vec3f,
@@ -97,19 +90,10 @@ struct RayType {
     regularBounces: u32,
 };
 
-struct ScatterRecord {
-	pdf: f32,
-	skip_pdf: bool,
-	skip_pdf_ray: Ray
+struct Ray {
+    direction: vec3<f32>,
+    origin: vec3<f32>,
 }
-
-struct MLTState {
-    path: Ray,
-    throughput: vec3f,
-    radiance: vec3f,
-    weight: f32,
-    contribution: vec3f,
-};
 
 // Group 0: Uniforms and Settings
 @group(0) @binding(0) var<uniform> uniforms : Uniforms;
@@ -138,10 +122,7 @@ const INV_PI: f32 = 0.31830988618;
 
 var<private> pixelCoords : vec2f;
 var<private> randState : u32 = 0u;
-var<private> scatterRec : ScatterRecord;
 
-var<workgroup> current_state: MLTState;
-var<workgroup> proposed_state: MLTState;
 var<workgroup> accumulated_radiance: vec3f;
 var<workgroup> rng_seed: u32;
 override WORKGROUP_SIZE_X: u32;
@@ -191,9 +172,6 @@ fn main(
     var myRay: Ray;
     sharedAccumulatedColor[local_invocation_index] = vec3<f32>(0.0);
 
-    // Call the metropolis_light_transport function
-    metropolis_light_transport(local_invocation_index, pixelCoords);
-
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
             // Generate stratified samples
@@ -231,60 +209,6 @@ fn main(
     framebuffer[idx] = vec4<f32>(acc_radiance, 1.0);
 }
 
-fn metropolis_light_transport(local_invocation_index: u32, pixelCoords: vec2<f32>) {
-
-    var acceptProb: f32;
-
-    // Initialize MLT state
-    current_state.path = generate_initial_path(pixelCoords);
-    current_state.throughput = vec3<f32>(1.0, 1.0, 1.0);
-    current_state.radiance = vec3<f32>(0.0, 0.0, 0.0);
-    current_state.weight = 1.0;
-    current_state.contribution = vec3<f32>(0.0, 0.0, 0.0);
-    accumulated_radiance = vec3<f32>(0.0, 0.0, 0.0);
-
-    for (var i: u32 = 0; i < 6; i = i + 1u) {
-
-        proposed_state = perturb(current_state, rng_seed);
-
-        acceptProb = min(1.0, luminance(proposed_state.contribution) / luminance(current_state.contribution));
-
-        if rand2D() < acceptProb {
-            current_state = proposed_state;
-            current_state.weight /= max(acceptProb, 1e-5); // Avoid division by zero
-        } else {
-            current_state.weight /= max((1.0 - acceptProb), 1e-5); // Avoid division by zero
-        }
-
-        accumulated_radiance += current_state.contribution * current_state.weight;
-    }
-
-    sharedAccumulatedColor[local_invocation_index] = accumulated_radiance / 6.0;
-}
-
-
-fn perturb(state: MLTState, seed: u32) -> MLTState {
-    var newState: MLTState = state;
-    // Apply small perturbation to the state
-    newState.path.direction += (vec3<f32>(xor_shift(seed), xor_shift(seed), xor_shift(seed)) - vec3<f32>(0.5)) * 0.1;
-    return newState;
-}
-
-
-fn luminance(color: vec3<f32>) -> f32 {
-    return dot(color, vec3<f32>(0.2126, 0.7152, 0.0722));
-}
-
-fn generate_initial_path(pixelCoords: vec2<f32>) -> Ray {
-    var ray: Ray;
-    // Calculate initial ray direction
-    ray.origin = vec3<f32>(pixelCoords, 0.0);
-    ray.direction = vec3<f32>(0.0, 0.0, 1.0);
-    return ray;
-}
-
-
-//https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-cam/
 fn trace(camRay: Ray) -> vec3f {
     var ray = camRay;
     var acc_radiance: vec3f = vec3(0.0, 0.0, 0.0);
@@ -301,22 +225,23 @@ fn trace(camRay: Ray) -> vec3f {
             acc_radiance += throughput * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, skyTextureEnabled);
             break;
         }
-
+        var M = hit.material;
         var originalEnergy = throughput;
-
+        M = ensure_energy_conservation(M);
+        
         // Absorption if inside the object
         if hit.from_front {
-            throughput *= exp(-hit.material.refrColor * hit.dist);
+            throughput *= exp(-M.refrColor * hit.dist);
         }
 
-        let n1 = select(1.0, hit.material.ior, !hit.from_front);
-        let n2 = select(1.0, hit.material.ior, hit.from_front);
+        let n1 = select(1.0, M.ior, !hit.from_front);
+        let n2 = select(1.0, M.ior, hit.from_front);
 
         // Fresnel effect
-        var specChance = hit.material.specChance;
-        var refrChance = hit.material.refrChance;
+        var specChance = M.specChance;
+        var refrChance = M.refrChance;
         if specChance > 0.1 {
-            refrChance *= (1.0 - specChance) / (1.0 - hit.material.specChance);
+            refrChance *= (1.0 - specChance) / (1.0 - M.specChance);
         }
 
         // Ray type determination
@@ -335,13 +260,13 @@ fn trace(camRay: Ray) -> vec3f {
         // New ray direction
         var specularDir = calculate_specular_dir(ray, hit);
         var refractDir = calculate_refract_dir(ray, hit, n1, n2);
-        ray.direction = mix(mix(uniform_sampling_hemisphere(hit.normal), specularDir, rayType.isSpecular), refractDir, rayType.isRefractive);
+        ray.direction = mix(mix(cosine_weighted_sampling_hemisphere(hit.normal), specularDir, rayType.isSpecular), refractDir, rayType.isRefractive);
 
-        acc_radiance += throughput * hit.material.emissionColor * hit.material.emissionStrength * vec3(3.0, 3.0, 3.0);
+        acc_radiance += throughput * M.emissionColor * M.emissionStrength;
 
         // Update throughput
         if rayType.isRefractive == 0.0 {
-            throughput = originalEnergy * (hit.material.albedo + hit.material.specColor * rayType.isSpecular);
+            throughput = originalEnergy * (M.albedo + M.specColor * rayType.isSpecular);
         }
 
         // Russian roulette
@@ -364,17 +289,8 @@ fn update_ray_origin(ray: Ray, hit: HitPoint, isRefractive: f32) -> vec3f {
     );
 }
 
-fn calculate_specular_dir(ray: Ray, hit: HitPoint) -> vec3f {
-    let alpha = hit.material.specRoughness * hit.material.specRoughness;
-    let specularDir = normalize(reflect(ray.direction, hit.normal));
-    let halfVector = normalize(ray.direction + specularDir);
-    let NdotH = max(dot(hit.normal, halfVector), 0.0);
-    let D = ggxDistribution(alpha, NdotH);
-    return normalize(mix(specularDir, uniform_sampling_hemisphere(hit.normal), hit.material.specRoughness * hit.material.specRoughness));
-}
-
 fn calculate_refract_dir(ray: Ray, hit: HitPoint, n1: f32, n2: f32) -> vec3f {
-    return normalize(mix(refract(ray.direction, hit.normal, n1 / n2), uniform_sampling_hemisphere(-hit.normal), hit.material.refrRoughness * hit.material.refrRoughness));
+    return normalize(mix(refract(ray.direction, hit.normal, n1 / n2), cosine_weighted_sampling_hemisphere(-hit.normal), hit.material.refrRoughness * hit.material.refrRoughness));
 }
 
 fn determine_ray_type(specChance: f32, refrChance: f32, randVal: f32) -> RayType {
@@ -394,12 +310,76 @@ fn determine_ray_type(specChance: f32, refrChance: f32, randVal: f32) -> RayType
     return result;
 }
 
+fn calculate_specular_dir(ray: Ray, hit: HitPoint) -> vec3<f32> {
+    let V = -ray.direction;
+    let H = sample_ggx_importance(hit.material.specRoughness, hit.normal);
+    let L = reflect(-V, H);
 
-fn ggxDistribution(alpha: f32, NdotH: f32) -> f32 {
-    let alpha2 = alpha * alpha;
-    let NdotH2 = NdotH * NdotH;
-    let denom = NdotH2 * (alpha2 - 1.0) + 1.0;
-    return alpha2 * INV_PI / (denom * denom);
+    if dot(L, hit.normal) <= 0.0 {
+        return vec3<f32>(0.0, 0.0, 0.0);
+    }
+
+    return L;
+}
+
+fn ensure_energy_conservation(material: Material) -> Material {
+    var M: Material = material;
+    let sum = M.albedo + M.specColor + M.refrColor;
+    let maxSum = max(sum.r, max(sum.g, sum.b));
+    if maxSum > 1.0 {
+        let factor = 1.0 / maxSum;
+        M.albedo *= factor;
+        M.specColor *= factor;
+        M.refrColor *= factor;
+    }
+    return M;
+}
+
+
+
+fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
+    let alpha = roughness * roughness;
+    let u1 = rand2D();
+    let u2 = rand2D();
+
+    let phi = TWO_PI * u1;
+    let cosTheta = sqrt((1.0 - u2) / (1.0 + (alpha * alpha - 1.0) * u2));
+    let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+
+    // Importance sampling the hemisphere in the direction of the normal
+    let H = vec3<f32>(
+        sinTheta * cos(phi),
+        sinTheta * sin(phi),
+        cosTheta
+    );
+
+    // Transform the sampled vector to the surface's local coordinate system
+    var up: vec3<f32> = select(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(1.0, 0.0, 0.0), abs(N.z) >= 0.999);
+    let T = normalize(cross(up, N));
+    let B = cross(N, T);
+
+    return normalize(T * H.x + B * H.y + N * H.z);
+}
+
+
+
+fn cosine_weighted_sampling_hemisphere(normal: vec3f) -> vec3f {
+    let r1 = rand2D();
+    let r2 = rand2D();
+    let r = sqrt(r1);
+    let theta = TWO_PI * r2;
+
+    let x = r * cos(theta);
+    let y = r * sin(theta);
+    let z = sqrt(1.0 - r1);
+
+    // Build an orthonormal basis (u, v, w)
+    var w = normalize(normal);
+    var a = select(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), abs(w.y) > 0.99);
+    var u = normalize(cross(a, w));
+    var v = cross(w, u);
+
+    return normalize(u * x + v * y + w * z);
 }
 
 fn xor_shift(state: u32) -> f32 {
@@ -416,22 +396,7 @@ fn rand2D() -> f32 {
 }
 
 
-fn uniform_sampling_hemisphere(normal: vec3f) -> vec3f {
-    let on_unit_sphere = uniform_random_in_unit_sphere();
-    let sign_dot = select(1.0, 0.0, dot(on_unit_sphere, normal) > 0.0);
-    return normalize(mix(on_unit_sphere, -on_unit_sphere, sign_dot));
-}
 
-fn uniform_random_in_unit_sphere() -> vec3f {
-    let phi = rand2D() * TWO_PI;
-    let theta = acos(2.0 * rand2D() - 1.0);
-
-    let x = sin(theta) * cos(phi);
-    let y = sin(theta) * sin(phi);
-    let z = cos(theta);
-
-    return normalize(vec3f(x, y, z));
-}
 
 fn traverse(ray: Ray) -> HitPoint {
     var surfacePoint: HitPoint;
