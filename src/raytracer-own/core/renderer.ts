@@ -472,9 +472,9 @@ export class Renderer {
       materialData[materialDataSize * i + 18] = 0.0
       materialData[materialDataSize * i + 19] = 0.0
 
-      // Adding inverseModel data to buffer
+      // Adding invModelTranspose data to buffer
       for (let j = 0; j < 16; j++) {
-        materialData[materialDataSize * i + 20 + j] = mesh.inverseModel[j]
+        materialData[materialDataSize * i + 20 + j] = mesh.invModelTranspose[j]
       }
     }
 

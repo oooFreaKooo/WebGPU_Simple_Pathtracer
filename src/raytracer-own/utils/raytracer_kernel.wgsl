@@ -27,7 +27,7 @@ struct Material {
     refrChance: f32,
     refrRoughness: f32,
     ior: f32,
-    inverseModel: mat4x4<f32>,
+    invModelTranspose: mat4x4<f32>,
 }
 
 struct Triangle {
@@ -282,7 +282,6 @@ fn trace(camRay: Ray) -> vec3f {
     return acc_radiance;
 }
 
-
 fn update_ray_origin(ray: Ray, hit: HitPoint, isRefractive: f32) -> vec3f {
     return select(
         (ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON,
@@ -337,8 +336,6 @@ fn ensure_energy_conservation(material: Material) -> Material {
     return M;
 }
 
-
-
 fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
     let alpha = roughness * roughness;
     let u1 = rand2D();
@@ -362,7 +359,6 @@ fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
 
     return normalize(T * H.x + B * H.y + N * H.z);
 }
-
 
 
 fn cosine_weighted_sampling_hemisphere(normal: vec3f) -> vec3f {
@@ -397,77 +393,73 @@ fn rand2D() -> f32 {
     return f32((word >> 22u) ^ word) / 4294967295;
 }
 
-
-
-
 fn traverse(ray: Ray) -> HitPoint {
     var surfacePoint: HitPoint;
     surfacePoint.hit = false;
     var nearestHit: f32 = 9999.0;
+    let inverseDir: vec3<f32> = vec3<f32>(1.0) / ray.direction;
 
-    var currentNode: Node = tree.nodes[0];
-    var stack: array<Node, 10>; // Reduced stack size
+    // Use a fixed-size stack with a maximum depth
+    var stack: array<u32, 64>;
     var stackLocation: u32 = 0u;
 
-    loop {
+    // Start with the root node index
+    stack[stackLocation] = 0u;
+    stackLocation += 1u;
+
+    while stackLocation > 0u {
+        // Pop the last node index from the stack
+        stackLocation -= 1u;
+        let nodeIdx: u32 = stack[stackLocation];
+        let currentNode: Node = tree.nodes[nodeIdx];
+
         let triCount: u32 = u32(currentNode.triCount);
         let contents: u32 = u32(currentNode.leftFirst);
 
         if triCount == 0u {
-            let child1: Node = tree.nodes[contents];
-            let child2: Node = tree.nodes[contents + 1u];
+            // Internal node: retrieve children indices
+            let child1Idx: u32 = contents;
+            let child2Idx: u32 = contents + 1u;
 
-            let distance1: f32 = hit_aabb(ray, child1);
-            let distance2: f32 = hit_aabb(ray, child2);
+            // Inline hit_aabb for both children
+            let distance1: f32 = hit_aabb_inline(ray, tree.nodes[child1Idx], inverseDir);
+            let distance2: f32 = hit_aabb_inline(ray, tree.nodes[child2Idx], inverseDir);
 
+            // Determine traversal order based on distance
             if distance1 < distance2 {
+                // Push farther child first
+                if distance2 < nearestHit {
+                    stack[stackLocation] = child2Idx;
+                    stackLocation += 1u;
+                }
                 if distance1 < nearestHit {
-                    if distance2 < nearestHit {
-                        stack[stackLocation] = child2;
-                        stackLocation += 1u;
-                    }
-                    currentNode = child1;
-                } else {
-                    if stackLocation == 0u {
-                        break;
-                    } else {
-                        stackLocation -= 1u;
-                        currentNode = stack[stackLocation];
-                    }
+                    stack[stackLocation] = child1Idx;
+                    stackLocation += 1u;
                 }
             } else {
+                // Push farther child first
+                if distance1 < nearestHit {
+                    stack[stackLocation] = child1Idx;
+                    stackLocation += 1u;
+                }
                 if distance2 < nearestHit {
-                    if distance1 < nearestHit {
-                        stack[stackLocation] = child1;
-                        stackLocation += 1u;
-                    }
-                    currentNode = child2;
-                } else {
-                    if stackLocation == 0u {
-                        break;
-                    } else {
-                        stackLocation -= 1u;
-                        currentNode = stack[stackLocation];
-                    }
+                    stack[stackLocation] = child2Idx;
+                    stackLocation += 1u;
                 }
             }
         } else {
+            // Leaf node: process triangles
             let end: u32 = contents + triCount;
-            for (var i: u32 = contents; i < end; i++) {
+
+            // Process triangles in a SIMD-friendly manner if possible
+            for (var i: u32 = contents; i < end; i += 1u) {
                 let triangle = objects.triangles[u32(triIdx.idx[i])];
                 let newHitPoint: HitPoint = hit_triangle(ray, triangle, 0.0001, nearestHit, surfacePoint);
 
-                if newHitPoint.hit {
+                if newHitPoint.hit && newHitPoint.dist < nearestHit {
                     nearestHit = newHitPoint.dist;
                     surfacePoint = newHitPoint;
                 }
-            }
-
-            if stackLocation == 0u {
-                break;
-            } else {
-                stackLocation -= 1u;
-                currentNode = stack[stackLocation];
             }
         }
     }
@@ -485,69 +477,79 @@ fn hit_triangle(
 ) -> HitPoint {
     var surfacePoint: HitPoint;
     surfacePoint.hit = false;
-    surfacePoint.material = oldHitPoint.material;
 
-    let edge_1: vec3<f32> = tri.corner_b - tri.corner_a;
-    let edge_2: vec3<f32> = tri.corner_c - tri.corner_a;
+    // Precompute edges
+    let edge1 = tri.corner_b - tri.corner_a;
+    let edge2 = tri.corner_c - tri.corner_a;
 
-    let h: vec3<f32> = cross(ray.direction, edge_2);
-    let a: f32 = dot(edge_1, h);
+    // Compute h and a
+    let h = cross(ray.direction, edge2);
+    let a = dot(edge1, h);
 
-    if (a < EPSILON) && setting.BACKFACE_CULLING == 1.0 {
+    // Early rejection based on backface culling and parallelism
+    if (a < EPSILON && setting.BACKFACE_CULLING == 1.0) || abs(a) < EPSILON {
         return surfacePoint;
     }
 
-    let f: f32 = 1.0 / a;
-    let s: vec3<f32> = ray.origin - tri.corner_a;
-    let u: f32 = f * dot(s, h);
+    let f = 1.0 / a;
+    let s = ray.origin - tri.corner_a;
+    let u = f * dot(s, h);
 
+    // Early rejection based on u
     if u < 0.0 || u > 1.0 {
         return surfacePoint;
     }
 
-    let q: vec3<f32> = cross(s, edge_1);
-    let v: f32 = f * dot(ray.direction, q);
+    let q = cross(s, edge1);
+    let v = f * dot(ray.direction, q);
 
-    if v < 0.0 || u + v > 1.0 {
+    // Early rejection based on v and u + v
+    if v < 0.0 || (u + v) > 1.0 {
         return surfacePoint;
     }
 
-    let dist: f32 = f * dot(edge_2, q);
+    let dist = f * dot(edge2, q);
 
+    // Early rejection based on distance
     if dist < tMin || dist > tMax {
         return surfacePoint;
     }
 
-    // Normalize normal calculation
-    let normal = normalize(tri.normal_b * u + tri.normal_c * v + tri.normal_a * (1.0 - u - v));
-    surfacePoint.normal = normalize((transpose(mesh.materials[u32(tri.meshID)].inverseModel) * vec4(normal, 0.0)).xyz);
+    // At this point, the intersection is valid
+    // Fetch material and inverse model transpose
+    let meshMaterial = mesh.materials[u32(tri.meshID)];
 
-    surfacePoint.material = mesh.materials[u32(tri.meshID)];
+    // Interpolate and transform normal without double normalization
+    let rawInterpolatedNormal = tri.normal_a * (1.0 - u - v) + tri.normal_b * u + tri.normal_c * v;
+    let transformedNormalUnnormalized = (meshMaterial.invModelTranspose * vec4<f32>(rawInterpolatedNormal, 0.0)).xyz;
+    let transformedNormal = normalize(transformedNormalUnnormalized);
+
+    // Determine front face using stored dot product
+    let dotProduct = dot(ray.direction, transformedNormal);
+    let frontFace = dotProduct < 0.0;
+    let finalNormal = select(transformedNormal, -transformedNormal, !frontFace);
+
+    // Populate hit information
+    surfacePoint.hit = true;
+    surfacePoint.material = meshMaterial;
     surfacePoint.dist = dist;
     surfacePoint.position = ray.origin + ray.direction * dist;
-    surfacePoint.hit = true;
-
-    // Determine if the ray hits the front face
-    let frontFace = dot(ray.direction, surfacePoint.normal) < 0.0;
+    surfacePoint.normal = finalNormal;
     surfacePoint.from_front = frontFace;
-    if !frontFace {
-        surfacePoint.normal = -surfacePoint.normal; // invert the normal for back face
-    }
+
     return surfacePoint;
 }
 
-fn hit_aabb(ray: Ray, node: Node) -> f32 {
-    var inverseDir: vec3<f32> = vec3(1.0) / ray.direction;
-    var t1: vec3<f32> = (node.aabbMin - ray.origin) * inverseDir;
-    var t2: vec3<f32> = (node.aabbMax - ray.origin) * inverseDir;
-    var tMin: vec3<f32> = min(t1, t2);
-    var tMax: vec3<f32> = max(t1, t2);
-    var t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
-    var t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
+// Inlined version of hit_aabb optimized for performance
+fn hit_aabb_inline(ray: Ray, node: Node, inverseDir: vec3<f32>) -> f32 {
+    let t1: vec3<f32> = (node.aabbMin - ray.origin) * inverseDir;
+    let t2: vec3<f32> = (node.aabbMax - ray.origin) * inverseDir;
+    let tMin: vec3<f32> = min(t1, t2);
+    let tMax: vec3<f32> = max(t1, t2);
+    let t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
+    let t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
-    if t_min > t_max || t_max < 0.0 {
-        return 99999.0;
-    } else {
-        return t_min;
-    }
+    let condition: bool = (t_min > t_max) || (t_max < 0.0);
+    return select(t_min, 99999.0, condition);
 }
+

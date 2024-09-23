@@ -18,6 +18,7 @@ export class ObjLoader {
   private vn: vec3[] = []
   private vt: vec2[] = []
   inverseModel: mat4 = mat4.create()
+  invModelTranspose: mat4 = mat4.create()
   material: Material
   triangles: Triangle[] = []
 
@@ -38,6 +39,7 @@ export class ObjLoader {
     mat4.rotateX(this.model, this.model, Deg2Rad(this.rotation[0]))
     mat4.scale(this.model, this.model, this.scale)
     mat4.invert(this.inverseModel, this.model)
+    mat4.transpose(this.invModelTranspose, this.inverseModel);
   }
 
   async initialize(url: string) {
