@@ -1,12 +1,36 @@
-struct Node {
+struct BVHInstance {
+    boundsMin: vec3<f32>,
+    padding0: f32,
+    boundsMax: vec3<f32>,
+    padding1: f32,
+    invTransform: mat4x4<f32>,
+    // Add other necessary fields like BLAS index or material ID
+}
+
+struct BVHInstances {
+    instance: array<BVHInstance>,
+}
+
+struct TLAS {
+    nodes: array<TLASNode>,
+}
+
+struct TLASNode {
+    aabbMin: vec3<f32>,
+    aabbMax: vec3<f32>,
+    leftFirst: f32,
+    blasIdx: f32,
+}
+
+struct BLAS {
+    nodes: array<BLASNode>,
+}
+
+struct BLASNode {
     aabbMin: vec3<f32>,
     leftFirst: f32,
     aabbMax: vec3<f32>,
     triCount: f32,
-}
-
-struct BVH {
-    nodes: array<Node>,
 }
 
 struct CameraData {
@@ -106,9 +130,10 @@ struct Ray {
 
 // Group 2: Object and BVH Data
 @group(2) @binding(0) var<storage, read> objects : ObjectData;
-@group(2) @binding(1) var<storage, read> tree : BVH;
+@group(2) @binding(1) var<storage, read> blasTree : BLAS;
 @group(2) @binding(2) var<storage, read> triIdx : ObjectIndices;
 @group(2) @binding(3) var<storage, read> mesh : MeshData;
+@group(2) @binding(4) var<storage, read> tlasTree : TLAS;
 
 // Group 3: Textures and Samplers
 @group(3) @binding(0) var skyTexture : texture_cube<f32>;
@@ -119,6 +144,9 @@ const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
 const INV_PI: f32 = 0.31830988618;
+const TLAS_STACK_SIZE: u32 = 64u;
+const BLAS_STACK_SIZE: u32 = 32u;
+const INF: f32 = 1e20;
 
 var<private> pixelCoords : vec2f;
 var<private> randState : u32 = 0u;
@@ -219,7 +247,7 @@ fn trace(camRay: Ray) -> vec3f {
     let skyTextureEnabled = setting.SKY_TEXTURE == 1.0;
 
     for (var bounce: u32 = 0u; bounce < maxBounces; bounce++) {
-        let hit = traverse(ray);
+        let hit = traverse_tlas(ray);
 
         if !hit.hit {
             acc_radiance += throughput * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, skyTextureEnabled);
@@ -282,7 +310,6 @@ fn trace(camRay: Ray) -> vec3f {
     return acc_radiance;
 }
 
-
 fn update_ray_origin(ray: Ray, hit: HitPoint, isRefractive: f32) -> vec3f {
     return select(
         (ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON,
@@ -337,8 +364,6 @@ fn ensure_energy_conservation(material: Material) -> Material {
     return M;
 }
 
-
-
 fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
     let alpha = roughness * roughness;
     let u1 = rand2D();
@@ -362,8 +387,6 @@ fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
 
     return normalize(T * H.x + B * H.y + N * H.z);
 }
-
-
 
 fn cosine_weighted_sampling_hemisphere(normal: vec3f) -> vec3f {
     let r1 = rand2D();
@@ -397,83 +420,146 @@ fn rand2D() -> f32 {
     return f32((word >> 22u) ^ word) / 4294967295;
 }
 
-
-
-
-fn traverse(ray: Ray) -> HitPoint {
+// Function to traverse the TLAS and BLAS to find the nearest hit
+fn traverse_tlas(ray: Ray) -> HitPoint {
     var surfacePoint: HitPoint;
     surfacePoint.hit = false;
-    var nearestHit: f32 = 9999.0;
+    surfacePoint.dist = INF;
 
-    var currentNode: Node = tree.nodes[0];
-    var stack: array<Node, 10>; // Reduced stack size
+    var stack: array<u32, TLAS_STACK_SIZE>;
     var stackLocation: u32 = 0u;
 
-    loop {
-        let triCount: u32 = u32(currentNode.triCount);
-        let contents: u32 = u32(currentNode.leftFirst);
+    // Start with the root TLAS node (assumed to be at index 0)
+    stack[stackLocation] = 0u;
+    stackLocation += 1u;
 
-        if triCount == 0u {
-            let child1: Node = tree.nodes[contents];
-            let child2: Node = tree.nodes[contents + 1u];
+    while stackLocation > 0u {
+        stackLocation -= 1u;
+        let currentTLASNodeIdx: u32 = stack[stackLocation];
+        let currentTLASNode: TLASNode = tlasTree.nodes[currentTLASNodeIdx];
 
-            let distance1: f32 = hit_aabb(ray, child1);
-            let distance2: f32 = hit_aabb(ray, child2);
+        let t = hit_aabb(ray, currentTLASNode.aabbMin, currentTLASNode.aabbMax);
+        if t > surfacePoint.dist {
+            continue;
+        }
 
-            if distance1 < distance2 {
-                if distance1 < nearestHit {
-                    if distance2 < nearestHit {
-                        stack[stackLocation] = child2;
-                        stackLocation += 1u;
-                    }
-                    currentNode = child1;
-                } else {
-                    if stackLocation == 0u {
-                        break;
-                    } else {
-                        stackLocation -= 1u;
-                        currentNode = stack[stackLocation];
-                    }
-                }
-            } else {
-                if distance2 < nearestHit {
-                    if distance1 < nearestHit {
-                        stack[stackLocation] = child1;
-                        stackLocation += 1u;
-                    }
-                    currentNode = child2;
-                } else {
-                    if stackLocation == 0u {
-                        break;
-                    } else {
-                        stackLocation -= 1u;
-                        currentNode = stack[stackLocation];
-                    }
-                }
-            }
+        // Determine if the node is a leaf or internal
+        let blasIdx_f32: f32 = currentTLASNode.blasIdx;
+        let isLeaf: bool = (blasIdx_f32 >= 0.0);
+
+        if isLeaf {
+            let blasIdx: u32 = u32(blasIdx_f32);
+            traverse_blas(ray, blasIdx, surfacePoint.dist, surfacePoint);
         } else {
-            let end: u32 = contents + triCount;
-            for (var i: u32 = contents; i < end; i++) {
-                let triangle = objects.triangles[u32(triIdx.idx[i])];
-                let newHitPoint: HitPoint = hit_triangle(ray, triangle, 0.0001, nearestHit, surfacePoint);
+            // Internal node: unpack children from leftFirst
+            let packed: u32 = as_u32(currentTLASNode.leftFirst);
+            let childA: u32 = packed & 0xFFFFu;
+            let childB: u32 = (packed >> 16u) & 0xFFFFu;
 
-                if newHitPoint.hit {
-                    nearestHit = newHitPoint.dist;
-                    surfacePoint = newHitPoint;
+            // Test intersection with children
+            let childANode: TLASNode = tlasTree.nodes[childA];
+            let childBNode: TLASNode = tlasTree.nodes[childB];
+
+            let tA: f32 = hit_aabb(ray, childANode.aabbMin, childANode.aabbMax);
+            let tB: f32 = hit_aabb(ray, childBNode.aabbMin, childBNode.aabbMax);
+
+            // Push closer child first
+            if tA < tB {
+                if tB < surfacePoint.dist {
+                    stack[stackLocation] = childB;
+                    stackLocation += 1u;
                 }
-            }
-
-            if stackLocation == 0u {
-                break;
+                if tA < surfacePoint.dist {
+                    stack[stackLocation] = childA;
+                    stackLocation += 1u;
+                }
             } else {
-                stackLocation -= 1u;
-                currentNode = stack[stackLocation];
+                if tA < surfacePoint.dist {
+                    stack[stackLocation] = childA;
+                    stackLocation += 1u;
+                }
+                if tB < surfacePoint.dist {
+                    stack[stackLocation] = childB;
+                    stackLocation += 1u;
+                }
             }
         }
     }
 
     return surfacePoint;
 }
+
+fn traverse_blas(ray: Ray, blasIdx: u32, nearestHitPoint: f32, hitPont: HitPoint) {
+    var surfacePoint: HitPoint = hitPont;
+    var nearestHit = nearestHitPoint;
+    var stack: array<u32, BLAS_STACK_SIZE>;
+    var stackLocation: u32 = 0u;
+
+    // Start with the root node of the BLAS
+    stack[stackLocation] = 0u; // Assuming root is at index 0
+    stackLocation += 1u;
+
+    let blasNodeCount: u32 = arrayLength(&blasTree.nodes);
+
+    while stackLocation > 0u {
+        stackLocation -= 1u;
+        let currentNodeIdx: u32 = stack[stackLocation];
+        let currentNode: BLASNode = blasTree.nodes[currentNodeIdx];
+
+        let t = hit_aabb(ray, currentNode.aabbMin, currentNode.aabbMax);
+        if t > nearestHit {
+            continue;
+        }
+
+        if u32(currentNode.triCount) == 0u {
+            // Internal node: push children to stack
+            let child1: u32 = u32(currentNode.leftFirst);
+            let child2: u32 = u32(currentNode.leftFirst) + 1u;
+
+            // Test intersection with children
+            let child1Node = blasTree.nodes[child1];
+            let child2Node = blasTree.nodes[child2];
+
+            let t1 = hit_aabb(ray, child1Node.aabbMin, child1Node.aabbMax);
+            let t2 = hit_aabb(ray, child2Node.aabbMin, child2Node.aabbMax);
+
+            // Push closer child first
+            if t1 < t2 {
+                if t2 < nearestHit {
+                    stack[stackLocation] = child2;
+                    stackLocation += 1u;
+                }
+                if t1 < nearestHit {
+                    stack[stackLocation] = child1;
+                    stackLocation += 1u;
+                }
+            } else {
+                if t1 < nearestHit {
+                    stack[stackLocation] = child1;
+                    stackLocation += 1u;
+                }
+                if t2 < nearestHit {
+                    stack[stackLocation] = child2;
+                    stackLocation += 1u;
+                }
+            }
+        } else {
+            // Leaf node: test all triangles
+            let triStart: u32 = u32(currentNode.leftFirst);
+            let triEnd: u32 = triStart + u32(currentNode.triCount);
+            for (var i: u32 = triStart; i < triEnd; i++) {
+                let triangle = objects.triangles[u32(triIdx.idx[i])];
+                let newHitPoint: HitPoint = hit_triangle(ray, triangle, 0.0001, nearestHit, surfacePoint);
+
+                if newHitPoint.hit && newHitPoint.dist < nearestHit {
+                    nearestHit = newHitPoint.dist;
+                    surfacePoint = newHitPoint;
+                }
+            }
+        }
+    }
+}
+
 
 // Möller–Trumbore intersection algorithm
 fn hit_triangle(
@@ -536,18 +622,28 @@ fn hit_triangle(
     return surfacePoint;
 }
 
-fn hit_aabb(ray: Ray, node: Node) -> f32 {
-    var inverseDir: vec3<f32> = vec3(1.0) / ray.direction;
-    var t1: vec3<f32> = (node.aabbMin - ray.origin) * inverseDir;
-    var t2: vec3<f32> = (node.aabbMax - ray.origin) * inverseDir;
-    var tMin: vec3<f32> = min(t1, t2);
-    var tMax: vec3<f32> = max(t1, t2);
-    var t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
-    var t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
+fn hit_aabb(ray: Ray, aabbMin: vec3<f32>, aabbMax: vec3<f32>) -> f32 {
+    let inverseDir: vec3<f32> = 1.0 / ray.direction;
+    let t1: vec3<f32> = (aabbMin - ray.origin) * inverseDir;
+    let t2: vec3<f32> = (aabbMax - ray.origin) * inverseDir;
+    let tMin: vec3<f32> = min(t1, t2);
+    let tMax: vec3<f32> = max(t1, t2);
+    let t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
+    let t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
     if t_min > t_max || t_max < 0.0 {
-        return 99999.0;
+        return INF;
     } else {
         return t_min;
     }
+}
+
+// Helper function to convert f32 to u32 (bitwise)
+fn as_u32(x: f32) -> u32 {
+    return bitcast<u32>(x);
+}
+
+// Helper function to convert u32 to f32 (bitwise)
+fn as_f32(x: u32) -> f32 {
+    return bitcast<f32>(x);
 }

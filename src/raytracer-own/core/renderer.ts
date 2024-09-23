@@ -4,6 +4,10 @@ import { Scene } from "./scene"
 import { Deg2Rad, addEventListeners, linearToSRGB, setTexture } from "../utils/helper"
 import { CubeMapMaterial } from "./material"
 import { computePass, createRenderPassDescriptor, createVertexBuffer, renderPass } from "../utils/webgpu"
+import { Triangle } from "./triangle"
+import { BLAS } from "./bvh/blas"
+import { Node } from "./node";
+import { TLASNode } from "./bvh/tlas"
 
 const frameTimeLabel: HTMLElement = <HTMLElement>document.getElementById("frame-time")
 const renderTimeLabel: HTMLElement = <HTMLElement>document.getElementById("render-time")
@@ -27,7 +31,8 @@ export class Renderer {
   private cameraBuffer: GPUBuffer
   private triangleBuffer: GPUBuffer
   private materialBuffer: GPUBuffer
-  private nodeBuffer: GPUBuffer
+  private nodeBufferBlas: GPUBuffer
+  private nodeBufferTlas: GPUBuffer
   private settingsBuffer: GPUBuffer
   private camsettingsBuffer: GPUBuffer
   private triangleIndexBuffer: GPUBuffer
@@ -42,6 +47,10 @@ export class Renderer {
 
   // Scene to render
   scene: Scene
+  private allTriangles: Triangle[] = [];
+  private allBlasNodes: Node[] = [];
+  private allTlasNodes: TLASNode[] = [];
+  private triangleIndices: number[] = [];
   private frametime: number = 0
   private loaded = false
   private updatedUniformArray: Float32Array
@@ -103,14 +112,62 @@ export class Renderer {
     })
   }
 
+  private collectSceneData() {
+    this.allTriangles = [];
+    this.allBlasNodes = [];
+    this.triangleIndices = [];
+
+    let triangleOffset = 0;
+    let nodeOffset = 0;
+
+    const blasTriangleOffsetMap = new Map<BLAS, number>();
+    const blasNodeOffsetMap = new Map<BLAS, number>();
+
+    // Collect data from BLASes
+    for (const blas of this.scene.uniqueGeometries.values()) {
+      // Record offsets
+      blasTriangleOffsetMap.set(blas, triangleOffset);
+      blasNodeOffsetMap.set(blas, nodeOffset);
+
+      // Add triangles
+      this.allTriangles.push(...blas.triangles);
+
+      // Add triangle indices (assuming blas.triangleIndices exists)
+      for (let index of blas.triangleIndices) {
+        this.triangleIndices.push(index + triangleOffset);
+      }
+
+      triangleOffset += blas.triangles.length;
+
+      // Adjust node indices within the BLAS
+      for (const node of blas.nodes) {
+        if (node.triCount > 0) {
+          node.leftFirst += this.triangleIndices.length - blas.triangleIndices.length;
+        } else {
+          node.leftFirst += nodeOffset;
+        }
+      }
+
+      // Add nodes
+      this.allBlasNodes.push(...blas.nodes);
+      nodeOffset += blas.nodes.length;
+    }
+
+
+    this.allTlasNodes.push(...this.scene.tlas.tlasNode);
+  }
+
+
   async createAssets() {
+    this.collectSceneData()
     this.createUniformBuffer()
     this.createImgOutputBuffer()
     this.createFrameBuffer()
     this.createCameraBuffer()
     this.createMaterialBuffer()
     this.createTriangleBuffer()
-    this.createNodeBuffer()
+    this.createBlasNodeBuffer()
+    this.createTlasNodeBuffer()
     this.createSettingsBuffer()
     this.createTriangleIndexBuffer()
     const vertexData = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1])
@@ -188,7 +245,7 @@ export class Renderer {
         {
           binding: 1,
           resource: {
-            buffer: this.nodeBuffer,
+            buffer: this.nodeBufferBlas,
           },
         },
         {
@@ -201,6 +258,12 @@ export class Renderer {
           binding: 3,
           resource: {
             buffer: this.materialBuffer,
+          },
+        },
+        {
+          binding: 4,
+          resource: {
+            buffer: this.nodeBufferTlas,
           },
         },
       ],
@@ -221,6 +284,7 @@ export class Renderer {
       ],
     })
   }
+
   async makeRenderPipeline() {
     this.render_output_pipeline = this.device.createRenderPipeline({
       layout: "auto",
@@ -308,16 +372,16 @@ export class Renderer {
     this.updateImgSettings()
     this.updateMaterialData()
     this.updateTriangleData()
-    this.updateNodeData()
+    this.updateBlasNodeData()
+    this.updateTlasNodeData()
 
-    const uploadTimeLabel: HTMLElement = <HTMLElement>document.getElementById("triangles")
-    uploadTimeLabel.innerText = this.scene.triangles.length.toFixed(2).toString()
+    // Update the triangle count label
+    const uploadTimeLabel = document.getElementById("triangles") as HTMLElement;
+    uploadTimeLabel.innerText = this.allTriangles.length.toString();
 
-    const triangleIndexData: Float32Array = new Float32Array(this.scene.triangles.length)
-    for (let i = 0; i < this.scene.triangles.length; i++) {
-      triangleIndexData[i] = this.scene.triangleIndices[i]
-    }
-    this.device.queue.writeBuffer(this.triangleIndexBuffer, 0, triangleIndexData, 0, this.scene.triangles.length)
+    // Write triangle index data
+    const triangleIndexData = new Float32Array(this.triangleIndices);
+    this.device.queue.writeBuffer(this.triangleIndexBuffer, 0, triangleIndexData, 0, triangleIndexData.length);
   }
 
   async createSkyTexture() {
@@ -395,42 +459,43 @@ export class Renderer {
 
   private createTriangleBuffer() {
     const triangleBufferDescriptor: GPUBufferDescriptor = {
-      size: 96 * this.scene.triangles.length,
+      size: 96 * this.allTriangles.length,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.triangleBuffer = this.device.createBuffer(triangleBufferDescriptor)
+    };
+    this.triangleBuffer = this.device.createBuffer(triangleBufferDescriptor);
   }
 
   private updateTriangleData() {
-    const triangleDataSize = 24
+    const triangleDataSize = 24;
 
-    const triangleData: Float32Array = new Float32Array(triangleDataSize * this.scene.triangles.length)
-    for (let i = 0; i < this.scene.triangles.length; i++) {
-      const tri = this.scene.triangles[i]
-      for (var corner = 0; corner < 2; corner++) {
-        triangleData[triangleDataSize * i + 8 * corner] = this.scene.triangles[i].corners[corner][0]
-        triangleData[triangleDataSize * i + 8 * corner + 1] = this.scene.triangles[i].corners[corner][1]
-        triangleData[triangleDataSize * i + 8 * corner + 2] = this.scene.triangles[i].corners[corner][2]
-        triangleData[triangleDataSize * i + 8 * corner + 3] = 0.0
+    const triangleData = new Float32Array(triangleDataSize * this.allTriangles.length);
+    for (let i = 0; i < this.allTriangles.length; i++) {
+      const tri = this.allTriangles[i];
+      for (let corner = 0; corner < 2; corner++) {
+        triangleData[triangleDataSize * i + 8 * corner] = tri.corners[corner][0];
+        triangleData[triangleDataSize * i + 8 * corner + 1] = tri.corners[corner][1];
+        triangleData[triangleDataSize * i + 8 * corner + 2] = tri.corners[corner][2];
+        triangleData[triangleDataSize * i + 8 * corner + 3] = 0.0;
 
-        triangleData[triangleDataSize * i + 8 * corner + 4] = this.scene.triangles[i].normals[corner][0]
-        triangleData[triangleDataSize * i + 8 * corner + 5] = this.scene.triangles[i].normals[corner][1]
-        triangleData[triangleDataSize * i + 8 * corner + 6] = this.scene.triangles[i].normals[corner][2]
-        triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0
+        triangleData[triangleDataSize * i + 8 * corner + 4] = tri.normals[corner][0];
+        triangleData[triangleDataSize * i + 8 * corner + 5] = tri.normals[corner][1];
+        triangleData[triangleDataSize * i + 8 * corner + 6] = tri.normals[corner][2];
+        triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0;
       }
-      triangleData[triangleDataSize * i + 16] = this.scene.triangles[i].corners[2][0]
-      triangleData[triangleDataSize * i + 17] = this.scene.triangles[i].corners[2][1]
-      triangleData[triangleDataSize * i + 18] = this.scene.triangles[i].corners[2][2]
-      triangleData[triangleDataSize * i + 19] = 0.0
+      triangleData[triangleDataSize * i + 16] = tri.corners[2][0];
+      triangleData[triangleDataSize * i + 17] = tri.corners[2][1];
+      triangleData[triangleDataSize * i + 18] = tri.corners[2][2];
+      triangleData[triangleDataSize * i + 19] = 0.0;
 
-      triangleData[triangleDataSize * i + 20] = this.scene.triangles[i].normals[2][0]
-      triangleData[triangleDataSize * i + 21] = this.scene.triangles[i].normals[2][1]
-      triangleData[triangleDataSize * i + 22] = this.scene.triangles[i].normals[2][2]
-      triangleData[triangleDataSize * i + 23] = tri.objectID
+      triangleData[triangleDataSize * i + 20] = tri.normals[2][0];
+      triangleData[triangleDataSize * i + 21] = tri.normals[2][1];
+      triangleData[triangleDataSize * i + 22] = tri.normals[2][2];
+      triangleData[triangleDataSize * i + 23] = tri.objectID;
     }
 
-    this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.scene.triangles.length)
+    this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleData.length);
   }
+
 
   private createMaterialBuffer() {
     const materialBufferDescriptor: GPUBufferDescriptor = {
@@ -481,35 +546,64 @@ export class Renderer {
     this.device.queue.writeBuffer(this.materialBuffer, 0, materialData, 0, materialDataSize * this.scene.objectMeshes.length)
   }
 
-  private createNodeBuffer() {
-    const nodeBufferDescriptor: GPUBufferDescriptor = {
-      size: 32 * this.scene.nodesUsed,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.nodeBuffer = this.device.createBuffer(nodeBufferDescriptor)
-  }
-
   private createTriangleIndexBuffer() {
     const triangleIndexBufferDescriptor: GPUBufferDescriptor = {
-      size: 4 * this.scene.triangles.length,
+      size: 4 * this.triangleIndices.length,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    }
-    this.triangleIndexBuffer = this.device.createBuffer(triangleIndexBufferDescriptor)
+    };
+    this.triangleIndexBuffer = this.device.createBuffer(triangleIndexBufferDescriptor);
   }
 
-  updateNodeData() {
-    var nodeData_a: Float32Array = new Float32Array(8 * this.scene.nodesUsed)
-    for (let i = 0; i < this.scene.nodesUsed; i++) {
-      nodeData_a[8 * i] = this.scene.nodes[i].aabbMin[0]
-      nodeData_a[8 * i + 1] = this.scene.nodes[i].aabbMin[1]
-      nodeData_a[8 * i + 2] = this.scene.nodes[i].aabbMin[2]
-      nodeData_a[8 * i + 3] = this.scene.nodes[i].leftFirst
-      nodeData_a[8 * i + 4] = this.scene.nodes[i].aabbMax[0]
-      nodeData_a[8 * i + 5] = this.scene.nodes[i].aabbMax[1]
-      nodeData_a[8 * i + 6] = this.scene.nodes[i].aabbMax[2]
-      nodeData_a[8 * i + 7] = this.scene.nodes[i].triCount
+  private createBlasNodeBuffer() {
+    const nodeBufferDescriptor: GPUBufferDescriptor = {
+      size: 32 * this.allBlasNodes.length,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    };
+    this.nodeBufferBlas = this.device.createBuffer(nodeBufferDescriptor);
+  }
+
+  private createTlasNodeBuffer() {
+    const nodeBufferDescriptor: GPUBufferDescriptor = {
+      size: 32 * this.allTlasNodes.length,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    };
+    this.nodeBufferTlas = this.device.createBuffer(nodeBufferDescriptor);
+  }
+
+  private updateBlasNodeData() {
+    const nodeData = new Float32Array(8 * this.allBlasNodes.length);
+
+    for (let i = 0; i < this.allBlasNodes.length; i++) {
+      const node = this.allBlasNodes[i];
+      nodeData[8 * i] = node.aabbMin[0];
+      nodeData[8 * i + 1] = node.aabbMin[1];
+      nodeData[8 * i + 2] = node.aabbMin[2];
+      nodeData[8 * i + 3] = node.leftFirst;
+      nodeData[8 * i + 4] = node.aabbMax[0];
+      nodeData[8 * i + 5] = node.aabbMax[1];
+      nodeData[8 * i + 6] = node.aabbMax[2];
+      nodeData[8 * i + 7] = node.triCount;
     }
-    this.device.queue.writeBuffer(this.nodeBuffer, 0, nodeData_a, 0, 8 * this.scene.nodesUsed)
+
+    this.device.queue.writeBuffer(this.nodeBufferBlas, 0, nodeData, 0, nodeData.length);
+  }
+
+  private updateTlasNodeData() {
+    const nodeData = new Float32Array(8 * this.allTlasNodes.length);
+
+    for (let i = 0; i < this.allTlasNodes.length; i++) {
+      const node = this.allTlasNodes[i];
+      nodeData[8 * i] = node.aabbMin[0];
+      nodeData[8 * i + 1] = node.aabbMin[1];
+      nodeData[8 * i + 2] = node.aabbMin[2];
+      nodeData[8 * i + 3] = node.leftFirst;
+      nodeData[8 * i + 4] = node.aabbMax[0];
+      nodeData[8 * i + 5] = node.aabbMax[1];
+      nodeData[8 * i + 6] = node.aabbMax[2];
+      nodeData[8 * i + 7] = node.BLAS;
+    }
+
+    this.device.queue.writeBuffer(this.nodeBufferTlas, 0, nodeData, 0, nodeData.length);
   }
 
   private createCameraBuffer() {
