@@ -145,8 +145,8 @@ export class Application {
     await this.scene.createObjects(cornelbox)
 
     // Build the BVH after creating all the objects
-    eventEmitter.on("BVH", async () => await this.scene.prepareBVH())
-    eventEmitter.emit("BVH")
+    await this.scene.prepareBVH()
+
 
     // Initialize the renderer
     await this.renderer.Initialize()
