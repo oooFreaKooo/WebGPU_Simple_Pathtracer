@@ -119,16 +119,17 @@ const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
 const INV_PI: f32 = 0.31830988618;
+const T_MIN = 0.001f;
+const T_MAX = 10000f;
 
-var<private> pixelCoords : vec2f;
-var<private> randState : u32 = 0u;
-
-var<workgroup> accumulated_radiance: vec3f;
-var<workgroup> rng_seed: u32;
 override WORKGROUP_SIZE_X: u32;
 override WORKGROUP_SIZE_Y: u32;
 
+var<private> pixelCoords : vec2f;
+var<private> randState : u32 = 0u;
+var<private> stack : array<u32, 64>;
 var<workgroup> sharedAccumulatedColor: array<vec3f, 64>;
+
 
 @compute @workgroup_size(WORKGROUP_SIZE_X, WORKGROUP_SIZE_Y)
 fn main(
@@ -136,7 +137,6 @@ fn main(
     @builtin(workgroup_id) workgroup_id: vec3<u32>,
     @builtin(local_invocation_id) local_invocation_id: vec3<u32>,
     @builtin(local_invocation_index) local_invocation_index: u32,
-    @builtin(num_workgroups) num_workgroups: vec3<u32>
 ) {
     if global_id.x >= u32(uniforms.screenDims.x) * u32(uniforms.screenDims.y) {
         return;
@@ -145,9 +145,7 @@ fn main(
     let dimensions = uniforms.screenDims;
     let coord = vec2u(workgroup_id.x * WORKGROUP_SIZE_X + local_invocation_id.x, workgroup_id.y * WORKGROUP_SIZE_Y + local_invocation_id.y);
     let idx = coord.y * u32(dimensions.x) + coord.x;
-
-    // Calculate the pixel coordinates
-    let pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
+    pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
 
     // Random state initialization
     randState = idx + u32(uniforms.frameNum) * 719393;
@@ -155,7 +153,6 @@ fn main(
     // Precompute constants outside the loops
     let sqrt_spp = sqrt(f32(setting.numSamples));
     let recip_sqrt_spp = 1.0 / sqrt_spp;
-    let jitter_scale_half = setting.jitterScale * 0.5;
     let half_screen_dims = vec2<f32>(dimensions.xy) * 0.5;
     let cam_fwd = cam.forward;
     let cam_right = cam.right;
@@ -165,37 +162,35 @@ fn main(
     let focus_dist = cam_setting.focusDistance;
     let aspect_ratio = setting.aspectRatio;
 
-    rng_seed = idx + u32(uniforms.frameNum) * 719393 + local_invocation_index;
+    let rand_state_vec = vec2<f32>(rand(), rand());
 
-
-    var sampleCount = 0.0;
     var myRay: Ray;
     sharedAccumulatedColor[local_invocation_index] = vec3<f32>(0.0);
+    var sampleCount = 0.0;
 
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
-            // Generate stratified samples
-            let stratifiedSample = (vec2<f32>(i, j) + vec2<f32>(xor_shift(randState), xor_shift(randState))) * recip_sqrt_spp;
-        
+            // Generate stratified samples with precomputed rand state
+            let stratifiedSample = (vec2<f32>(i, j) + rand_state_vec) * recip_sqrt_spp;
+
             // Calculate screen jittered coordinates
             let screen_jittered = pixelCoords + stratifiedSample - half_screen_dims;
-        
+
             // Calculate ray direction
             let horizontal_coeff = cam_fov * screen_jittered.x / dimensions.x;
             let vertical_coeff = cam_fov * screen_jittered.y / (dimensions.y * aspect_ratio);
             myRay.direction = normalize(cam_fwd + horizontal_coeff * cam_right + vertical_coeff * cam_up);
-        
+
             // Calculate lens point and origin
-            let lens_point = vec2<f32>(xor_shift(randState), xor_shift(randState)) * cam_setting.apertureSize;
+            let lens_point = rand_state_vec * cam_setting.apertureSize;
             myRay.origin = cam_pos + cam_right * lens_point.x + cam_up * lens_point.y;
-        
+
             // Adjust ray direction based on focus point
             let focus_point = cam_pos + myRay.direction * focus_dist;
             myRay.direction = normalize(focus_point - myRay.origin);
-        
+
             // Trace the ray and accumulate color
             sharedAccumulatedColor[local_invocation_index] += trace(myRay) * recip_sqrt_spp;
-
             sampleCount += 1.0;
         }
     }
@@ -219,7 +214,7 @@ fn trace(camRay: Ray) -> vec3f {
     let skyTextureEnabled = setting.SKY_TEXTURE == 1.0;
 
     for (var bounce: u32 = 0u; bounce < maxBounces; bounce++) {
-        let hit = traverse(ray);
+        let hit = traverse(ray, T_MAX);
 
         if !hit.hit {
             acc_radiance += throughput * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, skyTextureEnabled);
@@ -245,7 +240,7 @@ fn trace(camRay: Ray) -> vec3f {
         }
 
         // Ray type determination
-        let randVal = rand2D();
+        let randVal = rand();
         var rayType = determine_ray_type(specChance, refrChance, randVal);
         regularBounces = rayType.regularBounces;
 
@@ -270,14 +265,12 @@ fn trace(camRay: Ray) -> vec3f {
         }
 
         // Russian roulette
-        if bounce > 2u {
-            let rr_prob = max(throughput.r, max(throughput.g, throughput.b));
-            let rr_threshold = 0.2;
-            if rand2D() >= rr_prob * rr_threshold || length(throughput) < 0.001 {
+        let rr_prob = max(max(throughput.r, throughput.g), throughput.b);
+        if randVal >= rr_prob || length(throughput) < 0.001 {
                 break;
-            }
-            throughput /= rr_prob;
         }
+
+        throughput /= rr_prob;
     }
     return acc_radiance;
 }
@@ -338,8 +331,8 @@ fn ensure_energy_conservation(material: Material) -> Material {
 
 fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
     let alpha = roughness * roughness;
-    let u1 = rand2D();
-    let u2 = rand2D();
+    let u1 = rand();
+    let u2 = rand();
 
     let phi = TWO_PI * u1;
     let cosTheta = sqrt((1.0 - u2) / (1.0 + (alpha * alpha - 1.0) * u2));
@@ -360,10 +353,9 @@ fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
     return normalize(T * H.x + B * H.y + N * H.z);
 }
 
-
 fn cosine_weighted_sampling_hemisphere(normal: vec3f) -> vec3f {
-    let r1 = rand2D();
-    let r2 = rand2D();
+    let r1 = rand();
+    let r2 = rand();
     let r = sqrt(r1);
     let theta = TWO_PI * r2;
 
@@ -380,34 +372,25 @@ fn cosine_weighted_sampling_hemisphere(normal: vec3f) -> vec3f {
     return normalize(u * x + v * y + w * z);
 }
 
-fn xor_shift(state: u32) -> f32 {
-    var newState = state ^ (state << 13u);
-    newState ^= (newState >> 17u);
-    newState ^= (newState << 5u);
-    return f32(newState & 0xFFFFFFFu) / f32(0x10000000u);
-}
-
-fn rand2D() -> f32 {
+fn rand() -> f32 {
     randState = randState * 747796405u + 2891336453u;
     var word: u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
     return f32((word >> 22u) ^ word) / 4294967295;
 }
 
-fn traverse(ray: Ray) -> HitPoint {
+fn traverse(ray: Ray, tMax: f32) -> HitPoint {
+    var tmax = tMax;
     var surfacePoint: HitPoint;
     surfacePoint.hit = false;
-    var nearestHit: f32 = 9999.0;
     let inverseDir: vec3<f32> = vec3<f32>(1.0) / ray.direction;
 
-    // Use a fixed-size stack with a maximum depth
-    var stack: array<u32, 64>;
     var stackLocation: u32 = 0u;
 
     // Start with the root node index
     stack[stackLocation] = 0u;
     stackLocation += 1u;
 
-    while stackLocation > 0u {
+    while stackLocation != 0u {
         // Pop the last node index from the stack
         stackLocation -= 1u;
         let nodeIdx: u32 = stack[stackLocation];
@@ -428,21 +411,21 @@ fn traverse(ray: Ray) -> HitPoint {
             // Determine traversal order based on distance
             if distance1 < distance2 {
                 // Push farther child first
-                if distance2 < nearestHit {
+                if distance2 < tmax {
                     stack[stackLocation] = child2Idx;
                     stackLocation += 1u;
                 }
-                if distance1 < nearestHit {
+                if distance1 < tmax {
                     stack[stackLocation] = child1Idx;
                     stackLocation += 1u;
                 }
             } else {
                 // Push farther child first
-                if distance1 < nearestHit {
+                if distance1 < tmax {
                     stack[stackLocation] = child1Idx;
                     stackLocation += 1u;
                 }
-                if distance2 < nearestHit {
+                if distance2 < tmax {
                     stack[stackLocation] = child2Idx;
                     stackLocation += 1u;
                 }
@@ -454,10 +437,10 @@ fn traverse(ray: Ray) -> HitPoint {
             // Process triangles in a SIMD-friendly manner if possible
             for (var i: u32 = contents; i < end; i += 1u) {
                 let triangle = objects.triangles[u32(triIdx.idx[i])];
-                let newHitPoint: HitPoint = hit_triangle(ray, triangle, 0.0001, nearestHit, surfacePoint);
+                let newHitPoint: HitPoint = hit_triangle(ray, triangle, 0.0001, tmax);
 
-                if newHitPoint.hit && newHitPoint.dist < nearestHit {
-                    nearestHit = newHitPoint.dist;
+                if newHitPoint.hit && newHitPoint.dist < tmax {
+                    tmax = newHitPoint.dist;
                     surfacePoint = newHitPoint;
                 }
             }
@@ -472,8 +455,7 @@ fn hit_triangle(
     ray: Ray,
     tri: Triangle,
     tMin: f32,
-    tMax: f32,
-    oldHitPoint: HitPoint
+    tMax: f32
 ) -> HitPoint {
     var surfacePoint: HitPoint;
     surfacePoint.hit = false;

@@ -75,9 +75,6 @@ export class Renderer {
     this.adapter = <GPUAdapter>await navigator.gpu?.requestAdapter({
       powerPreference: "high-performance",
     })
-    if (!this.adapter) {
-      throw Error("Couldn't request WebGPU adapter.")
-    }
     const requiredLimits = {
       maxStorageBufferBindingSize: 1e9, // 1 GB
       maxComputeWorkgroupStorageSize: 16384, // 16 KB
