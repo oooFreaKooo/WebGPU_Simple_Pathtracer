@@ -133,18 +133,18 @@ var<workgroup> sharedAccumulatedColor: array<vec3f, 64>;
 
 @compute @workgroup_size(WORKGROUP_SIZE_X, WORKGROUP_SIZE_Y)
 fn main(
-    @builtin(global_invocation_id) global_id: vec3u,
+    @builtin(global_invocation_id) GlobalInvocationID: vec3u,
     @builtin(workgroup_id) workgroup_id: vec3<u32>,
     @builtin(local_invocation_id) local_invocation_id: vec3<u32>,
     @builtin(local_invocation_index) local_invocation_index: u32,
 ) {
-    if global_id.x >= u32(uniforms.screenDims.x) * u32(uniforms.screenDims.y) {
+    if GlobalInvocationID.x >= u32(uniforms.screenDims.x) * u32(uniforms.screenDims.y) {
         return;
     }
 
-    let dimensions = uniforms.screenDims;
+    let DIMENSION = uniforms.screenDims;
     let coord = vec2u(workgroup_id.x * WORKGROUP_SIZE_X + local_invocation_id.x, workgroup_id.y * WORKGROUP_SIZE_Y + local_invocation_id.y);
-    let idx = coord.y * u32(dimensions.x) + coord.x;
+    let idx = coord.y * u32(DIMENSION.x) + coord.x;
     pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
 
     // Random state initialization
@@ -153,12 +153,12 @@ fn main(
     // Precompute constants outside the loops
     let sqrt_spp = sqrt(f32(setting.numSamples));
     let recip_sqrt_spp = 1.0 / sqrt_spp;
-    let half_screen_dims = vec2<f32>(dimensions.xy) * 0.5;
-    let cam_fwd = cam.forward;
-    let cam_right = cam.right;
-    let cam_up = cam.up;
-    let cam_pos = cam.pos;
-    let cam_fov = cam_setting.cameraFOV;
+    let half_screen_dims = vec2<f32>(DIMENSION.xy) * 0.5;
+    let FORWARD = cam.forward;
+    let RIGHT = cam.right;
+    let UP = cam.up;
+    let POS = cam.pos;
+    let FOV = cam_setting.cameraFOV;
     let focus_dist = cam_setting.focusDistance;
     let aspect_ratio = setting.aspectRatio;
 
@@ -176,17 +176,14 @@ fn main(
             // Calculate screen jittered coordinates
             let screen_jittered = pixelCoords + stratifiedSample - half_screen_dims;
 
-            // Calculate ray direction
-            let horizontal_coeff = cam_fov * screen_jittered.x / dimensions.x;
-            let vertical_coeff = cam_fov * screen_jittered.y / (dimensions.y * aspect_ratio);
-            myRay.direction = normalize(cam_fwd + horizontal_coeff * cam_right + vertical_coeff * cam_up);
-
             // Calculate lens point and origin
             let lens_point = rand_state_vec * cam_setting.apertureSize;
-            myRay.origin = cam_pos + cam_right * lens_point.x + cam_up * lens_point.y;
+            myRay.origin = POS + RIGHT * lens_point.x + UP * lens_point.y;
 
-            // Adjust ray direction based on focus point
-            let focus_point = cam_pos + myRay.direction * focus_dist;
+            // Calculate ray direction
+            let horizontal_coeff = FOV * screen_jittered.x / DIMENSION.x;
+            let vertical_coeff = FOV * screen_jittered.y / (DIMENSION.y * aspect_ratio);
+            let focus_point = POS + normalize(FORWARD + horizontal_coeff * RIGHT + vertical_coeff * UP) * focus_dist;
             myRay.direction = normalize(focus_point - myRay.origin);
 
             // Trace the ray and accumulate color
@@ -220,6 +217,7 @@ fn trace(camRay: Ray) -> vec3f {
             acc_radiance += throughput * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, skyTextureEnabled);
             break;
         }
+
         var M = hit.material;
         var originalEnergy = throughput;
         M = ensure_energy_conservation(M);
@@ -235,6 +233,7 @@ fn trace(camRay: Ray) -> vec3f {
         // Fresnel effect
         var specChance = M.specChance;
         var refrChance = M.refrChance;
+
         if specChance > 0.1 {
             refrChance *= (1.0 - specChance) / (1.0 - M.specChance);
         }
@@ -251,10 +250,25 @@ fn trace(camRay: Ray) -> vec3f {
         // Ray position update
         ray.origin = update_ray_origin(ray, hit, rayType.isRefractive);
 
-        // New ray direction
         var specularDir = calculate_specular_dir(ray, hit);
-        var refractDir = calculate_refract_dir(ray, hit, n1, n2);
-        ray.direction = mix(mix(cosine_weighted_sampling_hemisphere(hit.normal), specularDir, rayType.isSpecular), refractDir, rayType.isRefractive);
+        var refractDir = normalize(
+            mix(
+                refract(ray.direction, hit.normal, n1 / n2),
+                cosine_weighted_sampling_hemisphere(-hit.normal),
+                M.refrRoughness * M.refrRoughness
+            )
+        );
+
+        // New ray direction
+        ray.direction = mix(
+            mix(
+                cosine_weighted_sampling_hemisphere(hit.normal),
+                specularDir,
+                rayType.isSpecular
+            ),
+            refractDir,
+            rayType.isRefractive
+        );
 
         acc_radiance += throughput * M.emissionColor * M.emissionStrength;
 
@@ -280,10 +294,6 @@ fn update_ray_origin(ray: Ray, hit: HitPoint, isRefractive: f32) -> vec3f {
         (ray.origin + ray.direction * hit.dist) - hit.normal * EPSILON,
         isRefractive == 1.0
     );
-}
-
-fn calculate_refract_dir(ray: Ray, hit: HitPoint, n1: f32, n2: f32) -> vec3f {
-    return normalize(mix(refract(ray.direction, hit.normal, n1 / n2), cosine_weighted_sampling_hemisphere(-hit.normal), hit.material.refrRoughness * hit.material.refrRoughness));
 }
 
 fn determine_ray_type(specChance: f32, refrChance: f32, randVal: f32) -> RayType {
