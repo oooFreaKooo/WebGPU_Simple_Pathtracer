@@ -15,6 +15,8 @@ export class Scene {
   private objectIDCount: number = 0 // starting at 0
   objectMeshes: ObjLoader[] = []
   camera: Camera
+  vignetteStrength: number = 0.5
+  vignetteRadius: number = 0.75
 
   // Data for the BVH
   nodes: Node[]
@@ -25,6 +27,7 @@ export class Scene {
   enableCulling: number = 1
   maxBounces: number = 8
   samples: number = 1
+  jitterScale: number = 1
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -33,8 +36,8 @@ export class Scene {
 
   // scene settings
   private initialize() {
-    this.camera = new Camera([0.01, 2.5, -7]) // camera position
-    this.cameraControls = new Controls(this.canvas, this.camera) // create controls
+    this.camera = new Camera([0.01, 2.5, -7])
+    this.cameraControls = new Controls(this.canvas, this.camera)
   }
 
   // creates objects using the ObjLoader
@@ -49,6 +52,7 @@ export class Scene {
 
       // push the object into an array
       this.objectMeshes.push(objectMesh)
+
       // make sure next object gets a new ID
       this.objectIDCount++
     }

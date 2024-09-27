@@ -34,6 +34,9 @@ To get started with this project, follow these simple steps:
    [git clone https://github.com/oooFreaKooo/webgpu-pathtracer.git](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer.git)
    ```
 
+Here's the adjusted section with the additional information about `ngrok.exe`:
+
+````markdown
 3. **Install Dependencies**
 
    Navigate to the project directory and run the following command to install the necessary dependencies:
@@ -41,6 +44,7 @@ To get started with this project, follow these simple steps:
    ```bash
    npm install
    ```
+````
 
 4. **Start the Project**
 
@@ -51,6 +55,16 @@ To get started with this project, follow these simple steps:
    ```
 
    This will launch the pathtracer in your default web browser.
+
+5. **Share Your Local Project**
+
+   If you want to share your local project with others, you can use `ngrok.exe` to create a secure tunnel to your local server. Run `ngrok.exe` and use the following command:
+
+   ```bash
+   ngrok http 3000
+   ```
+
+   Replace `3000` with the port number your project is running on. This will provide a public URL that you can share with others.
 
 ## Usage
 

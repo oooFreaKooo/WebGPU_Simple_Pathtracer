@@ -1,127 +1,81 @@
-@group(0) @binding(0) var mySampler : sampler;
-@group(0) @binding(1) var myTexture : texture_2d<f32>;
+struct Uniforms {
+	screenDims: vec2f,
+	frameNum: f32,
+	resetBuffer: f32,
+}
 
-const EXPOSURE: f32 = 2.0;
-const rangeMax: f32 = 8.0;
-const FXAA_EDGE_THRESHOLD_MIN: f32 = 1.0 / 16.0;
-const XAA_EDGE_THRESHOLD: f32 = 1.0 / 8.0;
-const FXAA_SUBPIX_TRIM: f32 = 1.0 / 4.0;
-const FXAA_SUBPIX_TRIM_SCALE: f32 = 1.0;
-const FXAA_SUBPIX_CAP: f32= 3.0 / 2.0;
+struct ImageOutput {
+    vignette_strength: f32,
+    vignette_radius: f32,
+}
 
+
+@group(0) @binding(0) var<uniform> uniforms : Uniforms;
+@group(0) @binding(1) var<storage, read_write> framebuffer: array<vec4f>;
+@group(0) @binding(2) var<uniform> img : ImageOutput;
+
+const VIGNETTE_STRENGTH: f32 = 0.5;
+const VIGNETTE_RADIUS: f32 = 0.75;
+
+fn get2Dfrom1D(pos: vec2f) -> u32 {
+
+    return (u32(pos.y) * u32(uniforms.screenDims.x) + u32(pos.x));
+}
+
+fn aces_approx(v: vec3f) -> vec3f {
+    let v1 = v * 0.6f;
+    const a = 2.51f;
+    const b = 0.03f;
+    const c = 2.43f;
+    const d = 0.59f;
+    const e = 0.14f;
+    return clamp((v1 * (a * v1 + b)) / (v1 * (c * v1 + d) + e), vec3(0.0f), vec3(1.0f));
+}
+
+fn filmic(x: vec3f) -> vec3f {
+    let X = max(vec3f(0.0), x - 0.004);
+    let result = (X * (6.2 * X + 0.5)) / (X * (6.2 * X + 1.7) + 0.06);
+    return pow(result, vec3(2.2));
+}
+  
 @fragment
-fn frag_main(@location(0) TexCoord: vec2<f32>) -> @location(0) vec4<f32> {
-    // with FXAA
-    //let resolution = vec2<f32>(f32(textureDimensions(myTexture).x), f32(textureDimensions(myTexture).y));
-    //return fxaa(TexCoord, resolution) * EXPOSURE;
-    // without FXAA
-    let color = textureSample(myTexture, mySampler, TexCoord) * EXPOSURE;
-    return color;
-}
+fn frag_main(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
+    // Invert the y-coordinate
+    let invertedX = uniforms.screenDims.x - fragCoord.x;
+    let invertedY = uniforms.screenDims.y - fragCoord.y;
+    let i = get2Dfrom1D(vec2f(invertedX, invertedY));
+    
+    // Retrieve current and previous frame colors
+    var color = framebuffer[i].xyz / uniforms.frameNum;
 
-fn FxaaLuma(rgb: vec3<f32>) -> f32 {
-    return rgb.y * (0.587 / 0.299) + rgb.x;
-}
-fn FxaaToVec3(value: f32) -> vec3<f32> {
-    return vec3<f32>(value, value, value);
-}
-// https://developer.download.nvidia.com/assets/gamedev/files/sdk/11/FXAA_WhitePaper.pdf
-fn fxaa(TexCoord: vec2<f32>, resolution: vec2<f32>) -> vec4<f32> {
-    let inverse_resolution = 1.0 / resolution;
+    // Apply gamma correction
+    //color = filmic(color.xyz);
+    color = aces_approx(color.xyz);
+    color = pow(color.xyz, vec3f(1 / 2.2));
 
-// Pre-sample all necessary texture coordinates
-    let rgbN = textureSample(myTexture, mySampler, TexCoord + (vec2<f32>(0.0, -1.0) * inverse_resolution)).rgb;
-    let rgbW = textureSample(myTexture, mySampler, TexCoord + (vec2<f32>(-1.0, 0.0) * inverse_resolution)).rgb;
-    let rgbM = textureSample(myTexture, mySampler, TexCoord + (vec2<f32>(0.0, 0.0) * inverse_resolution)).rgb;
-    let rgbE = textureSample(myTexture, mySampler, TexCoord + (vec2<f32>(1.0, 0.0) * inverse_resolution)).rgb;
-    let rgbS = textureSample(myTexture, mySampler, TexCoord + (vec2<f32>(0.0, 1.0) * inverse_resolution)).rgb;
-    let rgbNW = textureSample(myTexture, mySampler, TexCoord + (vec2<f32>(-1.0, -1.0) * inverse_resolution)).rgb;
-    let rgbNE = textureSample(myTexture, mySampler, TexCoord + (vec2<f32>(1.0, -1.0) * inverse_resolution)).rgb;
-    let rgbSW = textureSample(myTexture, mySampler, TexCoord + (vec2<f32>(-1.0, 1.0) * inverse_resolution)).rgb;
-    let rgbSE = textureSample(myTexture, mySampler, TexCoord + (vec2<f32>(1.0, 1.0) * inverse_resolution)).rgb;
+    // Vignette effect
+    let screenPos = (fragCoord.xy / uniforms.screenDims) * 2.0 - vec2f(1.0);
+    let dist = length(screenPos);
+    let vignette = clamp(1.0 - img.vignette_strength * (dist - img.vignette_radius), 0.0, 1.0);
+    color *= vignette;
 
-    let lumaN = FxaaLuma(rgbN);
-    let lumaW = FxaaLuma(rgbW);
-    let lumaM = FxaaLuma(rgbM);
-    let lumaE = FxaaLuma(rgbE);
-    let lumaS = FxaaLuma(rgbS);
-    let lumaNW = FxaaLuma(rgbNW);
-    let lumaNE = FxaaLuma(rgbNE);
-    let lumaSW = FxaaLuma(rgbSW);
-    let lumaSE = FxaaLuma(rgbSE);
-    let rangeMin = min(lumaM, min(min(lumaN, lumaW), min(lumaS, lumaE)));
-    let rangeMax = max(lumaM, max(max(lumaN, lumaW), max(lumaS, lumaE)));
-    let range = rangeMax - rangeMin;
-
-    if range < max(FXAA_EDGE_THRESHOLD_MIN, rangeMax * XAA_EDGE_THRESHOLD) {
-        return vec4<f32>(rgbM, 1.0);
+    // Reset buffer if needed
+    if uniforms.resetBuffer == 1.0 {
+        framebuffer[i] = vec4f(0);
     }
 
-    let lumaL = (lumaN + lumaW + lumaE + lumaS) * 0.25;
-    let rangeL = abs(lumaL - lumaM);
-    var blendL = max(0.0, (rangeL / range) - FXAA_SUBPIX_TRIM) * FXAA_SUBPIX_TRIM_SCALE;
-    blendL = min(FXAA_SUBPIX_CAP, blendL);
-
-    var rgbL = rgbN + rgbW + rgbM + rgbE + rgbS;
-
-
-    rgbL += (rgbNW + rgbNE + rgbSW + rgbSE);
-    rgbL *= FxaaToVec3(1.0 / 9.0);
-
-   // Determine edge direction
-    let edgeHorz = abs(-2.0 * lumaW + lumaNW + lumaSW - 2.0 * lumaM + lumaNE + lumaSE - 2.0 * lumaE);
-    let edgeVert = abs(-2.0 * lumaN + lumaNW + lumaNE - 2.0 * lumaM + lumaSW + lumaSE - 2.0 * lumaS);
-
-    let isHorizontal = (edgeHorz >= edgeVert);
-
-    // Calculate blend weights
-    var blend = vec2<f32>(0.0, 0.0);
-    if isHorizontal {
-        blend.x = mix(lumaS, lumaN, 0.5);
-        blend.y = mix(lumaW, lumaE, 0.5);
-    } else {
-        blend.x = mix(lumaW, lumaE, 0.5);
-        blend.y = mix(lumaS, lumaN, 0.5);
-    }
-
-    // Calculate final blend factor
-    let blendFactor = max(abs(blend.x - lumaM), abs(blend.y - lumaM));
-
-    // Blend the original color with the anti-aliased color
-    let antiAliasedColor = mix(vec4<f32>(rgbM, 1.0), vec4<f32>(rgbL, 1.0), blendFactor);
-
-    return antiAliasedColor;
-}
-   
-
-struct VertexOutput {
-    @builtin(position) Position: vec4<f32>,
-    @location(0) TexCoord: vec2<f32>,
+    return vec4f(color, 1);
 }
 
-@vertex
-fn vert_main(@builtin(vertex_index) VertexIndex: u32) -> VertexOutput {
 
-    var positions = array<vec2<f32>, 6>(
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>(-1.0, 1.0),
-        vec2<f32>(1.0, 1.0),
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>(1.0, 1.0),
-        vec2<f32>(1.0, -1.0)
-    );
+struct Vertex {
+	@location(0) position: vec2f,
+};
 
-    var texCoords = array<vec2<f32>, 6>(
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(1.0, 1.0),
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(0.0, 0.0)
-    );
+@vertex 
+fn vert_main(
+    vert: Vertex
+) -> @builtin(position) vec4f {
 
-    var output: VertexOutput;
-    output.Position = vec4<f32>(positions[VertexIndex], 0.0, 1.0);
-    output.TexCoord = texCoords[VertexIndex];
-    return output;
+    return vec4f(vert.position, 0.0, 1.0);
 }

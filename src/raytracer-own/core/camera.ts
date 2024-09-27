@@ -1,4 +1,4 @@
-import { vec3 } from "gl-matrix"
+import { mat4, vec3 } from "gl-matrix"
 import { Deg2Rad } from "../utils/helper"
 
 export class Camera {
@@ -10,6 +10,10 @@ export class Camera {
   right: Float32Array
   theta: number
   up: Float32Array
+
+  focusDistance: number = 4
+  apertureSize: number = 0.005
+
   constructor(position: number[]) {
     this.position = new Float32Array(position)
     this.theta = 0.0
@@ -36,6 +40,7 @@ export class Camera {
     this.up = new Float32Array([0.0, 0.0, 0.0])
     vec3.cross(this.up, this.right, this.forwards)
     vec3.normalize(this.up, this.up)
+
     // camera is only moving when this method is called (resets accumulation: see renderer)
     this.cameraIsMoving = true
   }

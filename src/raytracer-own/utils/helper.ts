@@ -23,16 +23,83 @@ export async function setTexture(textureUrl: string) {
   return imageBitmap
 }
 
+// Img Output Settings
+const vignetteStrengthElement = document.getElementById("vignetteStrength")
+const vignetteStrengthValueElement = document.getElementById("vignetteStrengthValue")
+const vignetteRadiusElement = document.getElementById("vignetteRadius")
+const vignetteRadiusValueElement = document.getElementById("vignetteRadiusValue")
+
+// Camera Settings
+const fovElement = document.getElementById("fov")
+const fovValueElement = document.getElementById("fovValue")
+const focusDistElement = document.getElementById("focusDist")
+const focusDistValueElement = document.getElementById("focusDistValue")
+const apertureSizeElement = document.getElementById("apertureSize")
+const apertureSizeValueElement = document.getElementById("apertureSizeValue")
+
+// Settings
 const bouncesElement = document.getElementById("bounces")
 const bouncesValueElement = document.getElementById("bouncesValue")
 const samplesElement = document.getElementById("samples")
 const samplesValueElement = document.getElementById("samplesValue")
-const fovElement = document.getElementById("fov")
-const fovValueElement = document.getElementById("fovValue")
 const skyTextureCheckbox = document.getElementById("skyTexture") as HTMLInputElement
 const backfaceCullingCheckbox = document.getElementById("backfaceCulling") as HTMLInputElement
+const jitterElement = document.getElementById("jitter")
+const jitterValueElement = document.getElementById("jitterValue")
 
 export function addEventListeners(instance: Renderer) {
+  if (vignetteStrengthElement) {
+    vignetteStrengthElement.addEventListener("input", (event) => {
+      instance.scene.vignetteStrength = parseFloat((<HTMLInputElement>event.target).value)
+      if (vignetteStrengthValueElement) {
+        vignetteStrengthValueElement.textContent = instance.scene.vignetteStrength.toString()
+      }
+      instance.updateImgSettings()
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
+  if (vignetteRadiusElement) {
+    vignetteRadiusElement.addEventListener("input", (event) => {
+      instance.scene.vignetteRadius = parseFloat((<HTMLInputElement>event.target).value)
+      if (vignetteRadiusValueElement) {
+        vignetteRadiusValueElement.textContent = instance.scene.vignetteRadius.toString()
+      }
+      instance.updateImgSettings()
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
+  if (fovElement) {
+    fovElement.addEventListener("input", (event) => {
+      instance.scene.camera.fov = parseFloat((<HTMLInputElement>event.target).value)
+      if (fovValueElement) {
+        fovValueElement.textContent = instance.scene.camera.fov.toString()
+      }
+      instance.updateCamSettings()
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
+
+  if (focusDistElement) {
+    focusDistElement.addEventListener("input", (event) => {
+      instance.scene.camera.focusDistance = parseFloat((<HTMLInputElement>event.target).value)
+      if (focusDistValueElement) {
+        focusDistValueElement.textContent = instance.scene.camera.focusDistance.toString()
+      }
+      instance.updateCamSettings()
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
+
+  if (apertureSizeElement) {
+    apertureSizeElement.addEventListener("input", (event) => {
+      instance.scene.camera.apertureSize = parseFloat((<HTMLInputElement>event.target).value)
+      if (apertureSizeValueElement) {
+        apertureSizeValueElement.textContent = instance.scene.camera.apertureSize.toString()
+      }
+      instance.updateCamSettings()
+      instance.scene.camera.cameraIsMoving = true
+    })
+  }
   if (bouncesElement) {
     bouncesElement.addEventListener("input", (event) => {
       instance.scene.maxBounces = parseFloat((<HTMLInputElement>event.target).value)
@@ -54,11 +121,11 @@ export function addEventListeners(instance: Renderer) {
       instance.scene.camera.cameraIsMoving = true
     })
   }
-  if (fovElement) {
-    fovElement.addEventListener("input", (event) => {
-      instance.scene.camera.fov = parseFloat((<HTMLInputElement>event.target).value)
-      if (fovValueElement) {
-        fovValueElement.textContent = instance.scene.camera.fov.toString()
+  if (jitterElement) {
+    jitterElement.addEventListener("input", (event) => {
+      instance.scene.jitterScale = parseFloat((<HTMLInputElement>event.target).value)
+      if (jitterValueElement) {
+        jitterValueElement.textContent = instance.scene.jitterScale.toString()
       }
       instance.updateSettings()
       instance.scene.camera.cameraIsMoving = true
@@ -94,7 +161,7 @@ export function createCornellBox(): ObjectProperties[] {
   const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
   const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
   const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
-  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 5.0 })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 18.0 })
   const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.05, specularChance: 1.0 })
   return [
     // Ground
@@ -325,7 +392,7 @@ export function createCornellBox4(): ObjectProperties[] {
   const redMaterial = new Material({ albedo: [1.0, 0.0, 0.0] })
   const greenMaterial = new Material({ albedo: [0.0, 1.0, 0.0] })
   const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
-  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 0.8, 0.6], emissionStrength: 6.5 })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 1.5 })
   const mirrorMaterial = new Material({ albedo: [1.0, 1.0, 1.0], specularRoughness: 0.05, specularChance: 1.0 })
   return [
     // Ground
@@ -388,7 +455,7 @@ export function createCornellBox4(): ObjectProperties[] {
 export function createScene1(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const glassBalls: Material = new Material({
     specularChance: 0.02,
@@ -470,7 +537,7 @@ export function createScene1(): ObjectProperties[] {
 export function createScene2(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const glassBalls: Material = new Material({
     specularChance: 0.02,
@@ -551,7 +618,7 @@ export function createScene2(): ObjectProperties[] {
 export function createScene3(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const glassBalls: Material = new Material({
     specularChance: 0.02,
@@ -637,7 +704,7 @@ export function createScene3(): ObjectProperties[] {
 export function createScene4(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const glassBalls: Material = new Material({
     albedo: [0.9, 0.1, 0.1],
@@ -716,7 +783,7 @@ export function createScene4(): ObjectProperties[] {
 export function createScene5(): ObjectProperties[] {
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const glassBalls: Material = new Material({
     specularChance: 1.0,
@@ -871,7 +938,7 @@ export function createScene6(): ObjectProperties[] {
     })
   }
 
-  const lampCount = 3
+  const lampCount = 0
   const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
 
   for (let i = 0; i < lampCount; i++) {
@@ -935,7 +1002,7 @@ export function createScene8(): ObjectProperties[] {
   const shiny = new Material({ albedo: [1.0, 0.5, 0.5], specularRoughness: 0.1, specularChance: 0.52 })
   const mirror = new Material({ specularRoughness: 0.1, specularChance: 1.0 })
   const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
-  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
   const lightWeak = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 0.85], emissionStrength: 2.5 })
   const gold = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.5 })
   const glass = new Material({
@@ -1065,7 +1132,7 @@ export function createScene10(): ObjectProperties[] {
   const shiny = new Material({ albedo: [1.0, 0.5, 0.5], specularRoughness: 0.1, specularChance: 0.52 })
   const mirror = new Material({ specularRoughness: 0.0, specularChance: 1.0 })
   const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
-  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
   const lightWeak = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 0.85], emissionStrength: 2.5 })
   const gold = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.5 })
   const lightSource2 = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 50.0 })
@@ -1165,14 +1232,15 @@ export function createScene10(): ObjectProperties[] {
 
 export function createScene11(): ObjectProperties[] {
   // create the Materials you want to use
-  const grey = new Material({ albedo: [0.84, 0.89, 0.82] })
-  const shiny = new Material({ albedo: [1.0, 0.5, 0.5], specularRoughness: 0.1, specularChance: 0.52 })
-  const mirror = new Material({ specularRoughness: 0.0, specularChance: 1.0 })
-  const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
-  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
-  const lightWeak = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 0.85], emissionStrength: 2.5 })
-  const gold = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.5 })
-  const lightSource2 = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 50.0 })
+  const woodenFloorMaterial = new Material({
+    albedo: [0.6, 0.4, 0.2], // Brownish color for wood
+    specularColor: [0.1, 0.1, 0.1], // Minimal specular highlight
+    specularRoughness: 0.8, // High roughness for a matte finish
+    specularChance: 0.1, // Lower chance of specular reflection
+    emissionColor: [0.0, 0.0, 0.0], // No emission
+    emissionStrength: 0.0, // No emission strength
+  })
+  const lightSource = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
   const glass = new Material({
     specularChance: 0.02, // how reflective, 1.0 is 100%
     specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
@@ -1180,6 +1248,7 @@ export function createScene11(): ObjectProperties[] {
     refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
     refractionRoughness: 0.0, // self explanatory
   })
+
   const water = new Material({
     specularChance: 0.02, // how reflective, 1.0 is 100%
     specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
@@ -1188,18 +1257,27 @@ export function createScene11(): ObjectProperties[] {
     refractionRoughness: 0.0, // self explanatory
   })
 
-  // create an array of objects you want to use
+  const glowingOrb = new Material({
+    albedo: [0.0, 0.5, 0.5],
+    specularColor: [0.2, 0.8, 1.0],
+    specularRoughness: 0.1,
+    specularChance: 0.9,
+    emissionColor: [0.0, 0.5, 0.5],
+    emissionStrength: 3.0,
+  })
+
+  const reflectiveSphere = new Material({
+    specularChance: 0.9,
+    specularRoughness: 0.05,
+    ior: 2.5,
+    refractionChance: 0.1,
+    refractionRoughness: 0.0,
+  })
+
   const objectsToLoad: ObjectProperties[] = [
-    /*     {
-      modelPath: "./src/assets/models/plane.obj",
-      material: lightSource,
-      position: [0.0, 70.0, 0.0],
-      scale: [2.0, 2.0, 2.0],
-      rotation: [180.0, 0.0, 0.0],
-    }, */
     {
       modelPath: "./src/assets/models/plane.obj",
-      material: grey,
+      material: woodenFloorMaterial,
       position: [0.0, 0.0, 0.0],
       scale: [2.0, 2.0, 2.0],
     },
@@ -1216,35 +1294,35 @@ export function createScene11(): ObjectProperties[] {
       scale: [0.5, 0.5, 0.5],
     },
     {
-      modelPath: "./src/assets/models/plane.obj",
-      material: lightSource,
-      position: [0.0, 4.0, -16.0], // Fill light to the right and above the dragon
-      scale: [0.5, 0.5, 0.5], // Smaller plane for softer light
-      rotation: [115.0, 0.0, 0.0], // Angled down towards the dragon
-    },
-    /*     {
-      modelPath: "./src/assets/models/statue.obj",
-      material: gold,
-      position: [0.0, 0.0, 1.0],
-      scale: [1.2, 1.2, 1.2],
-      rotation: [-90, 180.0, 0.0],
+      modelPath: "./src/assets/models/sphere.obj",
+      material: reflectiveSphere,
+      position: [2.0, 0.25, 1.0],
+      scale: [0.5, 0.5, 0.5],
     },
     {
       modelPath: "./src/assets/models/sphere.obj",
-      material: glass,
-      position: [0.0, 1, 1.0],
-      scale: [2, 2, 2],
+      material: reflectiveSphere,
+      position: [2.7, 0.25, 1.6],
+      scale: [0.5, 0.5, 0.5],
     },
     {
-      modelPath: "./src/assets/models/cube.obj",
-      material: glass,
-      position: [0.0, 1, 1.0],
-      scale: [1.5, 1.5, 1.5],
-    }, */
+      modelPath: "./src/assets/models/sphere.obj",
+      material: reflectiveSphere,
+      position: [1.64, 0.25, 1.7],
+      scale: [0.5, 0.5, 0.5],
+    },
+    {
+      modelPath: "./src/assets/models/plane.obj",
+      material: lightSource,
+      position: [0.0, 4.0, -16.0],
+      scale: [0.5, 0.5, 0.5],
+      rotation: [115.0, 0.0, 0.0],
+    },
   ]
 
   return objectsToLoad
 }
+
 export function createScene12(): ObjectProperties[] {
   // Define materials for each type of sphere
   const shinyGoldMaterial = new Material({ albedo: [218 / 255, 133 / 255, 32 / 225], specularRoughness: 0.0, specularChance: 0.7 })
@@ -1487,7 +1565,7 @@ export function createScene13(): ObjectProperties[] {
 
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
+  const glowMaterial = new Material({ albedo: [0.0, 0.0, 0.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 3.0 })
 
   const spheres: ObjectProperties[] = []
 
@@ -1499,89 +1577,8 @@ export function createScene13(): ObjectProperties[] {
   const sphereflake = createSphereflake(vec3.fromValues(0.0, 0.75, -2.5), startScale, maxDepth)
 
   // Add the sphereflake to the spheres array
-  spheres.push(...sphereflake) // Using spread operator to add all elements of sphereflake
+  spheres.push(...sphereflake)
 
-  /*   // Object 1
-  spheres.push({
-    modelPath: "./src/assets/models/dragon.obj",
-    material: shinyGoldMaterial,
-    position: [-4.0, 0.25, 0.0],
-    scale: vec3.fromValues(0.28, 0.28, 0.28),
-    rotation: [0.0, -45, 0.0],
-  })
-
-  // Object 2
-  spheres.push({
-    modelPath: "./src/assets/models/klein.obj",
-    material: glassMaterial,
-    position: [-3.0, 0.25, 0.0],
-    scale: vec3.fromValues(0.13, 0.13, 0.13),
-    rotation: [0.0, -25, 0.0],
-  }) */
-
-  /*   // Object 3
-  spheres.push({
-    modelPath: "./src/assets/models/teapot.obj",
-    material: shinyGoldMaterial,
-    position: [0.0, 0.0, 0.0],
-    scale: [0.3, 0.3, 0.3],
-    rotation: [0.0, 0, 0.0],
-  }) */
-  /* 
-  // Object 4
-  spheres.push({
-    modelPath: "./src/assets/models/sphere.obj",
-    material: roughGlassMaterial,
-    position: [-1.0, 0.7, 0.0],
-    scale: vec3.fromValues(0.8, 0.8, 0.8),
-    rotation: [0.0, -55, 0.0],
-  });
-  
-  // Object 5
-  spheres.push({
-    modelPath: "./src/assets/models/water2.obj",
-    material: colorGlassMaterial,
-    position: [0.0, 0.25, 0.0],
-    scale: vec3.fromValues(0.3, 0.3, 0.3),
-    rotation: [0.0, -45, 0.0],
-  });
-  
-  // Object 6
-  spheres.push({
-    modelPath: "./src/assets/models/donut.obj",
-    material: mirrorMaterial,
-    position: [1.0, 0.85, 0.0],
-    scale: vec3.fromValues(0.6, 0.6, 0.6),
-    rotation: [0.0, -45, 0.0],
-  });
-  
-  // Object 7
-  spheres.push({
-    modelPath: "./src/assets/models/horse.obj",
-    material: mirrorRoughMaterial,
-    position: [2.0, 0.25, 0.0],
-    scale: vec3.fromValues(0.65, 0.65, 0.65),
-    rotation: [0.0, -35, 0.0],
-  });
-  
-  // Object 8
-  spheres.push({
-    modelPath: "./src/assets/models/couch.obj",
-    material: shinyRedMaterial,
-    position: [3.0, 0.3, 0.0],
-    scale: vec3.fromValues(0.25, 0.25, 0.25),
-    rotation: [0.0, -45, 0.0],
-  });
-  
-  // Object 9
-  spheres.push({
-    modelPath: "./src/assets/models/monkey.obj",
-    material: metallicMatteMaterial,
-    position: [4.0, 0.85, 0.0],
-    scale: vec3.fromValues(0.5, 0.5, 0.5),
-    rotation: [0.0, -145, 0.0],
-  });
-   */
   const planes: ObjectProperties[] = [
     // Ground
     {
@@ -1609,9 +1606,6 @@ export function createScene13(): ObjectProperties[] {
       rotation: [90.0, 180.0, 0.0],
     })
   }
-
-  const lampCount = 3
-  const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
 
   planes.push({
     modelPath: "./src/assets/models/plane.obj",
@@ -1669,15 +1663,6 @@ export function createScene13(): ObjectProperties[] {
     scale: [1.0, 1.0, 0.015],
     rotation: [0.0, 0.0, 180.0],
   })
-  /*   for (let i = 0; i < lampCount; i++) {
-    planes.push({
-      modelPath: "./src/assets/models/plane.obj",
-      material: glowMaterial,
-      position: [-4 + i * lampSpacing, 2.0, 0.0],
-      scale: [0.1, 1.0, 0.1],
-      rotation: [0.0, 0.0, 180.0],
-    })
-  } */
 
   for (const ball of spheres) {
     planes.push(ball)
@@ -1849,7 +1834,7 @@ export function createScene14(): ObjectProperties[] {
   }
   const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
   const blackMaterial = new Material({ albedo: [0.0, 0.0, 0.0] })
-  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 7.5 })
+  const glowMaterial = new Material({ albedo: [1.0, 1.0, 1.0], emissionColor: [1.0, 1.0, 1.0], emissionStrength: 5.0 })
 
   const planes: ObjectProperties[] = [
     // Ground
@@ -1897,4 +1882,87 @@ export function createScene14(): ObjectProperties[] {
   }
 
   return planes
+}
+
+export function createScene15(): ObjectProperties[] {
+  const createGlowMaterial = (r: number, g: number, b: number, strength: number) =>
+    new Material({ emissionColor: [r, g, b], emissionStrength: strength })
+
+  const createDynamicMaterial = (i: number) =>
+    createGlowMaterial(
+      Math.sin(i * 0.1) * 0.5 + 0.5,
+      Math.sin(i * 0.1 + Math.PI / 3) * 0.5 + 0.5,
+      Math.sin(i * 0.1 + (2 * Math.PI) / 3) * 0.5 + 0.5,
+      5.0,
+    )
+
+  const objectsToLoad: ObjectProperties[] = []
+
+  const numSpheres = 200
+  const angleIncrement = (24 * Math.PI) / numSpheres
+
+  // Spiral of glowing spheres
+  for (let i = 0; i < numSpheres; i++) {
+    const angle = i * angleIncrement
+    const x = 5 * Math.sin(4 * angle) * Math.cos(angle)
+    const z = 5 * Math.sin(4 * angle) * Math.sin(angle)
+    const y = 5 * Math.cos(4 * angle)
+
+    objectsToLoad.push({
+      modelPath: "./src/assets/models/sphere.obj",
+      material: createDynamicMaterial(i),
+      position: new Float32Array([x, y, z]),
+      scale: new Float32Array([0.4, 0.4, 0.4]),
+    })
+  }
+
+  // Fractal arrangement using other shapes
+  const fractalDepth = 3
+  const fractalScale = 2.5
+
+  const createFractal = (modelPath: string, material: Material, position: Float32Array, scale: Float32Array, depth: number) => {
+    if (depth === 0) return
+
+    objectsToLoad.push({
+      modelPath,
+      material,
+      position,
+      scale,
+    })
+
+    const nextScale = new Float32Array(scale.map((s) => s / fractalScale))
+
+    for (let dx of [-1, 1]) {
+      for (let dy of [-1, 1]) {
+        for (let dz of [-1, 1]) {
+          const nextPosition = new Float32Array([position[0] + dx * scale[0], position[1] + dy * scale[1], position[2] + dz * scale[2]])
+
+          createFractal(modelPath, material, nextPosition, nextScale, depth - 1)
+        }
+      }
+    }
+  }
+
+  const fractalMaterials = Array.from({ length: 5 }, (_, i) => createDynamicMaterial(i))
+
+  fractalMaterials.forEach((material, i) => {
+    createFractal("./src/assets/models/cube.obj", material, new Float32Array([0.0, 0.0, 0.0]), new Float32Array([1.0, 1.0, 1.0]), fractalDepth)
+  })
+
+  // Adding a large central glass object
+  objectsToLoad.push({
+    modelPath: "./src/assets/models/glass.obj",
+    material: new Material({
+      refractionChance: 1.0,
+      ior: 1.18,
+      specularChance: 0.15,
+      specularColor: [0.8, 0.8, 0.8],
+      specularRoughness: 0.0,
+      refractionRoughness: 0.0,
+    }),
+    position: new Float32Array([0.0, 0.0, 0.0]),
+    scale: new Float32Array([3.0, 3.0, 3.0]),
+  })
+
+  return objectsToLoad
 }

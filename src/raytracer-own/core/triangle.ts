@@ -1,14 +1,15 @@
-import { mat4, vec3 } from "gl-matrix"
-import { Material } from "./material"
+import { vec2, vec3 } from "gl-matrix"
 
 export class Triangle {
   centroid: vec3
   corners: vec3[]
   normals: vec3[]
+  texCoords: vec2[]
   objectID: number
   constructor(objectID: number = 0) {
     this.corners = []
     this.normals = []
+    this.texCoords = []
     this.objectID = objectID
   }
 

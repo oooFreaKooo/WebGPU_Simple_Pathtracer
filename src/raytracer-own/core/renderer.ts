@@ -3,9 +3,13 @@ import screen_shader from "../utils/screen_shader.wgsl"
 import { Scene } from "./scene"
 import { Deg2Rad, addEventListeners, linearToSRGB, setTexture } from "../utils/helper"
 import { CubeMapMaterial } from "./material"
+import { computePass, createRenderPassDescriptor, createVertexBuffer, renderPass } from "../utils/webgpu"
 
 const frameTimeLabel: HTMLElement = <HTMLElement>document.getElementById("frame-time")
 const renderTimeLabel: HTMLElement = <HTMLElement>document.getElementById("render-time")
+
+const COMPUTE_WORKGROUP_SIZE_X = 8
+const COMPUTE_WORKGROUP_SIZE_Y = 8
 
 export class Renderer {
   private canvas: HTMLCanvasElement
@@ -17,30 +21,38 @@ export class Renderer {
   private format: GPUTextureFormat
 
   //Assets
-  private textureA: GPUTexture
-  private textureB: GPUTexture
-  private sampler: GPUSampler
+  private vertexBuffer: GPUBuffer
+  private uniformBuffer: GPUBuffer
+  private frameBuffer: GPUBuffer
   private cameraBuffer: GPUBuffer
   private triangleBuffer: GPUBuffer
   private materialBuffer: GPUBuffer
   private nodeBuffer: GPUBuffer
   private settingsBuffer: GPUBuffer
+  private camsettingsBuffer: GPUBuffer
   private triangleIndexBuffer: GPUBuffer
-  private sky_texture: CubeMapMaterial
-  private sceneVariablesBuffer: GPUBuffer
+  private imgOutputBuffer: GPUBuffer
 
+  private sky_texture: CubeMapMaterial
+  private uniforms: { screenDims: number[]; frameNum: number; resetBuffer: number }
   // Pipeline objects
   private ray_tracing_pipeline: GPUComputePipeline
   private render_output_pipeline: GPURenderPipeline
+  private renderPassDescriptor: GPURenderPassDescriptor
 
   // Scene to render
   scene: Scene
   private frametime: number = 0
   private loaded = false
-  private accumulationCount: number = 0
+  private updatedUniformArray: Float32Array
 
-  private renderOutputBindGroup: GPUBindGroup[]
-  private computeBindGroup: GPUBindGroup[]
+  private renderOutputBindGroup: GPUBindGroup
+  private uniformBindGroup: GPUBindGroup
+  private frameBufferBindGroup: GPUBindGroup
+  private objectBindGroup: GPUBindGroup
+  private textureBindGroup: GPUBindGroup
+  private frameNum = 0
+
   constructor(canvas: HTMLCanvasElement, scene: Scene) {
     this.canvas = canvas
     this.scene = scene
@@ -55,16 +67,21 @@ export class Renderer {
   }
 
   async setupDevice() {
+    if (!navigator.gpu.wgslLanguageFeatures.has("readonly_and_readwrite_storage_textures")) {
+      throw new Error("Read-only and read-write storage textures are not available")
+    }
     // adapter: wrapper around (physical) GPU.
     // Describes features and limits
     this.adapter = <GPUAdapter>await navigator.gpu?.requestAdapter({
       powerPreference: "high-performance",
     })
-    if (!this.adapter) {
-      throw Error("Couldn't request WebGPU adapter.")
-    }
     const requiredLimits = {
       maxStorageBufferBindingSize: 1e9, // 1 GB
+      maxComputeWorkgroupStorageSize: 16384, // 16 KB
+      maxComputeInvocationsPerWorkgroup: 1024,
+      maxComputeWorkgroupSizeX: 256,
+      maxComputeWorkgroupSizeY: 256,
+      maxComputeWorkgroupSizeZ: 64,
     }
 
     // device: wrapper around GPU functionality
@@ -84,15 +101,17 @@ export class Renderer {
   }
 
   async createAssets() {
-    this.createTextureBuffer()
-    this.createSampler()
+    this.createUniformBuffer()
+    this.createImgOutputBuffer()
+    this.createFrameBuffer()
     this.createCameraBuffer()
-    this.createSceneVariablesBuffer()
     this.createMaterialBuffer()
     this.createTriangleBuffer()
     this.createNodeBuffer()
     this.createSettingsBuffer()
     this.createTriangleIndexBuffer()
+    const vertexData = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1])
+    this.vertexBuffer = createVertexBuffer(this.device, vertexData)
     await this.createSkyTexture()
   }
 
@@ -103,149 +122,117 @@ export class Renderer {
       compute: {
         module: this.device.createShaderModule({ code: raytracer_kernel }),
         entryPoint: "main",
+        constants: {
+          WORKGROUP_SIZE_X: COMPUTE_WORKGROUP_SIZE_X,
+          WORKGROUP_SIZE_Y: COMPUTE_WORKGROUP_SIZE_Y,
+        },
       },
     })
 
-    // TODO: Replace the ping pong method because october 2023 webGPU update allows read-write storage textures (experimental)
-    this.computeBindGroup = [
-      this.device.createBindGroup({
-        layout: this.ray_tracing_pipeline.getBindGroupLayout(0),
-        entries: [
-          {
-            binding: 0,
-            resource: this.textureA.createView(), // ping-pong Texture A
+    this.uniformBindGroup = this.device.createBindGroup({
+      layout: this.ray_tracing_pipeline.getBindGroupLayout(0),
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: this.uniformBuffer,
           },
-          {
-            binding: 1,
-            resource: this.textureB.createView(), // ping-pong Texture B
+        },
+        {
+          binding: 1,
+          resource: {
+            buffer: this.cameraBuffer,
           },
-          {
-            binding: 2,
-            resource: {
-              buffer: this.cameraBuffer,
-            },
+        },
+        {
+          binding: 2,
+          resource: {
+            buffer: this.settingsBuffer,
           },
-          {
-            binding: 3,
-            resource: {
-              buffer: this.triangleBuffer,
-            },
+        },
+        {
+          binding: 3,
+          resource: {
+            buffer: this.camsettingsBuffer,
           },
-          {
-            binding: 4,
-            resource: {
-              buffer: this.nodeBuffer,
-            },
-          },
-          {
-            binding: 5,
-            resource: {
-              buffer: this.triangleIndexBuffer,
-            },
-          },
-          {
-            binding: 6,
-            resource: this.sky_texture.view,
-          },
-          {
-            binding: 7,
-            resource: this.sky_texture.sampler,
-          },
-          {
-            binding: 8,
-            resource: {
-              buffer: this.materialBuffer,
-            },
-          },
-          {
-            binding: 9,
-            resource: {
-              buffer: this.settingsBuffer,
-            },
-          },
-          {
-            binding: 10,
-            resource: {
-              buffer: this.sceneVariablesBuffer,
-            },
-          },
-        ],
-      }),
-      this.device.createBindGroup({
-        layout: this.ray_tracing_pipeline.getBindGroupLayout(0),
-        entries: [
-          {
-            binding: 0,
-            resource: this.textureB.createView(),
-          },
-          {
-            binding: 1,
-            resource: this.textureA.createView(),
-          },
-          {
-            binding: 2,
-            resource: {
-              buffer: this.cameraBuffer,
-            },
-          },
-          {
-            binding: 3,
-            resource: {
-              buffer: this.triangleBuffer,
-            },
-          },
-          {
-            binding: 4,
-            resource: {
-              buffer: this.nodeBuffer,
-            },
-          },
-          {
-            binding: 5,
-            resource: {
-              buffer: this.triangleIndexBuffer,
-            },
-          },
-          {
-            binding: 6,
-            resource: this.sky_texture.view,
-          },
-          {
-            binding: 7,
-            resource: this.sky_texture.sampler,
-          },
-          {
-            binding: 8,
-            resource: {
-              buffer: this.materialBuffer,
-            },
-          },
-          {
-            binding: 9,
-            resource: {
-              buffer: this.settingsBuffer,
-            },
-          },
-          {
-            binding: 10,
-            resource: {
-              buffer: this.sceneVariablesBuffer,
-            },
-          },
-        ],
-      }),
-    ]
-  }
+        },
+      ],
+    })
 
+    // Group 1: Framebuffer
+    this.frameBufferBindGroup = this.device.createBindGroup({
+      layout: this.ray_tracing_pipeline.getBindGroupLayout(1),
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: this.frameBuffer,
+          },
+        },
+      ],
+    })
+
+    // Group 2: Object and BVH Data
+    this.objectBindGroup = this.device.createBindGroup({
+      layout: this.ray_tracing_pipeline.getBindGroupLayout(2),
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: this.triangleBuffer,
+          },
+        },
+        {
+          binding: 1,
+          resource: {
+            buffer: this.nodeBuffer,
+          },
+        },
+        {
+          binding: 2,
+          resource: {
+            buffer: this.triangleIndexBuffer,
+          },
+        },
+        {
+          binding: 3,
+          resource: {
+            buffer: this.materialBuffer,
+          },
+        },
+      ],
+    })
+
+    // Group 3: Textures and Samplers
+    this.textureBindGroup = this.device.createBindGroup({
+      layout: this.ray_tracing_pipeline.getBindGroupLayout(3),
+      entries: [
+        {
+          binding: 0,
+          resource: this.sky_texture.view,
+        },
+        {
+          binding: 1,
+          resource: this.sky_texture.sampler,
+        },
+      ],
+    })
+  }
   async makeRenderPipeline() {
     this.render_output_pipeline = this.device.createRenderPipeline({
       layout: "auto",
-
+      label: "render pipeline",
       vertex: {
         module: this.device.createShaderModule({
           code: screen_shader,
         }),
         entryPoint: "vert_main",
+        buffers: [
+          {
+            arrayStride: 2 * 4, // 2 floats, 4 bytes each
+            attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }],
+          },
+        ],
       },
 
       fragment: {
@@ -261,34 +248,32 @@ export class Renderer {
       },
     })
     // Two bind groups to render the last accumulated compute pass
-    this.renderOutputBindGroup = [
-      this.device.createBindGroup({
-        layout: this.render_output_pipeline.getBindGroupLayout(0),
-        entries: [
-          {
-            binding: 0,
-            resource: this.sampler,
+
+    this.renderOutputBindGroup = this.device.createBindGroup({
+      layout: this.render_output_pipeline.getBindGroupLayout(0),
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: this.uniformBuffer,
           },
-          {
-            binding: 1,
-            resource: this.textureA.createView(),
+        },
+        {
+          binding: 1,
+          resource: {
+            buffer: this.frameBuffer,
           },
-        ],
-      }),
-      this.device.createBindGroup({
-        layout: this.render_output_pipeline.getBindGroupLayout(0),
-        entries: [
-          {
-            binding: 0,
-            resource: this.sampler,
+        },
+        {
+          binding: 2,
+          resource: {
+            buffer: this.imgOutputBuffer,
           },
-          {
-            binding: 1,
-            resource: this.textureB.createView(),
-          },
-        ],
-      }),
-    ]
+        },
+      ],
+    })
+
+    this.renderPassDescriptor = createRenderPassDescriptor()
   }
 
   private updateScene() {
@@ -296,9 +281,18 @@ export class Renderer {
       this.updateCamera()
     }
 
-    this.updateSceneVariables()
-
     addEventListeners(this)
+
+    // Create a Float32Array to hold the updated uniform data
+    this.updatedUniformArray = new Float32Array([
+      this.uniforms.screenDims[0],
+      this.uniforms.screenDims[1],
+      this.uniforms.frameNum,
+      this.uniforms.resetBuffer,
+    ])
+
+    // Write the updated data to the buffer
+    this.device.queue.writeBuffer(this.uniformBuffer, 0, this.updatedUniformArray)
 
     if (this.loaded) {
       // everything below will only load once
@@ -307,6 +301,8 @@ export class Renderer {
     this.loaded = true
 
     this.updateSettings()
+    this.updateCamSettings()
+    this.updateImgSettings()
     this.updateMaterialData()
     this.updateTriangleData()
     this.updateNodeData()
@@ -343,33 +339,55 @@ export class Renderer {
     await this.sky_texture.initialize(this.device, modifiedUrls)
   }
 
-  private createTextureBuffer() {
-    // Two textures for ping pong swap to accumulate compute passes
-    const textureSize = { width: this.canvas.width, height: this.canvas.height }
+  private createUniformBuffer() {
+    // Set initial uniform values
+    this.uniforms = {
+      screenDims: [this.canvas.width, this.canvas.height],
+      frameNum: 0,
+      resetBuffer: 0,
+    }
 
-    this.textureA = this.device.createTexture({
-      size: textureSize,
-      format: this.format,
-      usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    // Create a Float32Array to hold the uniform data
+    let uniformArray = new Float32Array([
+      this.uniforms.screenDims[0],
+      this.uniforms.screenDims[1],
+      this.uniforms.frameNum,
+      this.uniforms.resetBuffer,
+    ])
+
+    this.uniformBuffer = this.device.createBuffer({
+      label: "Uniform buffer",
+      size: uniformArray.byteLength,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })
 
-    this.textureB = this.device.createTexture({
-      size: textureSize,
-      format: this.format,
-      usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-    })
+    this.device.queue.writeBuffer(this.uniformBuffer, 0, uniformArray)
   }
 
-  private createSampler() {
-    const samplerDescriptor: GPUSamplerDescriptor = {
-      addressModeU: "repeat",
-      addressModeV: "repeat",
-      magFilter: "linear",
-      minFilter: "nearest",
-      mipmapFilter: "nearest",
-      maxAnisotropy: 1,
+  private createImgOutputBuffer() {
+    const camDescriptor: GPUBufferDescriptor = {
+      size: 12,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     }
-    this.sampler = this.device.createSampler(samplerDescriptor)
+    this.imgOutputBuffer = this.device.createBuffer(camDescriptor)
+  }
+
+  public updateImgSettings() {
+    const camSettings = {
+      vignetteStrength: this.scene.vignetteStrength,
+      vignetteRadius: this.scene.vignetteRadius,
+    }
+
+    this.device.queue.writeBuffer(this.imgOutputBuffer, 0, new Float32Array([camSettings.vignetteStrength, camSettings.vignetteRadius]), 0, 2)
+  }
+  private createFrameBuffer() {
+    let frameNum = new Float32Array(this.canvas.width * this.canvas.height * 4).fill(0)
+    this.frameBuffer = this.device.createBuffer({
+      label: "Framebuffer",
+      size: frameNum.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    })
+    this.device.queue.writeBuffer(this.frameBuffer, 0, frameNum)
   }
 
   private createTriangleBuffer() {
@@ -451,9 +469,9 @@ export class Renderer {
       materialData[materialDataSize * i + 18] = 0.0
       materialData[materialDataSize * i + 19] = 0.0
 
-      // Adding inverseModel data to buffer
+      // Adding invModelTranspose data to buffer
       for (let j = 0; j < 16; j++) {
-        materialData[materialDataSize * i + 20 + j] = mesh.inverseModel[j]
+        materialData[materialDataSize * i + 20 + j] = mesh.invModelTranspose[j]
       }
     }
 
@@ -489,23 +507,6 @@ export class Renderer {
       nodeData_a[8 * i + 7] = this.scene.nodes[i].triCount
     }
     this.device.queue.writeBuffer(this.nodeBuffer, 0, nodeData_a, 0, 8 * this.scene.nodesUsed)
-  }
-
-  private createSceneVariablesBuffer() {
-    const descriptor: GPUBufferDescriptor = {
-      size: 8,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    }
-    this.sceneVariablesBuffer = this.device.createBuffer(descriptor)
-  }
-
-  private updateSceneVariables() {
-    const sceneData = {
-      time: performance.now(),
-      weight: 1.0 / this.accumulationCount,
-    }
-
-    this.device.queue.writeBuffer(this.sceneVariablesBuffer, 0, new Float32Array([sceneData.time, sceneData.weight]), 0, 2)
   }
 
   private createCameraBuffer() {
@@ -549,32 +550,55 @@ export class Renderer {
     )
   }
   private createSettingsBuffer() {
-    const descriptor: GPUBufferDescriptor = {
-      size: 24,
+    const camDescriptor: GPUBufferDescriptor = {
+      size: 12,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     }
-    this.settingsBuffer = this.device.createBuffer(descriptor)
+    this.camsettingsBuffer = this.device.createBuffer(camDescriptor)
+
+    const settingDescriptor: GPUBufferDescriptor = {
+      size: 28,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    }
+    this.settingsBuffer = this.device.createBuffer(settingDescriptor)
   }
-  updateSettings() {
-    const settingsData = {
+
+  public updateCamSettings() {
+    const camSettings = {
       fov: Deg2Rad(this.scene.camera.fov),
+      focusDistance: this.scene.camera.focusDistance,
+      apertureSize: this.scene.camera.apertureSize,
+    }
+
+    this.device.queue.writeBuffer(
+      this.camsettingsBuffer,
+      0,
+      new Float32Array([camSettings.fov, camSettings.focusDistance, camSettings.apertureSize]),
+      0,
+      3,
+    )
+  }
+
+  public updateSettings() {
+    const settingsData = {
       maxBounces: this.scene.maxBounces,
       samples: this.scene.samples,
       culling: this.scene.enableCulling,
       skytexture: this.scene.enableSkytexture,
       aspectRatio: this.canvas.width / this.canvas.height,
+      jitterScale: this.scene.jitterScale,
     }
 
     this.device.queue.writeBuffer(
       this.settingsBuffer,
       0,
       new Float32Array([
-        settingsData.fov,
         settingsData.maxBounces,
         settingsData.samples,
         settingsData.culling,
         settingsData.skytexture,
         settingsData.aspectRatio,
+        settingsData.jitterScale,
       ]),
       0,
       6,
@@ -587,44 +611,45 @@ export class Renderer {
 
   async renderLoop() {
     const start: number = performance.now()
-    this.accumulationCount++
+    // Increment frame number
+    this.frameNum += 1
+    // Update uniforms
     this.updateScene()
 
+    // Update frame number in uniforms
+    this.uniforms.frameNum = this.frameNum
+
+    // Reset buffer if camera moved
     if (this.scene.camera.cameraIsMoving) {
-      this.accumulationCount = 0
+      this.frameNum = 1
+      this.uniforms.resetBuffer = 1
       this.scene.camera.cameraIsMoving = false
 
       this.totalFrametime = 0
       this.totalFrames = 0
+    } else {
+      this.uniforms.resetBuffer = 0
     }
 
-    const encoder = this.device.createCommandEncoder()
+    // Compute pass
+    let workGroupsX = Math.ceil(this.canvas.width / COMPUTE_WORKGROUP_SIZE_X)
+    let workGroupsY = Math.ceil(this.canvas.height / COMPUTE_WORKGROUP_SIZE_Y)
 
-    // Raytracing
-    const ray_trace_pass = encoder.beginComputePass()
-    ray_trace_pass.setPipeline(this.ray_tracing_pipeline)
-    ray_trace_pass.setBindGroup(0, this.computeBindGroup[this.accumulationCount % 2])
-    ray_trace_pass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8)
-    ray_trace_pass.end()
+    computePass(
+      this.device,
+      this.ray_tracing_pipeline,
+      {
+        uniformBindGroup: this.uniformBindGroup,
+        frameBufferBindGroup: this.frameBufferBindGroup,
+        objectBindGroup: this.objectBindGroup,
+        textureBindGroup: this.textureBindGroup,
+      },
+      workGroupsX,
+      workGroupsY,
+    )
 
-    // Output render
-    const renderpass = encoder.beginRenderPass({
-      colorAttachments: [
-        {
-          view: this.context.getCurrentTexture().createView(),
-          loadOp: "clear",
-          clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          storeOp: "store",
-        },
-      ],
-    })
-    renderpass.setPipeline(this.render_output_pipeline)
-    renderpass.setBindGroup(0, this.renderOutputBindGroup[this.accumulationCount % 2])
-    renderpass.draw(6, 1)
-    renderpass.end()
-
-    // Submit the command buffer
-    this.device.queue.submit([encoder.finish()])
+    // Render pass
+    renderPass(this.device, this.context, this.renderPassDescriptor, this.render_output_pipeline, this.renderOutputBindGroup, this.vertexBuffer)
 
     await this.device.queue.onSubmittedWorkDone()
 
@@ -642,7 +667,7 @@ export class Renderer {
       frameTimeLabel.innerText = avgFps.toFixed(2).toString()
     }
     if (renderTimeLabel) {
-      renderTimeLabel.innerText = this.accumulationCount.toFixed(2).toString()
+      renderTimeLabel.innerText = this.frameNum.toFixed(2).toString()
     }
 
     this.requestId = requestAnimationFrame(() => this.renderLoop())

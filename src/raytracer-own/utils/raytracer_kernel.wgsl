@@ -9,39 +9,26 @@ struct BVH {
     nodes: array<Node>,
 }
 
-
-struct Ray {
-    direction: vec3<f32>,
-    origin: vec3<f32>,
-}
-
 struct CameraData {
-    cameraPos: vec3<f32>,
-    cameraForwards: vec3<f32>,
-    cameraRight: vec3<f32>,
-    cameraUp: vec3<f32>,
-}
-
-
-struct SceneVariables {
-    time: f32,
-    weight: f32,
+    pos: vec3<f32>,
+    forward: vec3<f32>,
+    right: vec3<f32>,
+    up: vec3<f32>,
 }
 
 struct Material {
     albedo: vec3f,
-    specularChance: f32,
-    specularColor: vec3f,
-    specularRoughness: f32,
+    specChance: f32,
+    specColor: vec3f,
+    specRoughness: f32,
     emissionColor: vec3f,
     emissionStrength: f32,
-    refractionColor: vec3f,
-    refractionChance: f32,
-    refractionRoughness: f32,
-    ior: f32, //Index of Refraction
-    inverseModel: mat4x4<f32>,
+    refrColor: vec3f,
+    refrChance: f32,
+    refrRoughness: f32,
+    ior: f32,
+    invModelTranspose: mat4x4<f32>,
 }
-
 
 struct Triangle {
     corner_a: vec3f,
@@ -50,7 +37,7 @@ struct Triangle {
     normal_b: vec3f,
     corner_c: vec3f,
     normal_c: vec3f,
-    objectID: f32,
+    meshID: f32,
 }
 
 struct MeshData {
@@ -61,20 +48,34 @@ struct ObjectData {
     triangles: array<Triangle>,
 }
 
+
 struct ObjectIndices {
     idx: array<f32>,
 }
 
 struct Settings {
-    cameraFOV: f32,
     maxBounces: f32,
     numSamples: f32,
     BACKFACE_CULLING: f32,
     SKY_TEXTURE: f32,
     aspectRatio: f32,
+    jitterScale: f32,
+    numLights: f32,
 }
 
-struct SurfacePoint {
+struct CameraSettings {
+    cameraFOV: f32,
+    focusDistance: f32,
+    apertureSize: f32,
+}
+
+struct Uniforms {
+	screenDims: vec2f,
+	frameNum: f32,
+	resetBuffer: f32,
+}
+
+struct HitPoint {
     material: Material,
     position: vec3f,
     dist: f32,
@@ -83,379 +84,463 @@ struct SurfacePoint {
     from_front: bool,
 }
 
-@group(0) @binding(0) var outputTex : texture_storage_2d<rgba16float, write>;
-@group(0) @binding(1) var inputTex : texture_2d<f32>;
-@group(0) @binding(2) var<uniform> camera : CameraData;
-@group(0) @binding(3) var<storage, read> objects : ObjectData;
-@group(0) @binding(4) var<storage, read> tree : BVH;
-@group(0) @binding(5) var<storage, read> triIdx : ObjectIndices;
-@group(0) @binding(6) var skyTexture : texture_cube<f32>;
-@group(0) @binding(7) var skySampler : sampler;
-@group(0) @binding(8) var<storage, read> mesh : MeshData;
-@group(0) @binding(9) var<uniform> settings : Settings;
-@group(0) @binding(10) var<uniform> scene : SceneVariables;
+struct RayType {
+    isSpecular: f32,
+    isRefractive: f32,
+    regularBounces: u32,
+};
+
+struct Ray {
+    direction: vec3<f32>,
+    origin: vec3<f32>,
+}
+
+// Group 0: Uniforms and Settings
+@group(0) @binding(0) var<uniform> uniforms : Uniforms;
+@group(0) @binding(1) var<uniform> cam : CameraData;
+@group(0) @binding(2) var<uniform> setting : Settings;
+@group(0) @binding(3) var<uniform> cam_setting : CameraSettings;
+
+// Group 1: Framebuffer
+@group(1) @binding(0) var<storage, read_write> framebuffer: array<vec4f>;
+
+// Group 2: Object and BVH Data
+@group(2) @binding(0) var<storage, read> objects : ObjectData;
+@group(2) @binding(1) var<storage, read> tree : BVH;
+@group(2) @binding(2) var<storage, read> triIdx : ObjectIndices;
+@group(2) @binding(3) var<storage, read> mesh : MeshData;
+
+// Group 3: Textures and Samplers
+@group(3) @binding(0) var skyTexture : texture_cube<f32>;
+@group(3) @binding(1) var skySampler : sampler;
+
 
 const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
+const INV_PI: f32 = 0.31830988618;
+const T_MIN = 0.001f;
+const T_MAX = 10000f;
 
-@compute @workgroup_size(8, 8)
-fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
-    let screen_size = vec2<i32 >(textureDimensions(outputTex));
-    let screen_pos = vec2<i32>(GlobalInvocationID.xy);
+override WORKGROUP_SIZE_X: u32;
+override WORKGROUP_SIZE_Y: u32;
 
-    let FOV = settings.cameraFOV;
-    let halfScreenSize: vec2<f32> = vec2<f32 >(screen_size) * 0.5;
-
-    let forwards = camera.cameraForwards;
-    let right = camera.cameraRight;
-    let up = camera.cameraUp;
+var<private> pixelCoords : vec2f;
+var<private> randState : u32 = 0u;
+var<private> stack : array<u32, 64>;
+var<workgroup> sharedAccumulatedColor: array<vec3f, 64>;
 
 
-    var pixelIndex = u32(screen_pos.y) * u32(screen_size.x) + u32(screen_pos.x);
-    var seed = pixelIndex + u32(scene.time) * 1193u;
-
-    let jitterScale = 1.0 / f32(settings.numSamples);
-
-    var accumulatedColor = vec4<f32>(0.0, 0.0, 0.0, 0.0);
-
-    for (var i: u32 = 0u; i < u32(settings.numSamples); i = i + 1u) {
-        var myRay: Ray;
-        myRay.origin = camera.cameraPos;
-        let jitter: vec2<f32> = vec2<f32>(RandomFloat01(&seed), RandomFloat01(&seed)) * jitterScale;
-        let screen_sampled_jittered: vec2<f32> = vec2<f32>(screen_pos) + jitter - halfScreenSize;
-        let horizontal_coefficient: f32 = FOV * screen_sampled_jittered.x / f32(screen_size.x);
-        let vertical_coefficient: f32 = FOV * screen_sampled_jittered.y / (f32(screen_size.y) * settings.aspectRatio);
-        myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
-        accumulatedColor += vec4(trace(myRay, &seed), 1.0);
+@compute @workgroup_size(WORKGROUP_SIZE_X, WORKGROUP_SIZE_Y)
+fn main(
+    @builtin(global_invocation_id) GlobalInvocationID: vec3u,
+    @builtin(workgroup_id) workgroup_id: vec3<u32>,
+    @builtin(local_invocation_id) local_invocation_id: vec3<u32>,
+    @builtin(local_invocation_index) local_invocation_index: u32,
+) {
+    if GlobalInvocationID.x >= u32(uniforms.screenDims.x) * u32(uniforms.screenDims.y) {
+        return;
     }
 
-    let newImage = accumulatedColor / settings.numSamples;
-    let accumulated = textureLoad(inputTex, screen_pos, 0);
+    let DIMENSION = uniforms.screenDims;
+    let coord = vec2u(workgroup_id.x * WORKGROUP_SIZE_X + local_invocation_id.x, workgroup_id.y * WORKGROUP_SIZE_Y + local_invocation_id.y);
+    let idx = coord.y * u32(DIMENSION.x) + coord.x;
+    pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
 
-    // weighted average between the new and the accumulated image
-    let result_color = saturate(scene.weight * newImage + (1.0 - scene.weight) * accumulated);
+    // Random state initialization
+    randState = idx + u32(uniforms.frameNum) * 719393;
 
-    textureStore(outputTex, screen_pos, result_color);
+    // Precompute constants outside the loops
+    let sqrt_spp = sqrt(f32(setting.numSamples));
+    let recip_sqrt_spp = 1.0 / sqrt_spp;
+    let half_screen_dims = vec2<f32>(DIMENSION.xy) * 0.5;
+    let FORWARD = cam.forward;
+    let RIGHT = cam.right;
+    let UP = cam.up;
+    let POS = cam.pos;
+    let FOV = cam_setting.cameraFOV;
+    let focus_dist = cam_setting.focusDistance;
+    let aspect_ratio = setting.aspectRatio;
+
+    let rand_state_vec = vec2<f32>(rand(), rand());
+
+    var myRay: Ray;
+    sharedAccumulatedColor[local_invocation_index] = vec3<f32>(0.0);
+    var sampleCount = 0.0;
+
+    for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
+        for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
+            // Generate stratified samples with precomputed rand state
+            let stratifiedSample = (vec2<f32>(i, j) + rand_state_vec) * recip_sqrt_spp;
+
+            // Calculate screen jittered coordinates
+            let screen_jittered = pixelCoords + stratifiedSample - half_screen_dims;
+
+            // Calculate lens point and origin
+            let lens_point = rand_state_vec * cam_setting.apertureSize;
+            myRay.origin = POS + RIGHT * lens_point.x + UP * lens_point.y;
+
+            // Calculate ray direction
+            let horizontal_coeff = FOV * screen_jittered.x / DIMENSION.x;
+            let vertical_coeff = FOV * screen_jittered.y / (DIMENSION.y * aspect_ratio);
+            let focus_point = POS + normalize(FORWARD + horizontal_coeff * RIGHT + vertical_coeff * UP) * focus_dist;
+            myRay.direction = normalize(focus_point - myRay.origin);
+
+            // Trace the ray and accumulate color
+            sharedAccumulatedColor[local_invocation_index] += trace(myRay) * recip_sqrt_spp;
+            sampleCount += 1.0;
+        }
+    }
+
+    var acc_radiance = sharedAccumulatedColor[local_invocation_index] / sampleCount;
+
+    if uniforms.resetBuffer == 0.0 {
+        acc_radiance += framebuffer[idx].xyz;
+    }
+
+    framebuffer[idx] = vec4<f32>(acc_radiance, 1.0);
 }
 
-//https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-camera/
-fn trace(camRay: Ray, seed: ptr<function, u32>) -> vec3f {
+fn trace(camRay: Ray) -> vec3f {
     var ray = camRay;
-    var accumulatedColor: vec3f = vec3(0.0, 0.0, 0.0);
-    var energy = vec3(1.0, 1.0, 1.0);
-    var skyColor: vec3f;
-    var regularBounces: u32 = 0u;
-    for (var bounce: u32 = 0u; bounce < u32(settings.maxBounces); bounce++) {
-        let hit = traverse(ray);
+    var acc_radiance: vec3f = vec3(0.0, 0.0, 0.0);
+    var throughput = vec3(1.0, 1.0, 1.0);
+    var regularBounces: u32 = 1u;
+
+    let maxBounces = u32(setting.maxBounces);
+    let skyTextureEnabled = setting.SKY_TEXTURE == 1.0;
+
+    for (var bounce: u32 = 0u; bounce < maxBounces; bounce++) {
+        let hit = traverse(ray, T_MAX);
 
         if !hit.hit {
-            accumulatedColor += energy * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, settings.SKY_TEXTURE == 1.0);
+            acc_radiance += throughput * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, skyTextureEnabled);
             break;
         }
 
-        let material = hit.material;
-        var originalEnergy = energy;
-
-        // do absorption if we are hitting from inside the object
-        energy *= select(vec3(1.0), exp(-material.refractionColor * hit.dist), hit.from_front);
-
-        let n1 = select(1.0, material.ior, !hit.from_front);
-        let n2 = select(1.0, material.ior, hit.from_front);
-
-        // get the pre-fresnel chances
-        var specularChance = material.specularChance;
-        var refractionChance = material.refractionChance;
-
-        // take fresnel into account for specularChance and adjust other chances. specular takes priority.
-        // chanceMultiplier makes sure we keep diffuse / refraction ratio the same.
-        var rayProbability = 1.0;
-        if specularChance > 0.0 {
-            specularChance = FresnelReflectAmount(n1, n2, hit.normal, ray.direction, material.specularChance, 1.0);
-            let chanceMultiplier = (1.0 - specularChance) / (1.0 - material.specularChance);
-            refractionChance *= chanceMultiplier;
+        var M = hit.material;
+        var originalEnergy = throughput;
+        M = ensure_energy_conservation(M);
+        
+        // Absorption if inside the object
+        if hit.from_front {
+            throughput *= exp(-M.refrColor * hit.dist);
         }
 
-        // calculate whether we are going to do a diffuse, specular, or refractive ray
-        var isSpecular: f32 = 0.0;
-        var isRefractive: f32 = 0.0;
-        let randomFloat = RandomFloat01(seed);
-        if (specularChance > 0.0) && (randomFloat < specularChance) {
-            isSpecular = 1.0;
-            rayProbability = specularChance;
-        } else if refractionChance > 0.0 && randomFloat < specularChance + refractionChance {
-            isRefractive = 1.0;
-            rayProbability = refractionChance;
-        } else {
-            rayProbability = 1.0 - (specularChance + refractionChance);
-            regularBounces += 1u;
+        let n1 = select(1.0, M.ior, !hit.from_front);
+        let n2 = select(1.0, M.ior, hit.from_front);
+
+        // Fresnel effect
+        var specChance = M.specChance;
+        var refrChance = M.refrChance;
+
+        if specChance > 0.1 {
+            refrChance *= (1.0 - specChance) / (1.0 - M.specChance);
         }
 
-        if regularBounces >= 4u && isSpecular == 0.0 { // Stop if max bounces for regular materials is reached
+        // Ray type determination
+        var rayType = determine_ray_type(specChance, refrChance, rand());
+        regularBounces = rayType.regularBounces;
+
+        // Max bounces for diffuse objects
+        if regularBounces >= 4u && rayType.isSpecular == 0.0 {
             break;
         }
-        // numerical problems can cause rayProbability to become small enough to cause a divide by zero.
-        rayProbability = max(rayProbability, 0.001);
 
-        // update the ray position
-        ray.origin = select((ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON, (ray.origin + ray.direction * hit.dist) - hit.normal * 0.01, isRefractive == 1.0);
+        // Ray position update
+        ray.origin = update_ray_origin(ray, hit, rayType.isRefractive);
 
-        // Calculate a new ray direction.
-        // Diffuse uses a normal oriented cosine weighted hemisphere sample.
-        // Perfectly smooth specular uses the reflection ray.
-        // Rough (glossy) specular lerps from the smooth specular to the rough diffuse by the material roughness squared
-        // Squaring the roughness is just a convention to make roughness feel more linear perceptually.
-        let bounces = min(1u, bounce);
-        let diffuseDir = normalize(hit.normal + RandomUnitVector(seed));
-        //let diffuseDir = CosineWeightedRandomUnitVector(hit.normal, seed);
+        var specularDir = calculate_specular_dir(ray, hit);
+        var refractDir = normalize(
+            mix(
+                refract(ray.direction, hit.normal, n1 / n2),
+                cosine_weighted_sampling_hemisphere(-hit.normal),
+                M.refrRoughness * M.refrRoughness
+            )
+        );
 
-        var specularDir = reflect(ray.direction, hit.normal);
-        specularDir = normalize(mix(specularDir, diffuseDir, material.specularRoughness * material.specularRoughness));
+        // New ray direction
+        ray.direction = mix(
+            mix(
+                cosine_weighted_sampling_hemisphere(hit.normal),
+                specularDir,
+                rayType.isSpecular
+            ),
+            refractDir,
+            rayType.isRefractive
+        );
 
-        var refractDir = refract(ray.direction, hit.normal, select(material.ior, 1.0 / material.ior, hit.from_front));
-        refractDir = normalize(mix(refractDir, normalize(-hit.normal + RandomUnitVector(seed)), material.refractionRoughness * material.refractionRoughness));
-        ray.direction = mix(mix(diffuseDir, specularDir, isSpecular), refractDir, isRefractive);
+        acc_radiance += throughput * M.emissionColor * M.emissionStrength;
 
-
-        accumulatedColor += energy * material.emissionColor * material.emissionStrength;
-
-        if isRefractive == 0.0 {
-            energy = originalEnergy;
-            energy *= material.albedo + material.specularColor * isSpecular;
+        // Update throughput
+        if rayType.isRefractive == 0.0 {
+            throughput = originalEnergy * (M.albedo + M.specColor * rayType.isSpecular);
         }
 
-        energy /= rayProbability;
-
-        let p = max(energy.r, max(energy.g, energy.b));
-        if randomFloat >= p {
-            break;
+        // Russian roulette
+        let rr_prob = max(max(throughput.r, throughput.g), throughput.b);
+        if rand() >= rr_prob || length(throughput) < 0.001 {
+                break;
         }
-        energy *= (1.0 / p);
+
+        throughput /= rr_prob;
     }
-
-    return accumulatedColor;
+    return acc_radiance;
 }
 
-//https://simonstechblog.blogspot.com/2018/06/simple-gpu-path-tracer.html
-fn wang_hash(seed: ptr<function, u32>) -> u32 {
-    *seed = (*seed ^ 61u) ^ (*seed >> 16u);
-    *seed *= 9u;
-    *seed = *seed ^ (*seed >> 4u);
-    *seed *= 0x27d4eb2du;
-    *seed = *seed ^ (*seed >> 15u);
-    return *seed;
-}
-fn RandomFloat01(state: ptr<function, u32>) -> f32 {
-    return f32(wang_hash(state)) / 4294967296.0;
+fn update_ray_origin(ray: Ray, hit: HitPoint, isRefractive: f32) -> vec3f {
+    return select(
+        (ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON,
+        (ray.origin + ray.direction * hit.dist) - hit.normal * EPSILON,
+        isRefractive == 1.0
+    );
 }
 
-fn RandomUnitVector(state: ptr<function, u32>) -> vec3<f32> {
-    let z: f32 = RandomFloat01(state) * 2.0 - 1.0;
-    let a: f32 = RandomFloat01(state) * (2.0 * PI);
-    let r: f32 = sqrt(1.0 - z * z);
-    let x: f32 = r * cos(a);
-    let y: f32 = r * sin(a);
-    return vec3<f32>(x, y, z);
-}
+fn determine_ray_type(specChance: f32, refrChance: f32, randVal: f32) -> RayType {
+    var result: RayType;
+    result.isSpecular = 0.0;
+    result.isRefractive = 0.0;
+    result.regularBounces = 1u;
 
-
-
-
-// https://raytracing.github.io/books/RayTracingInOneWeekend.html#dielectrics/refraction
-fn refract(e1: vec3<f32>, e2: vec3<f32>, e3: f32) -> vec3<f32> {
-    let k: f32 = 1.0 - e3 * e3 * (1.0 - dot(e2, e1) * dot(e2, e1));
-    if k < 0.0 {
-        return vec3<f32>(0.0, 0.0, 0.0); // Total internal reflection, no refraction
+    if specChance > 0.0 && randVal < specChance {
+        result.isSpecular = 1.0;
+    } else if refrChance > 0.0 && randVal < (specChance + refrChance) {
+        result.isRefractive = 1.0;
     } else {
-        return e3 * e1 - (e3 * dot(e2, e1) + sqrt(k)) * e2;
+        result.regularBounces += 1u;
     }
+
+    return result;
 }
 
-fn FresnelReflectAmount(n1: f32, n2: f32, normal: vec3<f32>, incident: vec3<f32>, minReflectivity: f32, maxReflectivity: f32) -> f32 {
-    // Schlick approximation
-    let r0 = pow(((n1 - n2) / (n1 + n2)), 2.0);
-    var cosX: f32 = -dot(normal, incident);
-    if n1 > n2 {
-        let n: f32 = n1 / n2;
-        let sinT2: f32 = n * n * (1.0 - cosX * cosX);
-        // Total internal reflection
-        if sinT2 > 1.0 {
-            return maxReflectivity;
-        }
-        cosX = sqrt(1.0 - sinT2);
-    }
-    let x: f32 = pow(1.0 - cosX, 5.0);
-    let ret: f32 = r0 + (1.0 - r0) * x;
+fn calculate_specular_dir(ray: Ray, hit: HitPoint) -> vec3<f32> {
+    let V = -ray.direction;
+    let H = sample_ggx_importance(hit.material.specRoughness, hit.normal);
+    let L = reflect(-V, H);
 
-    // Adjust reflect multiplier for object reflectivity
-    return mix(minReflectivity, maxReflectivity, ret);
+    if dot(L, hit.normal) <= 0.0 {
+        return vec3<f32>(0.0, 0.0, 0.0);
+    }
+
+    return L;
 }
 
-fn traverse(ray: Ray) -> SurfacePoint {
-    var surfacePoint: SurfacePoint;
+fn ensure_energy_conservation(material: Material) -> Material {
+    var M: Material = material;
+    let sum = M.albedo + M.specColor + M.refrColor;
+    let maxSum = max(sum.r, max(sum.g, sum.b));
+    if maxSum > 1.0 {
+        let factor = 1.0 / maxSum;
+        M.albedo *= factor;
+        M.specColor *= factor;
+        M.refrColor *= factor;
+    }
+    return M;
+}
+
+fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
+    let alpha = roughness * roughness;
+    let u1 = rand();
+    let u2 = rand();
+
+    let phi = TWO_PI * u1;
+    let cosTheta = sqrt((1.0 - u2) / (1.0 + (alpha * alpha - 1.0) * u2));
+    let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+
+    // Importance sampling the hemisphere in the direction of the normal
+    let H = vec3<f32>(
+        sinTheta * cos(phi),
+        sinTheta * sin(phi),
+        cosTheta
+    );
+
+    // Transform the sampled vector to the surface's local coordinate system
+    var up: vec3<f32> = select(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(1.0, 0.0, 0.0), abs(N.z) >= 0.999);
+    let T = normalize(cross(up, N));
+    let B = cross(N, T);
+
+    return normalize(T * H.x + B * H.y + N * H.z);
+}
+
+fn cosine_weighted_sampling_hemisphere(normal: vec3f) -> vec3f {
+    let r1 = rand();
+    let r2 = rand();
+    let r = sqrt(r1);
+    let theta = TWO_PI * r2;
+
+    let x = r * cos(theta);
+    let y = r * sin(theta);
+    let z = sqrt(1.0 - r1);
+
+    // Build an orthonormal basis (u, v, w)
+    var w = normalize(normal);
+    var a = select(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), abs(w.y) > 0.99);
+    var u = normalize(cross(a, w));
+    var v = cross(w, u);
+
+    return normalize(u * x + v * y + w * z);
+}
+
+fn rand() -> f32 {
+    randState = randState * 747796405u + 2891336453u;
+    var word: u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
+    return f32((word >> 22u) ^ word) / 4294967295;
+}
+
+fn traverse(ray: Ray, tMax: f32) -> HitPoint {
+    var tmax = tMax;
+    var surfacePoint: HitPoint;
     surfacePoint.hit = false;
-    var nearestHit: f32 = 9999.0;
+    let inverseDir: vec3<f32> = vec3<f32>(1.0) / ray.direction;
 
-    var currentNode: Node = tree.nodes[0];
-    var stack: array<Node, 20>;
     var stackLocation: u32 = 0u;
 
-    while true {
+    // Start with the root node index
+    stack[stackLocation] = 0u;
+    stackLocation += 1u;
+
+    while stackLocation != 0u {
+        // Pop the last node index from the stack
+        stackLocation -= 1u;
+        let nodeIdx: u32 = stack[stackLocation];
+        let currentNode: Node = tree.nodes[nodeIdx];
+
         let triCount: u32 = u32(currentNode.triCount);
         let contents: u32 = u32(currentNode.leftFirst);
 
         if triCount == 0u {
-            var child1: Node = tree.nodes[contents];
-            var child2: Node = tree.nodes[contents + 1u];
+            // Internal node: retrieve children indices
+            let child1Idx: u32 = contents;
+            let child2Idx: u32 = contents + 1u;
 
-            var distance1: f32 = hit_aabb(ray, child1);
-            var distance2: f32 = hit_aabb(ray, child2);
+            // Inline hit_aabb for both children
+            let distance1: f32 = hit_aabb_inline(ray, tree.nodes[child1Idx], inverseDir);
+            let distance2: f32 = hit_aabb_inline(ray, tree.nodes[child2Idx], inverseDir);
 
-            if distance1 > distance2 {
-                let temp: f32 = distance1;
-                distance1 = distance2;
-                distance2 = temp;
-
-                var tempChild: Node = child1;
-                child1 = child2;
-                child2 = tempChild;
-            }
-
-            if distance1 > nearestHit {
-                if stackLocation == 0u {
-                    break;
-                } else {
-                    stackLocation -= 1u;
-                    currentNode = stack[stackLocation];
+            // Determine traversal order based on distance
+            if distance1 < distance2 {
+                // Push farther child first
+                if distance2 < tmax {
+                    stack[stackLocation] = child2Idx;
+                    stackLocation += 1u;
+                }
+                if distance1 < tmax {
+                    stack[stackLocation] = child1Idx;
+                    stackLocation += 1u;
                 }
             } else {
-                currentNode = child1;
-                if distance2 < nearestHit {
-                    stack[stackLocation] = child2;
+                // Push farther child first
+                if distance1 < tmax {
+                    stack[stackLocation] = child1Idx;
+                    stackLocation += 1u;
+                }
+                if distance2 < tmax {
+                    stack[stackLocation] = child2Idx;
                     stackLocation += 1u;
                 }
             }
         } else {
-            for (var i: u32 = 0u; i < triCount; i++) {
-                let newSurfacePoint: SurfacePoint = hit_triangle(
-                    ray,
-                    objects.triangles[u32(triIdx.idx[i + contents])],
-                    0.0001,
-                    nearestHit,
-                    surfacePoint,
-                );
+            // Leaf node: process triangles
+            let end: u32 = contents + triCount;
 
-                if newSurfacePoint.hit {
-                    nearestHit = newSurfacePoint.dist;
-                    surfacePoint = newSurfacePoint;
+            // Process triangles in a SIMD-friendly manner if possible
+            for (var i: u32 = contents; i < end; i += 1u) {
+                let triangle = objects.triangles[u32(triIdx.idx[i])];
+                let newHitPoint: HitPoint = hit_triangle(ray, triangle, 0.0001, tmax);
+
+                if newHitPoint.hit && newHitPoint.dist < tmax {
+                    tmax = newHitPoint.dist;
+                    surfacePoint = newHitPoint;
                 }
-            }
-
-
-            if stackLocation == 0u {
-                break;
-            } else {
-                stackLocation -= 1u;
-                currentNode = stack[stackLocation];
             }
         }
     }
 
     return surfacePoint;
 }
-
 
 // Möller–Trumbore intersection algorithm
 fn hit_triangle(
     ray: Ray,
     tri: Triangle,
     tMin: f32,
-    tMax: f32,
-    oldSurfacePoint: SurfacePoint
-) -> SurfacePoint {
-    var surfacePoint: SurfacePoint;
+    tMax: f32
+) -> HitPoint {
+    var surfacePoint: HitPoint;
     surfacePoint.hit = false;
-    surfacePoint.material = oldSurfacePoint.material;
 
-    //Kanten des Dreiecks vom Punkt A
-    let edge_1: vec3<f32> = tri.corner_b - tri.corner_a;
-    let edge_2: vec3<f32> = tri.corner_c - tri.corner_a;
+    // Precompute edges
+    let edge1 = tri.corner_b - tri.corner_a;
+    let edge2 = tri.corner_c - tri.corner_a;
 
-    //h ist das Kreuzprodukt der Richtung des Strahls und einer Kante des Dreiecks
-    let h: vec3<f32> = cross(ray.direction, edge_2); // Vektor senkrecht zu Dreiecks ebene
-    let a: f32 = dot(edge_1, h); //Skalarprodukt : Wenn a nahe 0 ist, dann ist h fast parallel zur Kante
+    // Compute h and a
+    let h = cross(ray.direction, edge2);
+    let a = dot(edge1, h);
 
-
-    if (a < EPSILON) && settings.BACKFACE_CULLING == 1.0 {
+    // Early rejection based on backface culling and parallelism
+    if (a < EPSILON && setting.BACKFACE_CULLING == 1.0) || abs(a) < EPSILON {
         return surfacePoint;
     }
 
-    let f: f32 = 1.0 / a; // Kehrwert von a
-    let s: vec3<f32> = ray.origin - tri.corner_a; // Vektor vom Ursprung des Strahls zu einer Ecke des Dreiecks
-    let u: f32 = f * dot(s, h);//U: Parameter für baryzentrische Koordinaten
+    let f = 1.0 / a;
+    let s = ray.origin - tri.corner_a;
+    let u = f * dot(s, h);
 
-    //Wenn u außerhalb des Intervalls [0,1] liegt, gibt es keinen Treffer
+    // Early rejection based on u
     if u < 0.0 || u > 1.0 {
         return surfacePoint;
     }
 
-    let q: vec3<f32> = cross(s, edge_1);
-    let v: f32 = f * dot(ray.direction, q);//Berechne den Parameter v für baryzentrische Koordinaten
+    let q = cross(s, edge1);
+    let v = f * dot(ray.direction, q);
 
-    //Wenn v außerhalb des Intervalls [0,1-u] liegt, gibt es keinen Treffer
-    if v < 0.0 || u + v > 1.0 {
+    // Early rejection based on v and u + v
+    if v < 0.0 || (u + v) > 1.0 {
         return surfacePoint;
     }
 
-    let dist: f32 = f * dot(edge_2, q); //Berechne den Abstand vom Ursprung des Strahls zum Trefferpunkt
+    let dist = f * dot(edge2, q);
 
-    //Wenn t außerhalb des Intervalls [tMin, tMax] liegt, gibt es keinen Treffer
+    // Early rejection based on distance
     if dist < tMin || dist > tMax {
         return surfacePoint;
     }
 
-    //Berechne die normale am Schnittpunkt mit Interpolation der Normalen der Dreiecksecken
-    //https://www.vaultcg.com/blog/casually-raytracing-in-webgpu-part1/
-    let normal = normalize(tri.normal_b * u + tri.normal_c * v + tri.normal_a * (1.0 - u - v));
-    surfacePoint.normal = normalize((transpose(mesh.materials[u32(tri.objectID)].inverseModel) * vec4(normal, 0.0)).xyz);
+    // At this point, the intersection is valid
+    // Fetch material and inverse model transpose
+    let meshMaterial = mesh.materials[u32(tri.meshID)];
 
-    surfacePoint.material = mesh.materials[u32(tri.objectID)];
+    // Interpolate and transform normal without double normalization
+    let rawInterpolatedNormal = tri.normal_a * (1.0 - u - v) + tri.normal_b * u + tri.normal_c * v;
+    let transformedNormalUnnormalized = (meshMaterial.invModelTranspose * vec4<f32>(rawInterpolatedNormal, 0.0)).xyz;
+    let transformedNormal = normalize(transformedNormalUnnormalized);
+
+    // Determine front face using stored dot product
+    let dotProduct = dot(ray.direction, transformedNormal);
+    let frontFace = dotProduct < 0.0;
+    let finalNormal = select(transformedNormal, -transformedNormal, !frontFace);
+
+    // Populate hit information
+    surfacePoint.hit = true;
+    surfacePoint.material = meshMaterial;
     surfacePoint.dist = dist;
     surfacePoint.position = ray.origin + ray.direction * dist;
-    surfacePoint.hit = true; //Es gibt einen Treffer
+    surfacePoint.normal = finalNormal;
+    surfacePoint.from_front = frontFace;
 
-    // Determine if the ray hits the front face
-    if dot(ray.direction, surfacePoint.normal) < 0.0 {
-        surfacePoint.from_front = true;
-    } else {
-        surfacePoint.from_front = false;
-        surfacePoint.normal = -surfacePoint.normal; // invert the normal for back face
-    }
     return surfacePoint;
 }
 
+// Inlined version of hit_aabb optimized for performance
+fn hit_aabb_inline(ray: Ray, node: Node, inverseDir: vec3<f32>) -> f32 {
+    let t1: vec3<f32> = (node.aabbMin - ray.origin) * inverseDir;
+    let t2: vec3<f32> = (node.aabbMax - ray.origin) * inverseDir;
+    let tMin: vec3<f32> = min(t1, t2);
+    let tMax: vec3<f32> = max(t1, t2);
+    let t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
+    let t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
-//Prüfe ob bounding box getroffen wurde
-fn hit_aabb(ray: Ray, node: Node) -> f32 {
-    //Inverse Richtung des strahls berechnen um divisionen im code zu vermeiden (rechenzeit vebessern)
-    var inverseDir: vec3<f32> = vec3(1.0) / ray.direction;
-    //Berechnung der t werte (bei welchen Wert(distanz) trifft unser Strahl unsere bounding box achse?)
-    var t1: vec3<f32> = (node.aabbMin - ray.origin) * inverseDir;
-    var t2: vec3<f32> = (node.aabbMax - ray.origin) * inverseDir;
-    //Sicherstellen dass tMin immer den kleineren und tMax den größeren Wert für jede Achse enthält. (zB bei negativer Stahrrichtung)
-    var tMin: vec3<f32> = min(t1, t2);
-    var tMax: vec3<f32> = max(t1, t2);
-    //Bestimmen den größten minimalen wert (sicherstellen dass der Stahl tatsächlich in der Box ist und durch alle 3 Seiten ging)
-    var t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
-    //Bestimme den kleinsten maximalen Wert (Wann der strahl unsere bounding box verlässt)
-    var t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
-
-    //Prüfen ob der Schnittpunkt gültig ist. eintrittspunkt muss kleiner als der ausstrittspunkt sein.
-    //Und wenn t_max kleiner null ist der punkt hinter dem strahl ursprung.
-    if t_min > t_max || t_max < 0.0 {
-        return 99999.0;
-    } else {
-        return t_min;
-    }
+    let condition: bool = (t_min > t_max) || (t_max < 0.0);
+    return select(t_min, 99999.0, condition);
 }
 
