@@ -240,8 +240,7 @@ fn trace(camRay: Ray) -> vec3f {
         }
 
         // Ray type determination
-        let randVal = rand();
-        var rayType = determine_ray_type(specChance, refrChance, randVal);
+        var rayType = determine_ray_type(specChance, refrChance, rand());
         regularBounces = rayType.regularBounces;
 
         // Max bounces for diffuse objects
@@ -266,7 +265,7 @@ fn trace(camRay: Ray) -> vec3f {
 
         // Russian roulette
         let rr_prob = max(max(throughput.r, throughput.g), throughput.b);
-        if randVal >= rr_prob || length(throughput) < 0.001 {
+        if rand() >= rr_prob || length(throughput) < 0.001 {
                 break;
         }
 
