@@ -1,15 +1,16 @@
 struct BLASInstance {
-    transform: mat4x4f,
-    invTransform: mat4x4f,
+    transform: mat4x4<f32>,
+    invTransform: mat4x4<f32>,
     blasOffset: u32,
-    materialIdx: u32
+    materialIdx: u32,
+    _padding: vec2<f32>,
 }
 
 struct BLASNode {
     aabbMin: vec3<f32>,
-    leftFirst: f32,
+    leftFirst: u32,
     aabbMax: vec3<f32>,
-    triCount: f32,
+    triCount: u32,
 }
 
 struct TLASNode {
@@ -18,13 +19,6 @@ struct TLASNode {
     aabbMax: vec3<f32>,
     right: u32,
     instanceIdx: u32
-}
-
-struct CameraData {
-    pos: vec3<f32>,
-    forward: vec3<f32>,
-    right: vec3<f32>,
-    up: vec3<f32>,
 }
 
 struct Material {
@@ -38,7 +32,6 @@ struct Material {
     refrChance: f32,
     refrRoughness: f32,
     ior: f32,
-    inverseModel: mat4x4<f32>,
 }
 
 struct Triangle {
@@ -48,15 +41,13 @@ struct Triangle {
     normal_b: vec3f,
     corner_c: vec3f,
     normal_c: vec3f,
-    meshID: f32,
 }
 
-struct MeshData {
-    materials: array<Material>,
-}
-
-struct ObjectData {
-    triangles: array<Triangle>,
+struct CameraData {
+    pos: vec3<f32>,
+    forward: vec3<f32>,
+    right: vec3<f32>,
+    up: vec3<f32>,
 }
 
 struct Settings {
@@ -111,12 +102,12 @@ struct Ray {
 @group(1) @binding(0) var<storage, read_write> framebuffer: array<vec4f>;
 
 // Group 2: Object and BVH Data
-@group(2) @binding(0) var<storage, read> objects : ObjectData;
+@group(2) @binding(0) var<storage, read> meshTriangles : array<Triangle>;
 @group(2) @binding(1) var<storage, read> blasNodes: array<BLASNode>;
 @group(2) @binding(2) var<storage, read> blasInstances: array<BLASInstance>;
 @group(2) @binding(3) var<storage, read> tlasNodes: array<TLASNode>;
 @group(2) @binding(4) var<storage, read> triIdxInfo: array<u32>;
-@group(2) @binding(5) var<storage, read> mesh : MeshData;
+@group(2) @binding(5) var<storage, read> meshMaterial : array<Material>;
 
 // Group 3: Textures and Samplers
 @group(3) @binding(0) var skyTexture : texture_cube<f32>;
@@ -261,7 +252,7 @@ fn trace(camRay: Ray) -> vec3f {
         var rayType = determine_ray_type(specChance, refrChance, randVal);
         regularBounces = rayType.regularBounces;
 
-        // Max bounces for diffuse objects
+        // Max bounces for diffuse materials
         if regularBounces >= 4u && rayType.isSpecular == 0.0 {
             break;
         }
@@ -408,25 +399,39 @@ fn rand2D() -> f32 {
 fn traverse_tlas(ray: Ray, tMax: f32) -> HitPoint {
     var surfacePoint: HitPoint;
     surfacePoint.hit = false;
-    let inverseDir: vec3<f32> = vec3<f32>(1.0) / ray.direction;
+    surfacePoint.dist = tMax;
+
     var stack: array<u32, 64>;
     var stackLocation: i32 = 0;
 
-    stack[stackLocation] = 0;
+    stack[stackLocation] = 0u; // Start with root node index 0
     stackLocation = stackLocation + 1;
 
-    while stackLocation > 0 {
-        stackLocation = stackLocation - 1; // pop node from stack
-        let nodeIdx: u32 = stack[stackLocation];
+    let inverseDir: vec3<f32> = vec3<f32>(1.0) / ray.direction;
 
-        if hit_aabb_inline(ray, tlasNodes[nodeIdx].aabbMin, tlasNodes[nodeIdx].aabbMax, inverseDir) < surfacePoint.dist {
-            if tlasNodes[nodeIdx].left == 0 && tlasNodes[nodeIdx].right == 0 {
-                let instanceIdx: u32 = tlasNodes[nodeIdx].instanceIdx;
-                surfacePoint = intersectBVH(ray, instanceIdx, tMax, inverseDir);
-            } else { // not leaf node
-                stack[stackLocation] = tlasNodes[nodeIdx].left;
+    while stackLocation > 0 {
+        stackLocation = stackLocation - 1; // Pop node from stack
+        let nodeIdx: u32 = stack[stackLocation];
+        let node = tlasNodes[nodeIdx];
+
+        // Check intersection with node's bounding box
+        let t = hit_aabb_inline(ray, node.aabbMin, node.aabbMax, inverseDir);
+
+        if t < surfacePoint.dist {
+            if node.left == 0 && node.right == 0 {
+                // Leaf node
+                let instanceIdx: u32 = node.instanceIdx;
+                let hitPoint = intersectBVH(ray, instanceIdx, surfacePoint.dist);
+
+                if hitPoint.hit && hitPoint.dist < surfacePoint.dist {
+                    surfacePoint = hitPoint;
+                }
+            } else {
+                // Internal node
+                // Push child nodes onto the stack
+                stack[stackLocation] = node.left;
                 stackLocation = stackLocation + 1;
-                stack[stackLocation] = tlasNodes[nodeIdx].right;
+                stack[stackLocation] = node.right;
                 stackLocation = stackLocation + 1;
             }
         }
@@ -434,15 +439,21 @@ fn traverse_tlas(ray: Ray, tMax: f32) -> HitPoint {
     return surfacePoint;
 }
 
-fn intersectBVH(r: Ray, instanceIdx: u32, tMax: f32, inverseDir: vec3f) -> HitPoint {
-    var tmax = tMax;
+fn intersectBVH(r: Ray, instanceIdx: u32, tMax: f32) -> HitPoint {
     var surfacePoint: HitPoint;
     surfacePoint.hit = false;
+    surfacePoint.dist = tMax;
 
     let instance: BLASInstance = blasInstances[instanceIdx];
     var ray: Ray;
-    ray.origin = (instance.invTransform * vec4f(r.origin, 1)).xyz;
-    ray.direction = (instance.invTransform * vec4f(r.direction, 0)).xyz;
+
+    // Transform the ray into object space
+    ray.origin = (instance.invTransform * vec4f(r.origin, 1.0)).xyz;
+    ray.direction = (instance.invTransform * vec4f(r.direction, 0.0)).xyz;
+
+    var tMaxObjSpace = surfacePoint.dist;
+
+    let inverseDir = vec3<f32>(1.0) / ray.direction;
 
     var stack: array<u32, 64>;
     var stackLocation: i32 = 0;
@@ -452,33 +463,52 @@ fn intersectBVH(r: Ray, instanceIdx: u32, tMax: f32, inverseDir: vec3f) -> HitPo
     stackLocation = stackLocation + 1;
 
     while stackLocation > 0 {
-        stackLocation = stackLocation - 1; // pop node from stack
+        stackLocation = stackLocation - 1;
         let nodeIdx: u32 = stack[stackLocation];
         let node: BLASNode = blasNodes[nodeIdx];
-        let aabbMin: vec3f = node.aabbMin;
-        let aabbMax: vec3f = node.aabbMax;
 
-        if hit_aabb_inline(ray, aabbMin, aabbMax, inverseDir) < surfacePoint.dist {
+        let t = hit_aabb_inline(ray, node.aabbMin, node.aabbMax, inverseDir);
+
+        if t < tMaxObjSpace {
             let triCount: u32 = u32(node.triCount);
             let lFirst: u32 = u32(node.leftFirst);
+
             if triCount > 0 {
-
-                for (var i: u32 = 0; i < triCount; i = i + 1) {
+                for (var i: u32 = 0u; i < triCount; i = i + 1u) {
                     let idx: u32 = triIdxInfo[lFirst + i];
+                    let triangle = meshTriangles[idx];
 
-                    let triangle = objects.triangles[idx];
+                    let newHitPoint: HitPoint = hit_triangle(ray, triangle, 0.0001, tMaxObjSpace);
 
-                    let newHitPoint: HitPoint = hit_triangle(ray, triangle, 0.0001, tmax);
-
-                    if newHitPoint.hit && newHitPoint.dist < tmax {
-                        tmax = newHitPoint.dist;
+                    if newHitPoint.hit && newHitPoint.dist < tMaxObjSpace {
+                        tMaxObjSpace = newHitPoint.dist; // Update tMax in object space
                         surfacePoint = newHitPoint;
+
+                        // Transform position back to world space
+                        surfacePoint.position = (instance.transform * vec4f(newHitPoint.position, 1.0)).xyz;
+
+                        // Transform normal back to world space (using transpose of the inverse model matrix)
+                        let normalMatrix = transpose(instance.transform);
+                        surfacePoint.normal = normalize((normalMatrix * vec4f(newHitPoint.normal, 0.0)).xyz);
+
+                        // Recompute front-face detection in world space
+                        let frontFace = dot(r.direction, surfacePoint.normal) < 0.0;
+                        surfacePoint.from_front = frontFace;
+                        if !frontFace {
+                            surfacePoint.normal = -surfacePoint.normal;
+                        }
+
+                        // Keep the object-space distance, as distance transformation isn't needed here
+                        surfacePoint.dist = newHitPoint.dist;
+
+                        // Set the material from the instance
+                        surfacePoint.material = meshMaterial[instance.materialIdx];
                     }
                 }
-            } else { // if triangle count = 0 not leaf node (leftFirst gives leftChild node)
-                stack[stackLocation] = lFirst;
+            } else {
+                stack[stackLocation] = u32(node.leftFirst);
                 stackLocation = stackLocation + 1;
-                stack[stackLocation] = lFirst + 1; // right child is always left+1
+                stack[stackLocation] = u32(node.leftFirst + 1u);
                 stackLocation = stackLocation + 1;
             }
         }
@@ -486,16 +516,12 @@ fn intersectBVH(r: Ray, instanceIdx: u32, tMax: f32, inverseDir: vec3f) -> HitPo
     return surfacePoint;
 }
 
+
+
 // Möller–Trumbore intersection algorithm
-fn hit_triangle(
-    ray: Ray,
-    tri: Triangle,
-    tMin: f32,
-    tMax: f32
-) -> HitPoint {
+fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32) -> HitPoint {
     var surfacePoint: HitPoint;
     surfacePoint.hit = false;
-
 
     let edge_1: vec3<f32> = tri.corner_b - tri.corner_a;
     let edge_2: vec3<f32> = tri.corner_c - tri.corner_a;
@@ -503,19 +529,24 @@ fn hit_triangle(
     let h: vec3<f32> = cross(ray.direction, edge_2);
     let a: f32 = dot(edge_1, h);
 
-    if (a < EPSILON) && setting.BACKFACE_CULLING == 1.0 {
+    // Handle backface culling
+    if setting.BACKFACE_CULLING == 1.0 && a < EPSILON {
         return surfacePoint;
     }
 
+    if abs(a) < EPSILON {
+        return surfacePoint; // Ray is parallel to triangle
+    }
+
     let f: f32 = 1.0 / a;
-    let stack: vec3<f32> = ray.origin - tri.corner_a;
-    let u: f32 = f * dot(stack, h);
+    let s: vec3<f32> = ray.origin - tri.corner_a;
+    let u: f32 = f * dot(s, h);
 
     if u < 0.0 || u > 1.0 {
         return surfacePoint;
     }
 
-    let q: vec3<f32> = cross(stack, edge_1);
+    let q: vec3<f32> = cross(s, edge_1);
     let v: f32 = f * dot(ray.direction, q);
 
     if v < 0.0 || u + v > 1.0 {
@@ -528,21 +559,19 @@ fn hit_triangle(
         return surfacePoint;
     }
 
-    // Normalize normal calculation
-    let normal = normalize(tri.normal_b * u + tri.normal_c * v + tri.normal_a * (1.0 - u - v));
-    surfacePoint.normal = normalize((transpose(mesh.materials[u32(tri.meshID)].inverseModel) * vec4(normal, 0.0)).xyz);
+    // Compute the intersection point
+    surfacePoint.position = ray.origin + dist * ray.direction;
 
-    surfacePoint.material = mesh.materials[u32(tri.meshID)];
+    // Interpolate the normal
+    let normal = normalize(
+        tri.normal_a * (1.0 - u - v) + tri.normal_b * u + tri.normal_c * v
+    );
+
+    surfacePoint.normal = normal; // In object space
     surfacePoint.dist = dist;
-    surfacePoint.position = ray.origin + ray.direction * dist;
     surfacePoint.hit = true;
 
-    // Determine if the ray hits the front face
-    let frontFace = dot(ray.direction, surfacePoint.normal) < 0.0;
-    surfacePoint.from_front = frontFace;
-    if !frontFace {
-        surfacePoint.normal = -surfacePoint.normal; // invert the normal for back face
-    }
+    // We will recompute front-face detection after transforming normals in intersectBVH
     return surfacePoint;
 }
 
@@ -556,14 +585,4 @@ fn hit_aabb_inline(ray: Ray, aabbMin: vec3f, aabbMax: vec3f, inverseDir: vec3<f3
 
     let condition: bool = (t_min > t_max) || (t_max < 0.0);
     return select(t_min, 99999.0, condition);
-}
-
-// Helper function to convert f32 to u32 (bitwise)
-fn as_u32(x: f32) -> u32 {
-    return bitcast<u32>(x);
-}
-
-// Helper function to convert u32 to f32 (bitwise)
-fn as_f32(x: u32) -> f32 {
-    return bitcast<f32>(x);
 }

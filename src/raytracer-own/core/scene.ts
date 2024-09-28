@@ -98,13 +98,10 @@ export class Scene {
       this.blasOffsetToMeshIDMap.set(blasNodeOffset, meshID);
       this.meshIDToBLAS.set(meshID, blas);
 
-      // Create a BLASInstance with the object's transform, the blas node offset, and material index
-      const transform = objectMesh.model;
-
       // Get material index
       const materialIdx = this.getMaterialIndex(material);
 
-      const instance = new BLASInstance(transform, blasNodeOffset, materialIdx);
+      const instance = new BLASInstance(objectMesh.model, objectMesh.inverseModel, blasNodeOffset, materialIdx);
       this.blasInstanceArray.push(instance);
     }
 
@@ -115,7 +112,7 @@ export class Scene {
       this.meshIDToBLAS
     );
 
-    console.log('TLAS nodes:', this.tlas.nodes);
+    console.log('TLAS nodes:', this.tlas.m_tlasNodes);
     console.log('BLAS nodes:', this.blasArray);
     console.log('Instances:', this.blasInstanceArray);
   }

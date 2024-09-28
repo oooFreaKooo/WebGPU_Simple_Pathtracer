@@ -4,22 +4,21 @@ export class Triangle {
   centroid: vec3
   corners: vec3[]
   normals: vec3[]
-  texCoords: vec2[]
-  materialIndex: number
-  objectID: number
-  constructor(objectID: number = 0) {
+
+  constructor() {
     this.corners = []
     this.normals = []
-    this.texCoords = []
-    this.objectID = objectID
-    this.materialIndex = 0
   }
 
   make_centroid(): void {
-    this.centroid = [
-      (this.corners[0][0] + this.corners[1][0] + this.corners[2][0]) / 3,
-      (this.corners[0][1] + this.corners[1][1] + this.corners[2][1]) / 3,
-      (this.corners[0][2] + this.corners[1][2] + this.corners[2][2]) / 3,
-    ]
+    const c0 = this.corners[0];
+    const c1 = this.corners[1];
+    const c2 = this.corners[2];
+
+    this.centroid = vec3.fromValues(
+      (c0[0] + c1[0] + c2[0]) / 3,
+      (c0[1] + c1[1] + c2[1]) / 3,
+      (c0[2] + c1[2] + c2[2]) / 3
+    );
   }
 }

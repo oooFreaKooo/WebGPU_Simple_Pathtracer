@@ -14,30 +14,43 @@ export class Node {
 }
 
 export class AABB {
-  bmax: vec3
-  bmin: vec3
+  bmax: vec3;
+  bmin: vec3;
 
   constructor(
     bmax: vec3 = vec3.fromValues(-Infinity, -Infinity, -Infinity),
     bmin: vec3 = vec3.fromValues(Infinity, Infinity, Infinity)
   ) {
-    this.bmax = bmax
-    this.bmin = bmin
+    this.bmax = bmax;
+    this.bmin = bmin;
   }
+
+  clone(): AABB {
+    return new AABB(vec3.clone(this.bmax), vec3.clone(this.bmin));
+  }
+
   area(): number {
-    const e = vec3.create()
-    vec3.subtract(e, this.bmax, this.bmin)
-    return e[0] * e[1] + e[1] * e[2] + e[2] * e[0]
+    const e = vec3.create();
+    vec3.subtract(e, this.bmax, this.bmin);
+    return e[0] * e[1] + e[1] * e[2] + e[2] * e[0];
   }
 
   grow(p: vec3): void {
-    vec3.min(this.bmin, this.bmin, p)
-    vec3.max(this.bmax, this.bmax, p)
+    vec3.min(this.bmin, this.bmin, p);
+    vec3.max(this.bmax, this.bmax, p);
   }
 
   growByAABB(aabb: AABB): void {
-    vec3.min(this.bmin, this.bmin, aabb.bmin)
-    vec3.max(this.bmax, this.bmax, aabb.bmax)
+    vec3.min(this.bmin, this.bmin, aabb.bmin);
+    vec3.max(this.bmax, this.bmax, aabb.bmax);
+  }
+
+  union(aabb: AABB): AABB {
+    const newBmin = vec3.create();
+    const newBmax = vec3.create();
+    vec3.min(newBmin, this.bmin, aabb.bmin);
+    vec3.max(newBmax, this.bmax, aabb.bmax);
+    return new AABB(newBmax, newBmin);
   }
 }
 
