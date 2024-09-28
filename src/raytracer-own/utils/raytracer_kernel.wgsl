@@ -1,29 +1,8 @@
-struct BVHInstance {
-    boundsMin: vec3<f32>,
-    padding0: f32,
-    boundsMax: vec3<f32>,
-    padding1: f32,
-    invTransform: mat4x4<f32>,
-    // Add other necessary fields like BLAS index or material ID
-}
-
-struct BVHInstances {
-    instance: array<BVHInstance>,
-}
-
-struct TLAS {
-    nodes: array<TLASNode>,
-}
-
-struct TLASNode {
-    aabbMin: vec3<f32>,
-    aabbMax: vec3<f32>,
-    leftFirst: f32,
-    blasIdx: f32,
-}
-
-struct BLAS {
-    nodes: array<BLASNode>,
+struct BLASInstance {
+    transform: mat4x4f,
+    invTransform: mat4x4f,
+    blasOffset: u32,
+    materialIdx: u32
 }
 
 struct BLASNode {
@@ -31,6 +10,14 @@ struct BLASNode {
     leftFirst: f32,
     aabbMax: vec3<f32>,
     triCount: f32,
+}
+
+struct TLASNode {
+    aabbMin: vec3<f32>,
+    left: u32,
+    aabbMax: vec3<f32>,
+    right: u32,
+    instanceIdx: u32
 }
 
 struct CameraData {
@@ -70,11 +57,6 @@ struct MeshData {
 
 struct ObjectData {
     triangles: array<Triangle>,
-}
-
-
-struct ObjectIndices {
-    idx: array<f32>,
 }
 
 struct Settings {
@@ -130,10 +112,11 @@ struct Ray {
 
 // Group 2: Object and BVH Data
 @group(2) @binding(0) var<storage, read> objects : ObjectData;
-@group(2) @binding(1) var<storage, read> blasTree : BLAS;
-@group(2) @binding(2) var<storage, read> triIdx : ObjectIndices;
-@group(2) @binding(3) var<storage, read> mesh : MeshData;
-@group(2) @binding(4) var<storage, read> tlasTree : TLAS;
+@group(2) @binding(1) var<storage, read> blasNodes: array<BLASNode>;
+@group(2) @binding(2) var<storage, read> blasInstances: array<BLASInstance>;
+@group(2) @binding(3) var<storage, read> tlasNodes: array<TLASNode>;
+@group(2) @binding(4) var<storage, read> triIdxInfo: array<u32>;
+@group(2) @binding(5) var<storage, read> mesh : MeshData;
 
 // Group 3: Textures and Samplers
 @group(3) @binding(0) var skyTexture : texture_cube<f32>;
@@ -146,7 +129,8 @@ const TWO_PI: f32 = 6.28318530718;
 const INV_PI: f32 = 0.31830988618;
 const TLAS_STACK_SIZE: u32 = 64u;
 const BLAS_STACK_SIZE: u32 = 32u;
-const INF: f32 = 1e20;
+const T_MIN = 0.001f;
+const T_MAX = 10000f;
 
 var<private> pixelCoords : vec2f;
 var<private> randState : u32 = 0u;
@@ -247,7 +231,7 @@ fn trace(camRay: Ray) -> vec3f {
     let skyTextureEnabled = setting.SKY_TEXTURE == 1.0;
 
     for (var bounce: u32 = 0u; bounce < maxBounces; bounce++) {
-        let hit = traverse_tlas(ray);
+        let hit = traverse_tlas(ray, T_MAX);
 
         if !hit.hit {
             acc_radiance += throughput * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, skyTextureEnabled);
@@ -380,7 +364,7 @@ fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
         cosTheta
     );
 
-    // Transform the sampled vector to the surface's local coordinate system
+    // Transform the sampled vector to the surface'stack local coordinate system
     var up: vec3<f32> = select(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(1.0, 0.0, 0.0), abs(N.z) >= 0.999);
     let T = normalize(cross(up, N));
     let B = cross(N, T);
@@ -420,158 +404,98 @@ fn rand2D() -> f32 {
     return f32((word >> 22u) ^ word) / 4294967295;
 }
 
-// Function to traverse the TLAS and BLAS to find the nearest hit
-fn traverse_tlas(ray: Ray) -> HitPoint {
+
+fn traverse_tlas(ray: Ray, tMax: f32) -> HitPoint {
     var surfacePoint: HitPoint;
     surfacePoint.hit = false;
-    surfacePoint.dist = INF;
+    let inverseDir: vec3<f32> = vec3<f32>(1.0) / ray.direction;
+    var stack: array<u32, 64>;
+    var stackLocation: i32 = 0;
 
-    var stack: array<u32, TLAS_STACK_SIZE>;
-    var stackLocation: u32 = 0u;
+    stack[stackLocation] = 0;
+    stackLocation = stackLocation + 1;
 
-    // Start with the root TLAS node (assumed to be at index 0)
-    stack[stackLocation] = 0u;
-    stackLocation += 1u;
+    while stackLocation > 0 {
+        stackLocation = stackLocation - 1; // pop node from stack
+        let nodeIdx: u32 = stack[stackLocation];
 
-    while stackLocation > 0u {
-        stackLocation -= 1u;
-        let currentTLASNodeIdx: u32 = stack[stackLocation];
-        let currentTLASNode: TLASNode = tlasTree.nodes[currentTLASNodeIdx];
-
-        let t = hit_aabb(ray, currentTLASNode.aabbMin, currentTLASNode.aabbMax);
-        if t > surfacePoint.dist {
-            continue;
-        }
-
-        // Determine if the node is a leaf or internal
-        let blasIdx_f32: f32 = currentTLASNode.blasIdx;
-        let isLeaf: bool = (blasIdx_f32 >= 0.0);
-
-        if isLeaf {
-            let blasIdx: u32 = u32(blasIdx_f32);
-            traverse_blas(ray, blasIdx, surfacePoint.dist, surfacePoint);
-        } else {
-            // Internal node: unpack children from leftFirst
-            let packed: u32 = as_u32(currentTLASNode.leftFirst);
-            let childA: u32 = packed & 0xFFFFu;
-            let childB: u32 = (packed >> 16u) & 0xFFFFu;
-
-            // Test intersection with children
-            let childANode: TLASNode = tlasTree.nodes[childA];
-            let childBNode: TLASNode = tlasTree.nodes[childB];
-
-            let tA: f32 = hit_aabb(ray, childANode.aabbMin, childANode.aabbMax);
-            let tB: f32 = hit_aabb(ray, childBNode.aabbMin, childBNode.aabbMax);
-
-            // Push closer child first
-            if tA < tB {
-                if tB < surfacePoint.dist {
-                    stack[stackLocation] = childB;
-                    stackLocation += 1u;
-                }
-                if tA < surfacePoint.dist {
-                    stack[stackLocation] = childA;
-                    stackLocation += 1u;
-                }
-            } else {
-                if tA < surfacePoint.dist {
-                    stack[stackLocation] = childA;
-                    stackLocation += 1u;
-                }
-                if tB < surfacePoint.dist {
-                    stack[stackLocation] = childB;
-                    stackLocation += 1u;
-                }
+        if hit_aabb_inline(ray, tlasNodes[nodeIdx].aabbMin, tlasNodes[nodeIdx].aabbMax, inverseDir) < surfacePoint.dist {
+            if tlasNodes[nodeIdx].left == 0 && tlasNodes[nodeIdx].right == 0 {
+                let instanceIdx: u32 = tlasNodes[nodeIdx].instanceIdx;
+                surfacePoint = intersectBVH(ray, instanceIdx, tMax, inverseDir);
+            } else { // not leaf node
+                stack[stackLocation] = tlasNodes[nodeIdx].left;
+                stackLocation = stackLocation + 1;
+                stack[stackLocation] = tlasNodes[nodeIdx].right;
+                stackLocation = stackLocation + 1;
             }
         }
     }
-
     return surfacePoint;
 }
 
-fn traverse_blas(ray: Ray, blasIdx: u32, nearestHitPoint: f32, hitPont: HitPoint) {
-    var surfacePoint: HitPoint = hitPont;
-    var nearestHit = nearestHitPoint;
-    var stack: array<u32, BLAS_STACK_SIZE>;
-    var stackLocation: u32 = 0u;
+fn intersectBVH(r: Ray, instanceIdx: u32, tMax: f32, inverseDir: vec3f) -> HitPoint {
+    var tmax = tMax;
+    var surfacePoint: HitPoint;
+    surfacePoint.hit = false;
 
-    // Start with the root node of the BLAS
-    stack[stackLocation] = 0u; // Assuming root is at index 0
-    stackLocation += 1u;
+    let instance: BLASInstance = blasInstances[instanceIdx];
+    var ray: Ray;
+    ray.origin = (instance.invTransform * vec4f(r.origin, 1)).xyz;
+    ray.direction = (instance.invTransform * vec4f(r.direction, 0)).xyz;
 
-    let blasNodeCount: u32 = arrayLength(&blasTree.nodes);
+    var stack: array<u32, 64>;
+    var stackLocation: i32 = 0;
+    let rootIdx: u32 = instance.blasOffset;
 
-    while stackLocation > 0u {
-        stackLocation -= 1u;
-        let currentNodeIdx: u32 = stack[stackLocation];
-        let currentNode: BLASNode = blasTree.nodes[currentNodeIdx];
+    stack[stackLocation] = rootIdx;
+    stackLocation = stackLocation + 1;
 
-        let t = hit_aabb(ray, currentNode.aabbMin, currentNode.aabbMax);
-        if t > nearestHit {
-            continue;
-        }
+    while stackLocation > 0 {
+        stackLocation = stackLocation - 1; // pop node from stack
+        let nodeIdx: u32 = stack[stackLocation];
+        let node: BLASNode = blasNodes[nodeIdx];
+        let aabbMin: vec3f = node.aabbMin;
+        let aabbMax: vec3f = node.aabbMax;
 
-        if u32(currentNode.triCount) == 0u {
-            // Internal node: push children to stack
-            let child1: u32 = u32(currentNode.leftFirst);
-            let child2: u32 = u32(currentNode.leftFirst) + 1u;
+        if hit_aabb_inline(ray, aabbMin, aabbMax, inverseDir) < surfacePoint.dist {
+            let triCount: u32 = u32(node.triCount);
+            let lFirst: u32 = u32(node.leftFirst);
+            if triCount > 0 {
 
-            // Test intersection with children
-            let child1Node = blasTree.nodes[child1];
-            let child2Node = blasTree.nodes[child2];
+                for (var i: u32 = 0; i < triCount; i = i + 1) {
+                    let idx: u32 = triIdxInfo[lFirst + i];
 
-            let t1 = hit_aabb(ray, child1Node.aabbMin, child1Node.aabbMax);
-            let t2 = hit_aabb(ray, child2Node.aabbMin, child2Node.aabbMax);
+                    let triangle = objects.triangles[idx];
 
-            // Push closer child first
-            if t1 < t2 {
-                if t2 < nearestHit {
-                    stack[stackLocation] = child2;
-                    stackLocation += 1u;
+                    let newHitPoint: HitPoint = hit_triangle(ray, triangle, 0.0001, tmax);
+
+                    if newHitPoint.hit && newHitPoint.dist < tmax {
+                        tmax = newHitPoint.dist;
+                        surfacePoint = newHitPoint;
+                    }
                 }
-                if t1 < nearestHit {
-                    stack[stackLocation] = child1;
-                    stackLocation += 1u;
-                }
-            } else {
-                if t1 < nearestHit {
-                    stack[stackLocation] = child1;
-                    stackLocation += 1u;
-                }
-                if t2 < nearestHit {
-                    stack[stackLocation] = child2;
-                    stackLocation += 1u;
-                }
-            }
-        } else {
-            // Leaf node: test all triangles
-            let triStart: u32 = u32(currentNode.leftFirst);
-            let triEnd: u32 = triStart + u32(currentNode.triCount);
-            for (var i: u32 = triStart; i < triEnd; i++) {
-                let triangle = objects.triangles[u32(triIdx.idx[i])];
-                let newHitPoint: HitPoint = hit_triangle(ray, triangle, 0.0001, nearestHit, surfacePoint);
-
-                if newHitPoint.hit && newHitPoint.dist < nearestHit {
-                    nearestHit = newHitPoint.dist;
-                    surfacePoint = newHitPoint;
-                }
+            } else { // if triangle count = 0 not leaf node (leftFirst gives leftChild node)
+                stack[stackLocation] = lFirst;
+                stackLocation = stackLocation + 1;
+                stack[stackLocation] = lFirst + 1; // right child is always left+1
+                stackLocation = stackLocation + 1;
             }
         }
     }
+    return surfacePoint;
 }
-
 
 // Möller–Trumbore intersection algorithm
 fn hit_triangle(
     ray: Ray,
     tri: Triangle,
     tMin: f32,
-    tMax: f32,
-    oldHitPoint: HitPoint
+    tMax: f32
 ) -> HitPoint {
     var surfacePoint: HitPoint;
     surfacePoint.hit = false;
-    surfacePoint.material = oldHitPoint.material;
+
 
     let edge_1: vec3<f32> = tri.corner_b - tri.corner_a;
     let edge_2: vec3<f32> = tri.corner_c - tri.corner_a;
@@ -584,14 +508,14 @@ fn hit_triangle(
     }
 
     let f: f32 = 1.0 / a;
-    let s: vec3<f32> = ray.origin - tri.corner_a;
-    let u: f32 = f * dot(s, h);
+    let stack: vec3<f32> = ray.origin - tri.corner_a;
+    let u: f32 = f * dot(stack, h);
 
     if u < 0.0 || u > 1.0 {
         return surfacePoint;
     }
 
-    let q: vec3<f32> = cross(s, edge_1);
+    let q: vec3<f32> = cross(stack, edge_1);
     let v: f32 = f * dot(ray.direction, q);
 
     if v < 0.0 || u + v > 1.0 {
@@ -622,8 +546,7 @@ fn hit_triangle(
     return surfacePoint;
 }
 
-fn hit_aabb(ray: Ray, aabbMin: vec3<f32>, aabbMax: vec3<f32>) -> f32 {
-    let inverseDir: vec3<f32> = 1.0 / ray.direction;
+fn hit_aabb_inline(ray: Ray, aabbMin: vec3f, aabbMax: vec3f, inverseDir: vec3<f32>) -> f32 {
     let t1: vec3<f32> = (aabbMin - ray.origin) * inverseDir;
     let t2: vec3<f32> = (aabbMax - ray.origin) * inverseDir;
     let tMin: vec3<f32> = min(t1, t2);
@@ -631,11 +554,8 @@ fn hit_aabb(ray: Ray, aabbMin: vec3<f32>, aabbMax: vec3<f32>) -> f32 {
     let t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
     let t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
-    if t_min > t_max || t_max < 0.0 {
-        return INF;
-    } else {
-        return t_min;
-    }
+    let condition: bool = (t_min > t_max) || (t_max < 0.0);
+    return select(t_min, 99999.0, condition);
 }
 
 // Helper function to convert f32 to u32 (bitwise)

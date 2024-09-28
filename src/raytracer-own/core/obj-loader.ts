@@ -10,20 +10,19 @@ export class ObjLoader {
   maxCorner: vec3 = vec3.fromValues(MAX_VALUE, MAX_VALUE, MAX_VALUE)
   minCorner: vec3 = vec3.fromValues(MIN_VALUE, MIN_VALUE, MIN_VALUE)
   model: mat4 = mat4.create()
-  private objectID: number
+  meshID: number
   position: vec3
-  private rotation: vec3
-  private scale: vec3
-  private v: vec3[] = []
-  private vn: vec3[] = []
-  private vt: vec2[] = []
+  rotation: vec3
+  scale: vec3
+  v: vec3[] = []
+  vn: vec3[] = []
+  vt: vec2[] = []
   inverseModel: mat4 = mat4.create()
   material: Material
   triangles: Triangle[] = []
 
-  constructor(material: Material, position: vec3, scale: vec3, rotation: vec3, objectID: number) {
+  constructor(material: Material, position: vec3, scale: vec3, rotation: vec3) {
     this.material = material
-    this.objectID = objectID
     this.position = position
     this.rotation = rotation
     this.scale = scale
@@ -90,32 +89,29 @@ export class ObjLoader {
   }
 
   private read_face_data(line: string) {
-    const vertex_descriptions = line.trim().split(" ")
+    const vertex_descriptions = line.trim().split(" ");
 
     if (vertex_descriptions.length === 4) {
-      const tri = new Triangle()
-      this.read_corner(vertex_descriptions[1], tri)
-      this.read_corner(vertex_descriptions[2], tri)
-      this.read_corner(vertex_descriptions[3], tri)
-      tri.objectID = this.objectID
-      tri.make_centroid()
-      this.triangles.push(tri)
+      const tri = new Triangle();
+      this.read_corner(vertex_descriptions[1], tri);
+      this.read_corner(vertex_descriptions[2], tri);
+      this.read_corner(vertex_descriptions[3], tri);
+      tri.make_centroid();
+      this.triangles.push(tri);
     } else if (vertex_descriptions.length === 5) {
-      const tri1 = new Triangle()
-      this.read_corner(vertex_descriptions[1], tri1)
-      this.read_corner(vertex_descriptions[2], tri1)
-      this.read_corner(vertex_descriptions[3], tri1)
-      tri1.objectID = this.objectID
-      tri1.make_centroid()
-      this.triangles.push(tri1)
+      const tri1 = new Triangle();
+      this.read_corner(vertex_descriptions[1], tri1);
+      this.read_corner(vertex_descriptions[2], tri1);
+      this.read_corner(vertex_descriptions[3], tri1);
+      tri1.make_centroid();
+      this.triangles.push(tri1);
 
-      const tri2 = new Triangle()
-      this.read_corner(vertex_descriptions[1], tri2)
-      this.read_corner(vertex_descriptions[3], tri2)
-      this.read_corner(vertex_descriptions[4], tri2)
-      tri2.objectID = this.objectID
-      tri2.make_centroid()
-      this.triangles.push(tri2)
+      const tri2 = new Triangle();
+      this.read_corner(vertex_descriptions[1], tri2);
+      this.read_corner(vertex_descriptions[3], tri2);
+      this.read_corner(vertex_descriptions[4], tri2);
+      tri2.make_centroid();
+      this.triangles.push(tri2);
     }
   }
 

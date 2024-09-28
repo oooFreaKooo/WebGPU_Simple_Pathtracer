@@ -1,211 +1,290 @@
 import { vec3 } from "gl-matrix";
 import { Triangle } from "../triangle";
-import { AABB, Bin, Node } from "../node"
+import { AABB, Node } from "../node"
 
-const MAX_VALUE = Number.POSITIVE_INFINITY
-const MIN_VALUE = Number.NEGATIVE_INFINITY
+interface BLASNode {
+    leftFirst: number;
+    triangleCount: number;
+    aabb: AABB;
+}
+
+interface Bin {
+    aabb: AABB;
+    triCount: number;
+}
+
+
+const BINS: number = 10;
+const BLAS_NODE_SIZE: number = 12; // 12 floats
+const BLAS_NODE_BYTE_SIZE: number = 1 * 4 + // leftFirst (float)
+    1 * 4 + // triangleCount (float)
+    2 * 4 + // padding
+    3 * 4 + // aabb min (float3)
+    1 * 4 + // padding
+    3 * 4 + // aabb max (float3)
+    1 * 4   // padding
 
 export class BLAS {
-    nodes: Node[];
-    nodesUsed: number = 0;
-    triangleIndices: number[];
-    triangles: Triangle[];
-    bounds: AABB;
+
+    m_triangles: Triangle[];
+    m_nodes: Array<BLASNode>;
+    m_centroids: Float32Array;
+    m_rootNodeIdx: number = 0;
+    m_nodeCount: number = 0;
+    m_triangleIndices: Uint32Array;
 
     constructor(triangles: Triangle[]) {
-        this.triangles = triangles;
-        this.triangleIndices = new Array(this.triangles.length);
-        for (let i = 0; i < this.triangles.length; i++) {
-            this.triangleIndices[i] = i;
-        }
+        this.m_triangles = triangles;
 
-        this.nodes = new Array(2 * this.triangles.length - 1);
-        for (let i = 0; i < 2 * this.triangles.length - 1; i++) {
-            this.nodes[i] = new Node();
-        }
+        let N: number = this.m_triangles.length;
+        this.m_nodes = new Array<BLASNode>(N * 2 - 1);
+        this.m_centroids = new Float32Array(N * 3);
+        this.m_triangleIndices = new Uint32Array(N);
+        this.m_nodeCount = 1;
+
+        this._buildBLAS();
     }
 
-    async buildBVH() {
-        // measures how long it took to build
-        console.time("Subdivision Time")
-
-        // our root node contains all the triangles at first
-        var root = this.nodes[0]
-        root.leftFirst = 0
-        root.triCount = this.triangles.length
-        this.nodesUsed = 1
-
-        this.updateNodeBounds(0)
-        this.subdivide(0)
-        this.computeBounds();
-        console.timeEnd("Subdivision Time")
+    public get nodes(): Readonly<Array<BLASNode>> {
+        return this.m_nodes;
     }
 
-    private updateNodeBounds(nodeIndex: number) {
-        var node = this.nodes[nodeIndex]
-        node.aabbMin = [MAX_VALUE, MAX_VALUE, MAX_VALUE]
-        node.aabbMax = [MIN_VALUE, MIN_VALUE, MIN_VALUE]
-
-        for (var i = 0; i < node.triCount; i++) {
-            const leafTri = this.triangles[this.triangleIndices[node.leftFirst + i]]
-
-            leafTri.corners.forEach((corner) => {
-                vec3.min(node.aabbMin, node.aabbMin, corner)
-                vec3.max(node.aabbMax, node.aabbMax, corner)
-            })
-        }
+    public get triangleIndices(): Readonly<Uint32Array> {
+        return this.m_triangleIndices;
     }
 
-    // https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
-    // Recursively subdivide a node to optimize ray-triangle intersection tests
-    private subdivide(nodeIdx: number): void {
-        const node = this.nodes[nodeIdx]
-        if (node.triCount <= 2) return
-        // Determine the optimal plane to split the node triangles, aiming to minimize ray intersection tests
-        const { bestAxis, bestPos, bestCost } = this.findBestSplitPlane(node)
+    public writeNodesToArray(target: Float32Array, nodeOffset: number = 0, triangleIdxOffset: number = 0): void {
+        this.m_nodes.forEach((node, i) => {
+            const baseIndex = (nodeOffset + i) * BLAS_NODE_SIZE;
 
-        // If subdividing doesnt improve ray intersection performance, stop further subdivision
-        if (bestCost >= this.calculateNodeCost(node)) return
+            // aabbMin
+            target[baseIndex + 0] = node.aabb.bmin[0]; // x
+            target[baseIndex + 1] = node.aabb.bmin[1]; // y
+            target[baseIndex + 2] = node.aabb.bmin[2]; // z
 
-        let i = node.leftFirst
-        let j = i + node.triCount - 1
+            // leftFirst
+            target[baseIndex + 3] = node.triangleCount > 0 ? node.leftFirst + triangleIdxOffset : node.leftFirst + nodeOffset;
 
-        // Organize triangles based on their spatial location relative to the optimal split plane
-        // This helps in quickly discarding irrelevant triangles during ray intersection tests
-        while (i <= j) {
-            if (this.triangles[this.triangleIndices[i]].centroid[bestAxis] < bestPos) {
-                i++
-            } else {
-                var temp: number = this.triangleIndices[i]
-                this.triangleIndices[i] = this.triangleIndices[j]
-                this.triangleIndices[j] = temp
-                j -= 1
-            }
+            // aabbMax
+            target[baseIndex + 4] = node.aabb.bmax[0]; // x
+            target[baseIndex + 5] = node.aabb.bmax[1]; // y
+            target[baseIndex + 6] = node.aabb.bmax[2]; // z
+
+            // triCount
+            target[baseIndex + 7] = node.triangleCount;
+        });
+    }
+
+    public writeTriangleIndicesToArray(target: Uint32Array, triangleIdxOffset: number = 0): void {
+        this.m_triangleIndices.forEach((triangleIdx, i) => {
+            target[triangleIdxOffset + i] = triangleIdxOffset + triangleIdx;
+        });
+    }
+
+    private _buildBLAS(): void {
+        // set initial triangle indices
+        for (let i = 0; i < this.m_triangleIndices.length; i++) {
+            this.m_triangleIndices[i] = i;
         }
 
-        const leftCount = i - node.leftFirst
+        // set centroids from triangles
+        for (let i = 0; i < this.m_triangleIndices.length; i++) {
+            let triangle = this.m_triangles[i];
+            triangle.make_centroid(); // Ensure centroid is computed
+            this.m_centroids[i * 3 + 0] = triangle.centroid[0];
+            this.m_centroids[i * 3 + 1] = triangle.centroid[1];
+            this.m_centroids[i * 3 + 2] = triangle.centroid[2];
+        }
 
-        // If all triangles end up on one side, its not beneficial to subdivide further
-        if (leftCount === 0 || leftCount === node.triCount) return
+        // Initialize root node with AABB and triangle count
+        this.m_nodes[this.m_rootNodeIdx] = {
+            leftFirst: 0,
+            triangleCount: this.m_triangleIndices.length,
+            aabb: new AABB(),
+        };
 
-        // Create child nodes to further refine the spatial hierarchy
-        const leftChildIdx = this.nodesUsed++
-        const rightChildIdx = this.nodesUsed++
+        this._updateAABBs(this.m_rootNodeIdx);
+        this._subdivideNode(this.m_rootNodeIdx);
 
-        this.nodes[leftChildIdx].leftFirst = node.leftFirst
-        this.nodes[leftChildIdx].triCount = leftCount
-        this.nodes[rightChildIdx].leftFirst = i
-        this.nodes[rightChildIdx].triCount = node.triCount - leftCount
-
-        // Update the current node to reference its children
-        node.leftFirst = leftChildIdx
-        node.triCount = 0
-
-        // Update bounding boxes for child nodes, which are used to quickly discard nodes during ray intersection tests
-        this.updateNodeBounds(leftChildIdx)
-        this.updateNodeBounds(rightChildIdx)
-
-        // Continue the subdivision process for the child nodes
-        this.subdivide(leftChildIdx)
-        this.subdivide(rightChildIdx)
+        this.m_nodes.splice(this.m_nodeCount);
     }
 
-    // This function determines the best split plane for a given node in a spatial data structure
-    // The goal is to find an optimal axis and position to split the nodes triangles, minimizing the cost
-    private findBestSplitPlane(node: Node): { bestAxis: number; bestPos: number; bestCost: number } {
-        // Dynamic binning based on the number of triangles
-        const BINS = Math.ceil(Math.sqrt(node.triCount))
+    private _updateAABBs(nodeIdx: number): void {
+        let node = this.m_nodes[nodeIdx];
+        let first = node.leftFirst;
 
-        let bestCost = Infinity
-        let bestAxis = -1
-        let bestPos = 0
+        for (let i = 0; i < node.triangleCount; i++) {
+            let triIdx = this.m_triangleIndices[first + i];
+            let triangle = this.m_triangles[triIdx];
 
-        // Iterate over the three axes
-        for (let a = 0; a < 3; a++) {
-            let boundsMin = Infinity
-            let boundsMax = -Infinity
+            // Grow the node's AABB by the corners of the triangle
+            triangle.corners.forEach(corner => {
+                node.aabb.grow(corner);
+            });
+        }
 
-            // Calculate the bounding box for the triangles in the node along the current axis
-            for (let i = 0; i < node.triCount; i++) {
-                const triangle = this.triangles[this.triangleIndices[node.leftFirst + i]]
-                boundsMin = Math.min(boundsMin, triangle.centroid[a])
-                boundsMax = Math.max(boundsMax, triangle.centroid[a])
+        this.m_nodes[nodeIdx] = node;
+    }
+
+
+    private _findBestSplit(nodeIdx: number): [number, number, number] {
+        let node = this.m_nodes[nodeIdx];
+        let bestAxis: number = -1;
+        let bestPos: number = 0.0;
+        let bestCost = Number.MAX_VALUE;
+
+        for (let axis = 0; axis < 3; axis++) {
+            let boundsMin = Number.MAX_VALUE;
+            let boundsMax = -Number.MAX_VALUE;
+
+            for (let i = 0; i < node.triangleCount; i++) {
+                let triIdx = this.m_triangleIndices[node.leftFirst + i];
+                let centroid = this.m_triangles[triIdx].centroid[axis];
+                boundsMin = Math.min(boundsMin, centroid);
+                boundsMax = Math.max(boundsMax, centroid);
             }
 
-            // If all triangles have the same centroid on this axis, skip to the next axis
-            if (boundsMin == boundsMax) continue
-
-            // Initialize bins for spatial partitioning
-            const bin: Bin[] = Array(BINS)
-                .fill(null)
-                .map(() => new Bin())
-            const scale = BINS / (boundsMax - boundsMin)
-
-            // Assign triangles to bins based on their centroids
-            for (let i = 0; i < node.triCount; i++) {
-                const triangle = this.triangles[this.triangleIndices[node.leftFirst + i]]
-                const binIdx = Math.min(BINS - 1, Math.floor((triangle.centroid[a] - boundsMin) * scale))
-                bin[binIdx].triCount++
-                triangle.corners.forEach((corner) => bin[binIdx].bounds.grow(corner))
+            if (boundsMin === boundsMax) {
+                continue;
             }
 
-            // Initialize arrays to store areas and counts of triangles to the left and right of each bin boundary
-            const leftArea = new Array(BINS - 1).fill(0)
-            const rightArea = new Array(BINS - 1).fill(0)
-            const leftCount = new Array(BINS - 1).fill(0)
-            const rightCount = new Array(BINS - 1).fill(0)
-            let leftBox = new AABB()
-            let rightBox = new AABB()
-            let leftSum = 0,
-                rightSum = 0
+            let bin: Bin[] = new Array(BINS).fill(null).map(() => ({ aabb: new AABB(), triCount: 0 }));
 
-            // Calculate areas and counts for each bin boundary
+            let scale: number = BINS / (boundsMax - boundsMin);
+            for (let i = 0; i < node.triangleCount; i++) {
+                let triIdx = this.m_triangleIndices[node.leftFirst + i];
+                let centroid = this.m_triangles[triIdx].centroid[axis];
+                let binIdx = Math.min(BINS - 1, Math.floor((centroid - boundsMin) * scale));
+
+                let triangle = this.m_triangles[triIdx];
+
+                bin[binIdx].triCount++;
+                triangle.corners.forEach(corner => {
+                    bin[binIdx].aabb.grow(corner);
+                });
+            }
+
+            let leftBox = new AABB();
+            let rightBox = new AABB();
+            let leftCount: Uint32Array = new Uint32Array(BINS - 1);
+            let rightCount: Uint32Array = new Uint32Array(BINS - 1);
+            let leftArea: Float32Array = new Float32Array(BINS - 1);
+            let rightArea: Float32Array = new Float32Array(BINS - 1);
+            let leftSum = 0;
+            let rightSum = 0;
+
             for (let i = 0; i < BINS - 1; i++) {
-                leftSum += bin[i].triCount
-                leftCount[i] = leftSum
-                leftBox.growByAABB(bin[i].bounds)
-                leftArea[i] = leftBox.area()
-                rightSum += bin[BINS - 1 - i].triCount
-                rightCount[BINS - 2 - i] = rightSum
-                rightBox.growByAABB(bin[BINS - 1 - i].bounds)
-                rightArea[BINS - 2 - i] = rightBox.area()
+                leftBox.growByAABB(bin[i].aabb);
+                leftCount[i] = leftSum += bin[i].triCount;
+                leftArea[i] = leftBox.area();
+                rightBox.growByAABB(bin[BINS - 1 - i].aabb);
+                rightCount[BINS - 2 - i] = rightSum += bin[BINS - 1 - i].triCount;
+                rightArea[BINS - 2 - i] = rightBox.area();
             }
 
-            const scale2 = (boundsMax - boundsMin) / BINS
-
-            // Calculate the cost for each bin boundary and update the best split if a lower cost is found
+            scale = (boundsMax - boundsMin) / BINS;
             for (let i = 0; i < BINS - 1; i++) {
-                const planeCost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i]
-                if (planeCost < bestCost) {
-                    bestCost = planeCost
-                    bestAxis = a
-                    bestPos = boundsMin + scale2 * (i + 1)
+                let cost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
+                if (cost < bestCost) {
+                    bestAxis = axis;
+                    bestPos = boundsMin + scale * (i + 1);
+                    bestCost = cost;
                 }
             }
         }
 
-        return { bestAxis, bestPos, bestCost }
+        return [bestAxis, bestPos, bestCost];
     }
 
-    private calculateNodeCost(node: Node): number {
-        const e = vec3.subtract(vec3.create(), node.aabbMax, node.aabbMin)
-        const surfaceArea = e[0] * e[1] + e[1] * e[2] + e[2] * e[0]
-        return node.triCount * surfaceArea
+
+    private _calculateNodeCost(nodeIdx: number): number {
+        let node = this.m_nodes[nodeIdx];
+        let extent = [
+            node.aabb.bmax[0] - node.aabb.bmin[0],
+            node.aabb.bmax[1] - node.aabb.bmin[1],
+            node.aabb.bmax[2] - node.aabb.bmin[2],
+        ];
+        let area = extent[0] * extent[1] + extent[1] * extent[2] + extent[2] * extent[0];
+        return area * node.triangleCount;
     }
 
-    private computeBounds() {
-        // Compute the AABB of the BLAS
-        const bmin = vec3.fromValues(Infinity, Infinity, Infinity);
-        const bmax = vec3.fromValues(-Infinity, -Infinity, -Infinity);
+    private _subdivideNode(nodeIdx: number): void {
+        let node = this.m_nodes[nodeIdx];
 
-        for (const triangle of this.triangles) {
-            for (const corner of triangle.corners) {
-                vec3.min(bmin, bmin, corner);
-                vec3.max(bmax, bmax, corner);
+        // find split axis
+        let bestAxis: number;
+        let bestPos: number;
+        let bestCost: number;
+
+        [bestAxis, bestPos, bestCost] = this._findBestSplit(nodeIdx);
+
+        let parentCost = this._calculateNodeCost(nodeIdx);
+
+        if (bestCost >= parentCost) {
+            return;
+        }
+
+        let axis = bestAxis;
+        let splitPos = bestPos;
+
+        // Quicksort triangles based on split axis
+        let i = node.leftFirst;
+        let j = i + node.triangleCount - 1;
+
+        while (i <= j) {
+            let triIdx = this.m_triangleIndices[i];
+            let centroid = this._getCentroid(triIdx);
+            if (centroid[axis] < splitPos) {
+                i++;
+            } else {
+                let tmp = this.m_triangleIndices[i];
+                this.m_triangleIndices[i] = this.m_triangleIndices[j];
+                this.m_triangleIndices[j] = tmp;
+                j--;
             }
         }
 
-        this.bounds = new AABB(bmin, bmax);
+        // abort if one side is empty
+        let leftCount = i - node.leftFirst;
+        if (leftCount === 0 || leftCount === node.triangleCount) {
+            return;
+        }
+
+        // create child nodes
+        let leftChildIdx = this.m_nodeCount;
+        this.m_nodeCount++;
+        let rightChildIdx = this.m_nodeCount;
+        this.m_nodeCount++;
+
+        this.m_nodes[leftChildIdx] = {
+            leftFirst: node.leftFirst,
+            triangleCount: leftCount,
+            aabb: new AABB()
+        };
+
+        this.m_nodes[rightChildIdx] = {
+            leftFirst: i,
+            triangleCount: node.triangleCount - leftCount,
+            aabb: new AABB()
+        };
+
+        node.leftFirst = leftChildIdx;
+        node.triangleCount = 0;
+        this.m_nodes[nodeIdx] = node;
+
+        this._updateAABBs(leftChildIdx);
+        this._updateAABBs(rightChildIdx);
+
+        // recurse
+        this._subdivideNode(leftChildIdx);
+        this._subdivideNode(rightChildIdx);
     }
 
+    private _getCentroid(triIdx: number): vec3 {
+        return [
+            this.m_centroids[triIdx * 3 + 0],
+            this.m_centroids[triIdx * 3 + 1],
+            this.m_centroids[triIdx * 3 + 2],
+        ];
+    }
 }

@@ -5,12 +5,14 @@ export class Triangle {
   corners: vec3[]
   normals: vec3[]
   texCoords: vec2[]
+  materialIndex: number
   objectID: number
   constructor(objectID: number = 0) {
     this.corners = []
     this.normals = []
     this.texCoords = []
     this.objectID = objectID
+    this.materialIndex = 0
   }
 
   make_centroid(): void {

@@ -24,6 +24,7 @@ export class Material {
   specularChance: number
   specularColor: vec3
   specularRoughness: number
+
   constructor(options: MaterialOptions = {}) {
     const defaults: MaterialOptions = {
       albedo: [0.8, 0.8, 0.8],
