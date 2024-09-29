@@ -113,6 +113,8 @@ struct RayType {
 @group(3) @binding(1) var skySampler : sampler;
 
 
+const DEBUG = false;
+
 const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
@@ -121,36 +123,31 @@ const TLAS_STACK_SIZE: u32 = 64u;
 const BLAS_STACK_SIZE: u32 = 32u;
 const T_MIN = 0.001f;
 const T_MAX = 10000f;
-const DEBUG = false;
 
-var<private> pixelCoords : vec2f;
-var<private> randState : u32 = 0u;
-
-var<workgroup> accumulated_radiance: vec3f;
-var<workgroup> rng_seed: u32;
 override WORKGROUP_SIZE_X: u32;
 override WORKGROUP_SIZE_Y: u32;
 
+var<private> pixelCoords : vec2f;
+var<private> randState : u32 = 0u;
+var<private> stack : array<u32, 64>;
 var<workgroup> sharedAccumulatedColor: array<vec3f, 64>;
+
 
 @compute @workgroup_size(WORKGROUP_SIZE_X, WORKGROUP_SIZE_Y)
 fn main(
-    @builtin(global_invocation_id) global_id: vec3u,
+    @builtin(global_invocation_id) GlobalInvocationID: vec3u,
     @builtin(workgroup_id) workgroup_id: vec3<u32>,
     @builtin(local_invocation_id) local_invocation_id: vec3<u32>,
     @builtin(local_invocation_index) local_invocation_index: u32,
-    @builtin(num_workgroups) num_workgroups: vec3<u32>
 ) {
-    if global_id.x >= u32(uniforms.screenDims.x) * u32(uniforms.screenDims.y) {
+    if GlobalInvocationID.x >= u32(uniforms.screenDims.x) * u32(uniforms.screenDims.y) {
         return;
     }
 
-    let dimensions = uniforms.screenDims;
+    let DIMENSION = uniforms.screenDims;
     let coord = vec2u(workgroup_id.x * WORKGROUP_SIZE_X + local_invocation_id.x, workgroup_id.y * WORKGROUP_SIZE_Y + local_invocation_id.y);
-    let idx = coord.y * u32(dimensions.x) + coord.x;
-
-    // Calculate the pixel coordinates
-    let pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
+    let idx = coord.y * u32(DIMENSION.x) + coord.x;
+    pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
 
     // Random state initialization
     randState = idx + u32(uniforms.frameNum) * 719393;
@@ -158,47 +155,41 @@ fn main(
     // Precompute constants outside the loops
     let sqrt_spp = sqrt(f32(setting.numSamples));
     let recip_sqrt_spp = 1.0 / sqrt_spp;
-    let jitter_scale_half = setting.jitterScale * 0.5;
-    let half_screen_dims = vec2<f32>(dimensions.xy) * 0.5;
-    let cam_fwd = cam.forward;
-    let cam_right = cam.right;
-    let cam_up = cam.up;
-    let cam_pos = cam.pos;
-    let cam_fov = cam_setting.cameraFOV;
+    let half_screen_dims = vec2<f32>(DIMENSION.xy) * 0.5;
+    let FORWARD = cam.forward;
+    let RIGHT = cam.right;
+    let UP = cam.up;
+    let POS = cam.pos;
+    let FOV = cam_setting.cameraFOV;
     let focus_dist = cam_setting.focusDistance;
     let aspect_ratio = setting.aspectRatio;
 
-    rng_seed = idx + u32(uniforms.frameNum) * 719393 + local_invocation_index;
+    let rand_state_vec = vec2<f32>(rand(), rand());
 
-
-    var sampleCount = 0.0;
     var myRay: Ray;
     sharedAccumulatedColor[local_invocation_index] = vec3<f32>(0.0);
+    var sampleCount = 0.0;
 
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
-            // Generate stratified samples
-            let stratifiedSample = (vec2<f32>(i, j) + vec2<f32>(xor_shift(randState), xor_shift(randState))) * recip_sqrt_spp;
-        
+            // Generate stratified samples with precomputed rand state
+            let stratifiedSample = (vec2<f32>(i, j) + rand_state_vec) * recip_sqrt_spp;
+
             // Calculate screen jittered coordinates
             let screen_jittered = pixelCoords + stratifiedSample - half_screen_dims;
-        
-            // Calculate ray direction
-            let horizontal_coeff = cam_fov * screen_jittered.x / dimensions.x;
-            let vertical_coeff = cam_fov * screen_jittered.y / (dimensions.y * aspect_ratio);
-            myRay.direction = normalize(cam_fwd + horizontal_coeff * cam_right + vertical_coeff * cam_up);
-        
+
             // Calculate lens point and origin
-            let lens_point = vec2<f32>(xor_shift(randState), xor_shift(randState)) * cam_setting.apertureSize;
-            myRay.origin = cam_pos + cam_right * lens_point.x + cam_up * lens_point.y;
-        
-            // Adjust ray direction based on focus point
-            let focus_point = cam_pos + myRay.direction * focus_dist;
+            let lens_point = rand_state_vec * cam_setting.apertureSize;
+            myRay.origin = POS + RIGHT * lens_point.x + UP * lens_point.y;
+
+            // Calculate ray direction
+            let horizontal_coeff = FOV * screen_jittered.x / DIMENSION.x;
+            let vertical_coeff = FOV * screen_jittered.y / (DIMENSION.y * aspect_ratio);
+            let focus_point = POS + normalize(FORWARD + horizontal_coeff * RIGHT + vertical_coeff * UP) * focus_dist;
             myRay.direction = normalize(focus_point - myRay.origin);
-        
+
             // Trace the ray and accumulate color
             sharedAccumulatedColor[local_invocation_index] += trace(myRay) * recip_sqrt_spp;
-
             sampleCount += 1.0;
         }
     }
@@ -225,9 +216,10 @@ fn trace(camRay: Ray) -> vec3f {
         let hit = trace_tlas(ray, T_MAX);
 
         if !hit.hit {
-            acc_radiance += throughput * select(vec3(0.8), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, skyTextureEnabled);
+            acc_radiance += throughput * select(vec3(0.0), textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz, skyTextureEnabled);
             break;
         }
+
         var M = hit.material;
         var originalEnergy = throughput;
         M = ensure_energy_conservation(M);
@@ -243,16 +235,16 @@ fn trace(camRay: Ray) -> vec3f {
         // Fresnel effect
         var specChance = M.specChance;
         var refrChance = M.refrChance;
+
         if specChance > 0.1 {
             refrChance *= (1.0 - specChance) / (1.0 - M.specChance);
         }
 
         // Ray type determination
-        let randVal = rand2D();
-        var rayType = determine_ray_type(specChance, refrChance, randVal);
+        var rayType = determine_ray_type(specChance, refrChance, rand());
         regularBounces = rayType.regularBounces;
 
-        // Max bounces for diffuse materials
+        // Max bounces for diffuse objects
         if regularBounces >= 4u && rayType.isSpecular == 0.0 {
             break;
         }
@@ -260,10 +252,25 @@ fn trace(camRay: Ray) -> vec3f {
         // Ray position update
         ray.origin = update_ray_origin(ray, hit, rayType.isRefractive);
 
-        // New ray direction
         var specularDir = calculate_specular_dir(ray, hit);
-        var refractDir = calculate_refract_dir(ray, hit, n1, n2);
-        ray.direction = mix(mix(cosine_weighted_sampling_hemisphere(hit.normal), specularDir, rayType.isSpecular), refractDir, rayType.isRefractive);
+        var refractDir = normalize(
+            mix(
+                refract(ray.direction, hit.normal, n1 / n2),
+                cosine_weighted_sampling_hemisphere(-hit.normal),
+                M.refrRoughness * M.refrRoughness
+            )
+        );
+
+        // New ray direction
+        ray.direction = mix(
+            mix(
+                cosine_weighted_sampling_hemisphere(hit.normal),
+                specularDir,
+                rayType.isSpecular
+            ),
+            refractDir,
+            rayType.isRefractive
+        );
 
         acc_radiance += throughput * M.emissionColor * M.emissionStrength;
 
@@ -273,14 +280,12 @@ fn trace(camRay: Ray) -> vec3f {
         }
 
         // Russian roulette
-        if bounce > 2u {
-            let rr_prob = max(throughput.r, max(throughput.g, throughput.b));
-            let rr_threshold = 0.2;
-            if rand2D() >= rr_prob * rr_threshold || length(throughput) < 0.001 {
+        let rr_prob = max(max(throughput.r, throughput.g), throughput.b);
+        if rand() >= rr_prob || length(throughput) < 0.001 {
                 break;
-            }
-            throughput /= rr_prob;
         }
+
+        throughput /= rr_prob;
     }
     return acc_radiance;
 }
@@ -291,10 +296,6 @@ fn update_ray_origin(ray: Ray, hit: HitPoint, isRefractive: f32) -> vec3f {
         (ray.origin + ray.direction * hit.dist) - hit.normal * EPSILON,
         isRefractive == 1.0
     );
-}
-
-fn calculate_refract_dir(ray: Ray, hit: HitPoint, n1: f32, n2: f32) -> vec3f {
-    return normalize(mix(refract(ray.direction, hit.normal, n1 / n2), cosine_weighted_sampling_hemisphere(-hit.normal), hit.material.refrRoughness * hit.material.refrRoughness));
 }
 
 fn determine_ray_type(specChance: f32, refrChance: f32, randVal: f32) -> RayType {
@@ -341,8 +342,8 @@ fn ensure_energy_conservation(material: Material) -> Material {
 
 fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
     let alpha = roughness * roughness;
-    let u1 = rand2D();
-    let u2 = rand2D();
+    let u1 = rand();
+    let u2 = rand();
 
     let phi = TWO_PI * u1;
     let cosTheta = sqrt((1.0 - u2) / (1.0 + (alpha * alpha - 1.0) * u2));
@@ -355,7 +356,7 @@ fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
         cosTheta
     );
 
-    // Transform the sampled vector to the surface'stack local coordinate system
+    // Transform the sampled vector to the surface's local coordinate system
     var up: vec3<f32> = select(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(1.0, 0.0, 0.0), abs(N.z) >= 0.999);
     let T = normalize(cross(up, N));
     let B = cross(N, T);
@@ -364,8 +365,8 @@ fn sample_ggx_importance(roughness: f32, N: vec3<f32>) -> vec3<f32> {
 }
 
 fn cosine_weighted_sampling_hemisphere(normal: vec3f) -> vec3f {
-    let r1 = rand2D();
-    let r2 = rand2D();
+    let r1 = rand();
+    let r2 = rand();
     let r = sqrt(r1);
     let theta = TWO_PI * r2;
 
@@ -382,14 +383,7 @@ fn cosine_weighted_sampling_hemisphere(normal: vec3f) -> vec3f {
     return normalize(u * x + v * y + w * z);
 }
 
-fn xor_shift(state: u32) -> f32 {
-    var newState = state ^ (state << 13u);
-    newState ^= (newState >> 17u);
-    newState ^= (newState << 5u);
-    return f32(newState & 0xFFFFFFFu) / f32(0x10000000u);
-}
-
-fn rand2D() -> f32 {
+fn rand() -> f32 {
     randState = randState * 747796405u + 2891336453u;
     var word: u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
     return f32((word >> 22u) ^ word) / 4294967295;
