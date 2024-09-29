@@ -434,81 +434,51 @@ fn trace_tlas(ray: Ray, tMax: f32) -> HitPoint {
 fn trace_blas(ray: Ray, instance: BLASInstance, renderState: HitPoint) -> HitPoint {
     var blasRenderState: HitPoint = renderState;
     blasRenderState.hit = false;
+    var nearestHit: f32 = blasRenderState.dist;
 
     var object_ray: Ray;
     object_ray.origin = (instance.invTransform * vec4<f32>(ray.origin, 1.0)).xyz;
-    object_ray.direction = normalize((instance.invTransform * vec4<f32>(ray.direction, 0.0)).xyz);
-
+    object_ray.direction = (instance.invTransform * vec4<f32>(ray.direction, 0.0)).xyz;
     let inverseDir: vec3<f32> = 1.0 / object_ray.direction;
-
-    var blasNearestHit: f32 = blasRenderState.dist;
 
     var stack: array<u32, 64>;
     var stackLocation: u32 = 0u;
-    stack[stackLocation] = instance.blasOffset;
+    let rootIdx: u32 = instance.blasOffset;
+
+    stack[stackLocation] = rootIdx;
     stackLocation += 1u;
 
     while stackLocation > 0u {
-
         stackLocation -= 1u;
         let nodeIdx: u32 = stack[stackLocation];
         let node: BLASNode = blasNodes[nodeIdx];
-
         let distance: f32 = hit_aabb(object_ray, node.aabbMin, node.aabbMax, inverseDir);
-        if distance > blasNearestHit {
-            continue;
-        }
 
-        if node.triCount == 0u {
-            var leftChildIdx: u32 = node.leftFirst;
-            var rightChildIdx: u32 = node.leftFirst + 1u;
-
-            var distLeft: f32 = hit_aabb(object_ray, blasNodes[leftChildIdx].aabbMin, blasNodes[leftChildIdx].aabbMax, inverseDir);
-            var distRight: f32 = hit_aabb(object_ray, blasNodes[rightChildIdx].aabbMin, blasNodes[rightChildIdx].aabbMax, inverseDir);
-
-            if distLeft > distRight {
-                var tempDist: f32 = distLeft;
-                distLeft = distRight;
-                distRight = tempDist;
-
-                var tempIdx: u32 = leftChildIdx;
-                leftChildIdx = rightChildIdx;
-                rightChildIdx = tempIdx;
-            }
-            if distLeft < blasNearestHit {
-                stack[stackLocation] = leftChildIdx;
-                stackLocation += 1u;
-            }
-
-            if distRight < blasNearestHit {
-                stack[stackLocation] = rightChildIdx;
-                stackLocation += 1u;
-            }
-        } else {
-
-            let firstTriIdx: u32 = node.leftFirst;
+        if distance < nearestHit {
             let triCount: u32 = node.triCount;
+            let leftFirst: u32 = node.leftFirst;
 
-            for (var i: u32 = 0u; i < triCount; i = i + 1u) {
-                let triIdx: u32 = triIdxInfo[firstTriIdx + i];
-                let triangle: Triangle = meshTriangles[triIdx];
+            if triCount > 0u {
+                for (var i: u32 = 0u; i < triCount; i += 1u) {
+                    let triIdx: u32 = triIdxInfo[leftFirst + i];
+                    let triangle: Triangle = meshTriangles[triIdx];
 
-                let newRenderState: HitPoint = hit_triangle(object_ray, triangle, 0.001, blasNearestHit, blasRenderState);
-                if newRenderState.hit && newRenderState.dist < blasNearestHit {
-                    blasNearestHit = newRenderState.dist;
-                    blasRenderState = newRenderState;
+                    let newRenderState: HitPoint = hit_triangle(object_ray, triangle, 0.001, nearestHit, blasRenderState);
+                    if newRenderState.hit && newRenderState.dist < nearestHit {
+                        nearestHit = newRenderState.dist;
+                        blasRenderState = newRenderState;
+                        blasRenderState.normal = normalize((instance.transform * vec4<f32>(blasRenderState.normal, 0.0)).xyz);
+                        blasRenderState.material = meshMaterial[instance.materialIdx];
+                    }
                 }
+            } else {
+                stack[stackLocation] = leftFirst;
+                stackLocation += 1u;
+                stack[stackLocation] = leftFirst + 1u;
+                stackLocation += 1u;
             }
         }
     }
-
-    if blasRenderState.hit {
-        blasRenderState.normal = normalize(
-            (transpose(instance.transform) * vec4<f32>(blasRenderState.normal, 0.0)).xyz
-        );
-        blasRenderState.material = meshMaterial[instance.materialIdx];
-    }
-
     return blasRenderState;
 }
 
