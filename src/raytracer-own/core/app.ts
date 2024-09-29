@@ -59,8 +59,27 @@ export class Application {
     const scene13 = createScene13()
     const scene14 = createScene14()
     const scene15 = createScene15()
+
+    const whiteMaterial = new Material({ albedo: [1.0, 1.0, 1.0] })
+    const blueMaterial = new Material({ albedo: [0.3, 0.31, 0.98] })
+    const objects: ObjectProperties[] = [
+      {
+        position: [0.0, 0.0, 0.0],
+        scale: [1.0, 1.0, 1.0],
+        rotation: [0.0, 40.0, 0.0],
+        material: whiteMaterial,
+        modelPath: "./src/assets/models/cube.obj",
+      },
+      {
+        position: [5.0, 0.0, 0.0],
+        scale: [1.0, 2.0, 1.0],
+        rotation: [0.0, 0.0, 0.0],
+        material: blueMaterial,
+        modelPath: "./src/assets/models/cube.obj",
+      },
+    ]
     // Create objects in the scene
-    await this.scene.createObjects(cornelbox)
+    await this.scene.createObjects(objects)
 
     // Initialize the renderer
     await this.renderer.Initialize()

@@ -51,58 +51,49 @@ export class Scene {
         position = [0, 0, 0],
         scale = [1, 1, 1],
         rotation = [0, 0, 0],
-      } = obj;
+      } = obj
 
-      const objectMesh = new ObjLoader(
-        material,
-        position as vec3,
-        scale as vec3,
-        rotation as vec3
-      );
+      const objectMesh = new ObjLoader()
+      await objectMesh.initialize(modelPath)
 
-      let blas: BLAS;
-      let blasNodeOffset: number;
+      let blas: BLAS
+      let blasNodeOffset: number
 
       // Check if the geometry has already been loaded
       if (this.uniqueGeometries.has(modelPath)) {
         // Use the existing BLAS
-        blas = this.uniqueGeometries.get(modelPath)!;
-
-        // Get the blasNodeOffset for this BLAS
-        blasNodeOffset = this.blasToNodeOffsetMap.get(blas)!;
+        blas = this.uniqueGeometries.get(modelPath)!
+        blasNodeOffset = this.blasToNodeOffsetMap.get(blas)!
       } else {
-        // Load the geometry and create BLAS
-        await objectMesh.initialize(modelPath);
-        blas = new BLAS(objectMesh.triangles);
-
-        // Store the current totalBLASNodeCount as the blasNodeOffset for this BLAS
-        blasNodeOffset = this.totalBLASNodeCount;
-
-        // Map the BLAS to its node offset
-        this.blasToNodeOffsetMap.set(blas, blasNodeOffset);
-
-        // Increase totalBLASNodeCount
-        this.totalBLASNodeCount += blas.m_nodes.length;
-
-        // Store the BLAS
-        this.uniqueGeometries.set(modelPath, blas);
-        this.blasArray.push(blas);
+        // Create BLAS for new geometry
+        blas = new BLAS(objectMesh.triangles)
+        blasNodeOffset = this.totalBLASNodeCount
+        this.blasToNodeOffsetMap.set(blas, blasNodeOffset)
+        this.totalBLASNodeCount += blas.m_nodes.length
+        this.uniqueGeometries.set(modelPath, blas)
+        this.blasArray.push(blas)
       }
 
       // Assign a unique meshID to objectMesh
-      const meshID = this.nextMeshID++;
-      objectMesh.meshID = meshID;
+      const meshID = this.nextMeshID++
 
       // Map meshID to blasNodeOffset and blasOffset to meshID
-      this.meshIDtoBlasOffsetMap.set(meshID, blasNodeOffset);
-      this.blasOffsetToMeshIDMap.set(blasNodeOffset, meshID);
-      this.meshIDToBLAS.set(meshID, blas);
+      this.meshIDtoBlasOffsetMap.set(meshID, blasNodeOffset)
+      this.blasOffsetToMeshIDMap.set(blasNodeOffset, meshID)
+      this.meshIDToBLAS.set(meshID, blas)
 
       // Get material index
-      const materialIdx = this.getMaterialIndex(material);
+      const materialIdx = this.getMaterialIndex(material)
 
-      const instance = new BLASInstance(objectMesh.model, objectMesh.inverseModel, blasNodeOffset, materialIdx);
-      this.blasInstanceArray.push(instance);
+      // Create BLASInstance with position, scale, rotation
+      const instance = new BLASInstance(
+        vec3.fromValues(position[0], position[1], position[2]),
+        vec3.fromValues(scale[0], scale[1], scale[2]),
+        vec3.fromValues(rotation[0], rotation[1], rotation[2]),
+        blasNodeOffset,
+        materialIdx
+      )
+      this.blasInstanceArray.push(instance)
     }
 
     // After processing all objects, create the TLAS
@@ -110,11 +101,11 @@ export class Scene {
       this.blasInstanceArray,
       this.blasOffsetToMeshIDMap,
       this.meshIDToBLAS
-    );
+    )
 
-    console.log('TLAS nodes:', this.tlas.m_tlasNodes);
-    console.log('BLAS nodes:', this.blasArray);
-    console.log('Instances:', this.blasInstanceArray);
+    console.log('TLAS nodes:', this.tlas.m_tlasNodes)
+    console.log('BLAS nodes:', this.blasArray)
+    console.log('Instances:', this.blasInstanceArray)
   }
 
   // Helper method to get material index
