@@ -121,7 +121,7 @@ const TLAS_STACK_SIZE: u32 = 64u;
 const BLAS_STACK_SIZE: u32 = 32u;
 const T_MIN = 0.001f;
 const T_MAX = 10000f;
-const DEBUG = true;
+const DEBUG = false;
 
 var<private> pixelCoords : vec2f;
 var<private> randState : u32 = 0u;
@@ -402,26 +402,44 @@ fn trace_tlas(ray: Ray, tMax: f32) -> HitPoint {
 
     var stack: array<u32, 64>;
     var stackPtr: u32 = 0u;
-    stack[stackPtr] = 0u;
+    stack[stackPtr] = 0u; // Start with root node index 0
     stackPtr += 1u;
 
     while stackPtr > 0u {
-        stackPtr = stackPtr - 1u;
+        stackPtr -= 1u;
         let nodeIdx: u32 = stack[stackPtr];
         let node: TLASNode = tlasNodes[nodeIdx];
 
-        if hit_aabb(ray, node.aabbMin, node.aabbMax) > closestHit.dist {
-            continue;
+        // Perform AABB intersection
+        let distance: f32 = hit_aabb(ray, node.aabbMin, node.aabbMax);
+        if distance > closestHit.dist {
+            continue; // No intersection within current closest hit
+        }
+
+        // Calculate the intersection point
+        let intersectionPoint: vec3<f32> = ray.origin + distance * ray.direction;
+
+        if DEBUG {
+            // Check if the intersection is on the border
+            if is_on_border(intersectionPoint, node.aabbMin, node.aabbMax, 0.01) { // epsilon = 0.01
+                closestHit.hit = true;
+                closestHit.material.albedo = vec3<f32>(1.0, 0.0, 0.0); // Red color
+                return closestHit;
+            }
         }
 
         if node.left == 0u && node.right == 0u {
-            let instance: BLASInstance = blasInstances[node.instanceIdx];
-            let blasHit: HitPoint = trace_blas(ray, instance, closestHit.dist, closestHit);
+            // **Leaf Node:** Process BLAS instance
+            let instanceIdx: u32 = node.instanceIdx; // Ensure 'instanceIdx' is correctly referenced
+            let instance: BLASInstance = blasInstances[instanceIdx];
 
+            // Trace against the BLAS
+            let blasHit: HitPoint = trace_blas(ray, instance, closestHit.dist, closestHit);
             if blasHit.hit && blasHit.dist < closestHit.dist {
                 closestHit = blasHit;
             }
         } else {
+            // **Internal Node:** Push child nodes to stack
             stack[stackPtr] = node.left;
             stackPtr += 1u;
             stack[stackPtr] = node.right;
@@ -431,8 +449,6 @@ fn trace_tlas(ray: Ray, tMax: f32) -> HitPoint {
 
     return closestHit;
 }
-
-
 
 fn trace_blas(ray: Ray, instance: BLASInstance, nearestHit: f32, renderState: HitPoint) -> HitPoint {
     var object_ray: Ray;
@@ -444,43 +460,38 @@ fn trace_blas(ray: Ray, instance: BLASInstance, nearestHit: f32, renderState: Hi
 
     var blasNearestHit: f32 = nearestHit;
 
-    var nodeIdx: u32 = instance.blasOffset; // Starting node index in BLAS
     var stack: array<u32, 64>;
     var stackLocation: u32 = 0u;
+    stack[stackLocation] = instance.blasOffset; // Start with root node of BLAS
+    stackLocation += 1u;
 
     loop {
-        if nodeIdx == 0xFFFFFFFFu {
-            if stackLocation == 0u {
-                break;
-            } else {
-                stackLocation -= 1u;
-                nodeIdx = stack[stackLocation];
-            }
-            continue;
+        if stackLocation == 0u {
+            break;
         }
 
+        stackLocation -= 1u;
+        let nodeIdx: u32 = stack[stackLocation];
         let node: BLASNode = blasNodes[nodeIdx];
 
-        var distance: f32 = hit_aabb(object_ray, node.aabbMin, node.aabbMax);
-        if distance >= blasNearestHit {
-            nodeIdx = 0xFFFFFFFFu; // No valid node, will pop from stack
-            continue;
+        // Perform AABB intersection
+        let distance: f32 = hit_aabb(object_ray, node.aabbMin, node.aabbMax);
+        if distance > blasNearestHit {
+            continue; // No intersection within current closest hit
         }
 
         if node.triCount == 0u {
-            // **Internal Node**
+            // **Internal Node:** Push child nodes to stack
             var leftChildIdx: u32 = node.leftFirst;
             var rightChildIdx: u32 = node.leftFirst + 1u;
 
-            // Access child nodes
-            let leftChild: BLASNode = blasNodes[leftChildIdx];
-            let rightChild: BLASNode = blasNodes[rightChildIdx];
-
-            var distLeft: f32 = hit_aabb(object_ray, leftChild.aabbMin, leftChild.aabbMax);
-            var distRight: f32 = hit_aabb(object_ray, rightChild.aabbMin, rightChild.aabbMax);
+            // Perform AABB intersection for child nodes
+            var distLeft: f32 = hit_aabb(object_ray, blasNodes[leftChildIdx].aabbMin, blasNodes[leftChildIdx].aabbMax);
+            var distRight: f32 = hit_aabb(object_ray, blasNodes[rightChildIdx].aabbMin, blasNodes[rightChildIdx].aabbMax);
 
             // Sort children based on distance
             if distLeft > distRight {
+                // Swap
                 var tempDist: f32 = distLeft;
                 distLeft = distRight;
                 distRight = tempDist;
@@ -490,33 +501,32 @@ fn trace_blas(ray: Ray, instance: BLASInstance, nearestHit: f32, renderState: Hi
                 rightChildIdx = tempIdx;
             }
 
+            // Push children to stack if they intersect within the nearest hit distance
             if distLeft < blasNearestHit {
-                nodeIdx = leftChildIdx;
-                if distRight < blasNearestHit {
-                    stack[stackLocation] = rightChildIdx;
-                    stackLocation += 1u;
-                }
-            } else {
-                nodeIdx = 0xFFFFFFFFu; // No valid node, will pop from stack
+                stack[stackLocation] = leftChildIdx;
+                stackLocation += 1u;
+            }
+
+            if distRight < blasNearestHit {
+                stack[stackLocation] = rightChildIdx;
+                stackLocation += 1u;
             }
         } else {
-            // **Leaf Node with Triangles**
-            var firstTriIdx: u32 = node.leftFirst;
-            var triCount: u32 = node.triCount;
+            // **Leaf Node with Triangles:** Process all triangles
+
+            let firstTriIdx: u32 = node.leftFirst;
+            let triCount: u32 = node.triCount;
 
             for (var i: u32 = 0u; i < triCount; i = i + 1u) {
-                var triIdx: u32 = triIdxInfo[firstTriIdx + i];
-                var triangle: Triangle = meshTriangles[triIdx];
+                let triIdx: u32 = triIdxInfo[firstTriIdx + i];
+                let triangle: Triangle = meshTriangles[triIdx];
 
-                var newRenderState: HitPoint = hit_triangle(object_ray, triangle, 0.001, blasNearestHit, blasRenderState);
-
+                let newRenderState: HitPoint = hit_triangle(object_ray, triangle, 0.001, blasNearestHit, blasRenderState);
                 if newRenderState.hit && newRenderState.dist < blasNearestHit {
                     blasNearestHit = newRenderState.dist;
                     blasRenderState = newRenderState;
                 }
             }
-
-            nodeIdx = 0xFFFFFFFFu; // Leaf node, will pop from stack
         }
     }
 
@@ -543,7 +553,6 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, renderState: HitP
     let h: vec3<f32> = cross(ray.direction, edge_2);
     let a: f32 = dot(edge_1, h);
 
-    // Disable backface culling by removing the sign check
     if a > -EPSILON && a < EPSILON {
         return surfacePoint; // Ray is parallel to triangle
     }
@@ -569,30 +578,43 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, renderState: HitP
         return surfacePoint;
     }
 
-    surfacePoint.normal = normalize(
+    // Calculate the interpolated normal
+    let interpolated_normal: vec3<f32> = normalize(
         tri.normal_a * (1.0 - u - v) + tri.normal_b * u + tri.normal_c * v
     );
+
+    // Determine if the hit is from the front
+    let is_front_hit: bool = dot(ray.direction, interpolated_normal) < 0.0;
+
+    // Apply backface culling if enabled
+    if setting.BACKFACE_CULLING > 0.5 && !is_front_hit {
+        return surfacePoint; // Cull the back face hit
+    }
+
+    // Set the normal to always point against the ray direction using `select`
+    surfacePoint.normal = select(-interpolated_normal, interpolated_normal, is_front_hit);
     surfacePoint.dist = dist;
     surfacePoint.hit = true;
+    surfacePoint.from_front = is_front_hit;
 
     return surfacePoint;
 }
 
 
-fn hit_aabb(ray: Ray, aabbMin: vec3f, aabbMax: vec3f) -> f32 {
-    var inverseDir: vec3<f32> = vec3(1.0) / ray.direction;
-    var t1: vec3<f32> = (aabbMin - ray.origin) * inverseDir;
-    var t2: vec3<f32> = (aabbMax - ray.origin) * inverseDir;
-    var tMin: vec3<f32> = min(t1, t2);
-    var tMax: vec3<f32> = max(t1, t2);
+fn hit_aabb(ray: Ray, aabbMin: vec3<f32>, aabbMax: vec3<f32>) -> f32 {
+    let inverseDir: vec3<f32> = 1.0 / ray.direction;
+    let t1: vec3<f32> = (aabbMin - ray.origin) * inverseDir;
+    let t2: vec3<f32> = (aabbMax - ray.origin) * inverseDir;
+    let tMin: vec3<f32> = min(t1, t2);
+    let tMax: vec3<f32> = max(t1, t2);
 
-    var t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
-    var t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
+    let t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
+    let t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
-    if t_min > t_max || t_max < 0 {
-        return 99999;
+    if t_min > t_max || t_max < 0.0 {
+        return 99999.0; // No intersection
     } else {
-        return t_min;
+        return max(t_min, 0.0); // Clamp to zero to handle rays inside AABB
     }
 }
 

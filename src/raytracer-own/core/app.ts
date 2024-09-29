@@ -73,13 +73,13 @@ export class Application {
       {
         position: [5.0, 0.0, 0.0],
         scale: [1.0, 2.0, 1.0],
-        rotation: [0.0, 0.0, 0.0],
+        rotation: [0.0, 60.0, 0.0],
         material: blueMaterial,
         modelPath: "./src/assets/models/cube.obj",
       },
     ]
     // Create objects in the scene
-    await this.scene.createObjects(objects)
+    await this.scene.createObjects(cornelbox)
 
     // Initialize the renderer
     await this.renderer.Initialize()

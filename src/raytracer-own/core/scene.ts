@@ -1,5 +1,5 @@
 import { Camera } from "./camera";
-import { vec3, mat4 } from "gl-matrix";
+import { vec3 } from "gl-matrix";
 import { Controls } from "./controls";
 import { ObjLoader } from "./obj-loader";
 import { ObjectProperties } from "../utils/helper";
@@ -9,117 +9,107 @@ import { BLASInstance } from "./bvh/blas-instance";
 import { Material } from "./material";
 
 export class Scene {
+  // Rendering settings
+  vignetteStrength = 0.5;
+  vignetteRadius = 0.75;
+  enableSkytexture = 0;
+  enableCulling = 1;
+  maxBounces = 8;
+  samples = 1;
+  jitterScale = 1;
+
+  // Camera and controls
+  camera: Camera = new Camera([0.01, 2.5, -7]);
   cameraControls: Controls;
-  canvas: HTMLCanvasElement;
-  camera: Camera;
-  vignetteStrength: number = 0.5;
-  vignetteRadius: number = 0.75;
-  enableSkytexture: number = 0;
-  enableCulling: number = 1;
-  maxBounces: number = 8;
-  samples: number = 1;
-  jitterScale: number = 1;
 
-  objectMeshes: ObjLoader[] = [];
-  tlas: TLAS;
-  blasArray: BLAS[] = [];
-  blasNodeCount: number; // total node count
-  blasInstanceArray: BLASInstance[] = [];
-  materials: Material[] = [];
-
-  materialToIdxMap: Map<Material, number> = new Map();
-  meshIDtoBlasOffsetMap: Map<number, number> = new Map();
-  blasOffsetToMeshIDMap: Map<number, number> = new Map();
-  meshIDToBLAS: Map<number, BLAS> = new Map();
-  uniqueGeometries: Map<string, BLAS> = new Map();
-  blasToNodeOffsetMap: Map<BLAS, number> = new Map();
-  totalBLASNodeCount: number = 0;
-  nextMeshID: number = 0;
-
+  // Canvas element
   constructor(canvas: HTMLCanvasElement) {
-    this.canvas = canvas;
-    this.camera = new Camera([0.01, 2.5, -7]);
-    this.cameraControls = new Controls(this.canvas, this.camera);
+    this.cameraControls = new Controls(canvas, this.camera);
   }
 
-  // creates objects using the ObjLoader
+  // Object and material data
+  materials: Material[] = [];
+  private objectMeshes: ObjLoader[] = [];
+  private materialToIdxMap = new Map<Material, number>();
+
+  // BVH structures
+  blasArray: BLAS[] = [];
+  blasInstanceArray: BLASInstance[] = [];
+  private uniqueGeometries = new Map<string, BLAS>();
+  private totalBLASNodeCount = 0;
+  private nextMeshID = 0;
+
+  // Mapping relationships
+  blasTriangleIndexOffsets = new Map<string, number>();
+  private blasToNodeOffsetMap = new Map<string, number>();
+  private blasOffsetToMeshIDMap = new Map<number, number>();
+  private meshIDtoBlasOffsetMap = new Map<number, number>();
+  private meshIDToBLAS = new Map<number, BLAS>();
+
+  // Top-Level Acceleration Structure
+  tlas!: TLAS;
+
   async createObjects(objects: ObjectProperties[]) {
-    for (const obj of objects) {
-      const {
-        modelPath,
-        material,
-        position = [0, 0, 0],
-        scale = [1, 1, 1],
-        rotation = [0, 0, 0],
-      } = obj
+    for (const { modelPath, material, position = [0, 0, 0], scale = [1, 1, 1], rotation = [0, 0, 0] } of objects) {
+      const objectMesh = new ObjLoader();
+      await objectMesh.initialize(modelPath);
+      this.objectMeshes.push(objectMesh);
 
-      const objectMesh = new ObjLoader()
-      await objectMesh.initialize(modelPath)
+      const blas = this.getOrCreateBLAS(modelPath, objectMesh.triangles);
 
-      let blas: BLAS
-      let blasNodeOffset: number
+      const meshID = this.nextMeshID++;
+      this.mapMeshToBLAS(meshID, blas.nodeOffset, blas.blas);
 
-      // Check if the geometry has already been loaded
-      if (this.uniqueGeometries.has(modelPath)) {
-        // Use the existing BLAS
-        blas = this.uniqueGeometries.get(modelPath)!
-        blasNodeOffset = this.blasToNodeOffsetMap.get(blas)!
-      } else {
-        // Create BLAS for new geometry
-        blas = new BLAS(objectMesh.triangles)
-        blasNodeOffset = this.totalBLASNodeCount
-        this.blasToNodeOffsetMap.set(blas, blasNodeOffset)
-        this.totalBLASNodeCount += blas.m_nodes.length
-        this.uniqueGeometries.set(modelPath, blas)
-        this.blasArray.push(blas)
-      }
+      const materialIdx = this.getMaterialIndex(material);
 
-      // Assign a unique meshID to objectMesh
-      const meshID = this.nextMeshID++
+      this.blasInstanceArray.push(
+        new BLASInstance(
+          vec3.fromValues(position[0], position[1], position[2]),
+          vec3.fromValues(scale[0], scale[1], scale[2]),
+          vec3.fromValues(rotation[0], rotation[1], rotation[2]),
+          blas.nodeOffset,
+          materialIdx
+        )
+      );
 
-      // Map meshID to blasNodeOffset and blasOffset to meshID
-      this.meshIDtoBlasOffsetMap.set(meshID, blasNodeOffset)
-      this.blasOffsetToMeshIDMap.set(blasNodeOffset, meshID)
-      this.meshIDToBLAS.set(meshID, blas)
-
-      // Get material index
-      const materialIdx = this.getMaterialIndex(material)
-
-      // Create BLASInstance with position, scale, rotation
-      const instance = new BLASInstance(
-        vec3.fromValues(position[0], position[1], position[2]),
-        vec3.fromValues(scale[0], scale[1], scale[2]),
-        vec3.fromValues(rotation[0], rotation[1], rotation[2]),
-        blasNodeOffset,
-        materialIdx
-      )
-      this.blasInstanceArray.push(instance)
     }
 
-    // After processing all objects, create the TLAS
-    this.tlas = new TLAS(
-      this.blasInstanceArray,
-      this.blasOffsetToMeshIDMap,
-      this.meshIDToBLAS
-    )
-
-    console.log('TLAS nodes:', this.tlas.m_tlasNodes)
-    console.log('BLAS nodes:', this.blasArray)
-    console.log('Instances:', this.blasInstanceArray)
+    // Initialize TLAS after all objects are processed
+    this.tlas = new TLAS(this.blasInstanceArray, this.blasOffsetToMeshIDMap, this.meshIDToBLAS);
   }
 
-  // Helper method to get material index
-  getMaterialIndex(material: Material): number {
+  private getMaterialIndex(material: Material): number {
     if (!this.materialToIdxMap.has(material)) {
-      const idx = this.materials.length;
       this.materials.push(material);
-      this.materialToIdxMap.set(material, idx);
-      return idx;
-    } else {
-      return this.materialToIdxMap.get(material)!;
+      this.materialToIdxMap.set(material, this.materials.length - 1);
     }
+    return this.materialToIdxMap.get(material)!;
+  }
+
+  private getOrCreateBLAS(modelPath: string, triangles: any[]): { blas: BLAS; nodeOffset: number } {
+    const existingBLAS = this.uniqueGeometries.get(modelPath);
+    if (existingBLAS) {
+      const nodeOffset = this.blasToNodeOffsetMap.get(existingBLAS.id)!;
+      return { blas: existingBLAS, nodeOffset };
+    }
+
+    const blasID = `blas_${this.blasArray.length}`;
+    const newBLAS = new BLAS(blasID, triangles);
+    const nodeOffset = this.totalBLASNodeCount;
+
+    this.blasArray.push(newBLAS);
+    this.uniqueGeometries.set(modelPath, newBLAS);
+    this.blasToNodeOffsetMap.set(blasID, nodeOffset);
+    this.blasTriangleIndexOffsets.set(blasID, nodeOffset);
+    this.totalBLASNodeCount += newBLAS.m_nodes.length;
+
+    return { blas: newBLAS, nodeOffset };
+  }
+
+  private mapMeshToBLAS(meshID: number, nodeOffset: number, blas: BLAS) {
+    this.meshIDtoBlasOffsetMap.set(meshID, nodeOffset);
+    this.blasOffsetToMeshIDMap.set(nodeOffset, meshID);
+    this.meshIDToBLAS.set(meshID, blas);
   }
 }
-
-
 

@@ -60,7 +60,8 @@ export class Renderer {
   // Scene to render
   scene: Scene
 
-
+  private floatDataBlas: Float32Array
+  private uintDataBlas: Uint32Array
   private frametime: number = 0
   private loaded = false
   private updatedUniformArray: Float32Array
@@ -407,7 +408,7 @@ export class Renderer {
     this.imgOutputBuffer = this.device.createBuffer(camDescriptor)
   }
 
-  public updateImgSettings() {
+  updateImgSettings() {
     const camSettings = {
       vignetteStrength: this.scene.vignetteStrength,
       vignetteRadius: this.scene.vignetteRadius,
@@ -589,36 +590,6 @@ export class Renderer {
     );
   }
 
-  private createBlasNodeBuffer() {
-    let nodeOffset = 0;
-
-    for (const blas of this.scene.blasArray) {
-      const triangleIndexOffset = this.blasTriangleIndexOffsets.get(blas)!;
-      // Adjust node indices
-      for (const node of blas.m_nodes) {
-        if (node.triangleCount > 0) {
-          // Adjust leftFirst to point to the correct index in the global triangle index array
-          node.leftFirst += triangleIndexOffset;
-        } else {
-          // Adjust child node indices to global node indices
-          node.leftFirst += nodeOffset;
-        }
-        this.allBlasNodes.push(node);
-      }
-
-      nodeOffset += blas.m_nodes.length;
-    }
-
-    // Create the BLAS node buffer as before
-    const nodeSize = 32; // Each BLASNode is 32 bytes
-    const bufferSize = nodeSize * this.allBlasNodes.length;
-
-    this.nodeBufferBlas = this.device.createBuffer({
-      size: bufferSize,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-  }
-
   private createTlasNodeBuffer() {
     // Get TLAS nodes from the scene
     this.tlasNodes = this.scene.tlas.m_tlasNodes;
@@ -649,83 +620,126 @@ export class Renderer {
     });
   }
 
-  private updateBlasNodeData() {
-    const floatData = new Float32Array(8 * this.allBlasNodes.length);
-    const uintData = new Uint32Array(floatData.buffer);
+  private createBlasNodeBuffer() {
+    let nodeOffset = 0
+    this.allBlasNodes = [] // Clear previous nodes
 
-    for (let i = 0; i < this.allBlasNodes.length; i++) {
-      const node = this.allBlasNodes[i];
-      const baseIndex = 8 * i;
+    for (const blas of this.scene.blasArray) {
+      const blasID = blas.id
+      const triangleIndexOffset = this.scene.blasTriangleIndexOffsets.get(blasID)
+      if (triangleIndexOffset === undefined) {
+        console.warn(`Triangle index offset not found for BLAS ID: ${blasID}`, blas)
+        continue // Skip if offset is undefined
+      }
+
+      // Adjust node indices
+      for (const node of blas.m_nodes) {
+        if (node.triangleCount > 0) {
+          // Adjust leftFirst to point to the correct index in the global triangle index array
+          node.leftFirst += triangleIndexOffset
+        } else {
+          // Adjust child node indices to global node indices
+          node.leftFirst += nodeOffset
+        }
+        this.allBlasNodes.push(node)
+      }
+
+      nodeOffset += blas.m_nodes.length
+    }
+
+    // Create the BLAS node buffer
+    const nodeSize = 32 // Each BLASNode is 32 bytes
+    const bufferSizeUnaligned = nodeSize * this.allBlasNodes.length
+    const bufferSize = Math.ceil(bufferSizeUnaligned / 256) * 256 // Align to 256 bytes
+
+    this.nodeBufferBlas = this.device.createBuffer({
+      size: bufferSize,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    })
+
+    // Initialize typed arrays for buffer data
+    this.floatDataBlas = new Float32Array(this.allBlasNodes.length * 8) // 8 slots per node
+    this.uintDataBlas = new Uint32Array(this.floatDataBlas.buffer)
+  }
+
+  private updateBlasNodeData() {
+    const nodeCount = this.allBlasNodes.length
+
+    for (let i = 0; i < nodeCount; i++) {
+      const node = this.allBlasNodes[i]
+      const baseIndex = i * 8 // 8 slots per node
 
       // aabbMin
-      floatData[baseIndex + 0] = node.aabb.bmin[0];
-      floatData[baseIndex + 1] = node.aabb.bmin[1];
-      floatData[baseIndex + 2] = node.aabb.bmin[2];
+      this.floatDataBlas[baseIndex + 0] = node.aabb.bmin[0]
+      this.floatDataBlas[baseIndex + 1] = node.aabb.bmin[1]
+      this.floatDataBlas[baseIndex + 2] = node.aabb.bmin[2]
 
-      // leftFirst (as u32)
-      uintData[baseIndex + 3] = node.leftFirst;
+      // leftFirst (Uint32)
+      this.uintDataBlas[baseIndex + 3] = node.leftFirst
 
       // aabbMax
-      floatData[baseIndex + 4] = node.aabb.bmax[0];
-      floatData[baseIndex + 5] = node.aabb.bmax[1];
-      floatData[baseIndex + 6] = node.aabb.bmax[2];
+      this.floatDataBlas[baseIndex + 4] = node.aabb.bmax[0]
+      this.floatDataBlas[baseIndex + 5] = node.aabb.bmax[1]
+      this.floatDataBlas[baseIndex + 6] = node.aabb.bmax[2]
 
-      // triangleCount (as u32)
-      uintData[baseIndex + 7] = node.triangleCount;
+      // triangleCount (Uint32)
+      this.uintDataBlas[baseIndex + 7] = node.triangleCount
     }
 
     // Write the data to the buffer
     this.device.queue.writeBuffer(
       this.nodeBufferBlas,
       0,
-      floatData.buffer,
-      floatData.byteOffset,
-      floatData.byteLength
-    );
+      this.floatDataBlas.buffer,
+      0,
+      nodeCount * 32 // Only write the actual data, excluding padding
+    )
   }
 
   private updateTlasNodeData() {
-    const floatData = new Float32Array(12 * this.tlasNodes.length);
-    const uintData = new Uint32Array(floatData.buffer);
+    const byteLength = 48 * this.tlasNodes.length; // 12 slots * 4 bytes each
+    const buffer = new ArrayBuffer(byteLength);
+    const view = new DataView(buffer);
 
     for (let i = 0; i < this.tlasNodes.length; i++) {
       const node = this.tlasNodes[i];
-      const baseIndex = 12 * i;
+      const byteOffset = i * 48; // 12 slots * 4 bytes
 
       // aabbMin
-      floatData[baseIndex + 0] = node.aabb.bmin[0];
-      floatData[baseIndex + 1] = node.aabb.bmin[1];
-      floatData[baseIndex + 2] = node.aabb.bmin[2];
+      view.setFloat32(byteOffset + 0, node.aabb.bmin[0], true);
+      view.setFloat32(byteOffset + 4, node.aabb.bmin[1], true);
+      view.setFloat32(byteOffset + 8, node.aabb.bmin[2], true);
 
       // left child index
-      uintData[baseIndex + 3] = node.left >= 0 ? node.left : 0;
+      view.setUint32(byteOffset + 12, node.left >= 0 ? node.left : 0, true);
 
       // aabbMax
-      floatData[baseIndex + 4] = node.aabb.bmax[0];
-      floatData[baseIndex + 5] = node.aabb.bmax[1];
-      floatData[baseIndex + 6] = node.aabb.bmax[2];
+      view.setFloat32(byteOffset + 16, node.aabb.bmax[0], true);
+      view.setFloat32(byteOffset + 20, node.aabb.bmax[1], true);
+      view.setFloat32(byteOffset + 24, node.aabb.bmax[2], true);
 
       // right child index
-      uintData[baseIndex + 7] = node.right >= 0 ? node.right : 0;
+      view.setUint32(byteOffset + 28, node.right >= 0 ? node.right : 0, true);
 
       // instance index (blas)
-      uintData[baseIndex + 8] = node.blas >= 0 ? node.blas : 0;
+      view.setUint32(byteOffset + 32, node.blas >= 0 ? node.blas : 0, true);
 
       // Padding
-      uintData[baseIndex + 9] = 0;
-      uintData[baseIndex + 10] = 0;
-      uintData[baseIndex + 11] = 0;
+      view.setUint32(byteOffset + 36, 0, true);
+      view.setUint32(byteOffset + 40, 0, true);
+      view.setUint32(byteOffset + 44, 0, true);
     }
 
     // Write the data to the buffer
     this.device.queue.writeBuffer(
       this.nodeBufferTlas,
       0,
-      floatData.buffer,
-      floatData.byteOffset,
-      floatData.byteLength
+      buffer,
+      0,
+      byteLength
     );
   }
+
 
   private updateBlasInstanceData() {
     const instanceCount = this.blasInstances.length;
@@ -816,7 +830,7 @@ export class Renderer {
     this.settingsBuffer = this.device.createBuffer(settingDescriptor)
   }
 
-  public updateCamSettings() {
+  updateCamSettings() {
     const camSettings = {
       fov: Deg2Rad(this.scene.camera.fov),
       focusDistance: this.scene.camera.focusDistance,
@@ -832,7 +846,7 @@ export class Renderer {
     )
   }
 
-  public updateSettings() {
+  updateSettings() {
     const settingsData = {
       maxBounces: this.scene.maxBounces,
       samples: this.scene.samples,

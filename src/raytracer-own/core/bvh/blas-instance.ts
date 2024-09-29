@@ -13,19 +13,12 @@ export class BLASInstance {
         this.blasOffset = blasOffset;
         this.materialIdx = materialIdx;
 
-        // Compute the transformation matrix: Scale -> Rotate (Z -> Y -> X) -> Translate
         mat4.identity(this.transform);
-
-        // 1. Scale
-        mat4.scale(this.transform, this.transform, scale);
-
-        // 2. Rotate (apply rotations in ZYX order for proper orientation)
+        mat4.translate(this.transform, this.transform, position);
         mat4.rotateZ(this.transform, this.transform, Deg2Rad(rotation[2]));
         mat4.rotateY(this.transform, this.transform, Deg2Rad(rotation[1]));
         mat4.rotateX(this.transform, this.transform, Deg2Rad(rotation[0]));
-
-        // 3. Translate
-        mat4.translate(this.transform, this.transform, position);
+        mat4.scale(this.transform, this.transform, scale);
 
         // Compute the inverse transformation matrix
         if (!mat4.invert(this.transformInv, this.transform)) {
