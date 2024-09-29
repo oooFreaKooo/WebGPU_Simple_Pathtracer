@@ -23,8 +23,6 @@ import {
   createScene14,
   createScene15,
 } from "../utils/helper"
-const { EventEmitter } = require("events")
-const eventEmitter = new EventEmitter()
 
 export class Application {
   private canvas: HTMLCanvasElement
