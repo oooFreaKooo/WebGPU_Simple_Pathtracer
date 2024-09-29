@@ -462,8 +462,8 @@ fn trace_blas(ray: Ray, instance: BLASInstance, renderState: HitPoint) -> HitPoi
                 for (var i: u32 = 0u; i < triCount; i += 1u) {
                     let triIdx: u32 = triIdxInfo[leftFirst + i];
                     let triangle: Triangle = meshTriangles[triIdx];
+                    let newRenderState: HitPoint = hit_triangle(object_ray, triangle, 0.001, nearestHit);
 
-                    let newRenderState: HitPoint = hit_triangle(object_ray, triangle, 0.001, nearestHit, blasRenderState);
                     if newRenderState.hit && newRenderState.dist < nearestHit {
                         nearestHit = newRenderState.dist;
                         blasRenderState = newRenderState;
@@ -482,78 +482,70 @@ fn trace_blas(ray: Ray, instance: BLASInstance, renderState: HitPoint) -> HitPoi
     return blasRenderState;
 }
 
-fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, renderState: HitPoint) -> HitPoint {
-    var surfacePoint: HitPoint = renderState;
+fn hit_triangle(
+    ray: Ray,
+    tri: Triangle,
+    tMin: f32,
+    tMax: f32
+) -> HitPoint {
+    var surfacePoint: HitPoint;
     surfacePoint.hit = false;
 
-    let edge_1: vec3<f32> = tri.corner_b - tri.corner_a;
-    let edge_2: vec3<f32> = tri.corner_c - tri.corner_a;
+    let edge1 = tri.corner_b - tri.corner_a;
+    let edge2 = tri.corner_c - tri.corner_a;
+    let h = cross(ray.direction, edge2);
+    let a = dot(edge1, h);
 
-    let h: vec3<f32> = cross(ray.direction, edge_2);
-    let a: f32 = dot(edge_1, h);
-
-    if a > -EPSILON && a < EPSILON {
-        return surfacePoint; // Ray is parallel to triangle
+    // Early rejection based on backface culling and parallelism
+    if (a < EPSILON && setting.BACKFACE_CULLING == 1.0) || abs(a) < EPSILON {
+        return surfacePoint;
     }
 
-    let f: f32 = 1.0 / a;
-    let s: vec3<f32> = ray.origin - tri.corner_a;
-    let u: f32 = f * dot(s, h);
+    let f = 1.0 / a;
+    let s = ray.origin - tri.corner_a;
+    let u = f * dot(s, h);
 
     if u < 0.0 || u > 1.0 {
         return surfacePoint;
     }
 
-    let q: vec3<f32> = cross(s, edge_1);
-    let v: f32 = f * dot(ray.direction, q);
+    let q = cross(s, edge1);
+    let v = f * dot(ray.direction, q);
 
-    if v < 0.0 || u + v > 1.0 {
+    if v < 0.0 || (u + v) > 1.0 {
         return surfacePoint;
     }
 
-    let dist: f32 = f * dot(edge_2, q);
+    let dist = f * dot(edge2, q);
 
     if dist < tMin || dist > tMax {
         return surfacePoint;
     }
 
-    // Calculate the interpolated normal
-    let interpolated_normal: vec3<f32> = normalize(
-        tri.normal_a * (1.0 - u - v) + tri.normal_b * u + tri.normal_c * v
-    );
+    let interpolated_normal = tri.normal_a * (1.0 - u - v) + tri.normal_b * u + tri.normal_c * v;
+    let dotProduct = dot(ray.direction, interpolated_normal);
+    let frontFace = dotProduct < 0.0;
+    let finalNormal = select(interpolated_normal, -interpolated_normal, !frontFace);
 
-    // Determine if the hit is from the front
-    let is_front_hit: bool = dot(ray.direction, interpolated_normal) < 0.0;
-
-    // Apply backface culling if enabled
-    if setting.BACKFACE_CULLING > 0.5 && !is_front_hit {
-        return surfacePoint; // Cull the back face hit
-    }
-
-    // Set the normal to always point against the ray direction using `select`
-    surfacePoint.normal = select(-interpolated_normal, interpolated_normal, is_front_hit);
     surfacePoint.dist = dist;
     surfacePoint.hit = true;
-    surfacePoint.from_front = is_front_hit;
+    surfacePoint.normal = finalNormal;
+    surfacePoint.from_front = frontFace;
 
     return surfacePoint;
 }
 
-
 fn hit_aabb(ray: Ray, aabbMin: vec3<f32>, aabbMax: vec3<f32>, inverseDir: vec3<f32>) -> f32 {
     let t1: vec3<f32> = (aabbMin - ray.origin) * inverseDir;
     let t2: vec3<f32> = (aabbMax - ray.origin) * inverseDir;
+
     let tMin: vec3<f32> = min(t1, t2);
     let tMax: vec3<f32> = max(t1, t2);
-
     let t_min: f32 = max(max(tMin.x, tMin.y), tMin.z);
     let t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
-    if t_min > t_max || t_max < 0.0 {
-        return 99999.0; // No intersection
-    } else {
-        return max(t_min, 0.0); // Clamp to zero to handle rays inside AABB
-    }
+    let condition: bool = (t_min > t_max) || (t_max < 0.0);
+    return select(t_min, 99999.0, condition);
 }
 
 fn is_on_border(point: vec3<f32>, aabbMin: vec3<f32>, aabbMax: vec3<f32>, epsilon: f32) -> bool {
