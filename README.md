@@ -61,6 +61,7 @@ To get started with this project, follow these simple steps:
    Once the dependencies are installed, you can start the project by running:
 
    ```bash
+   yarn build
    yarn dev
    ```
 

@@ -1,27 +1,29 @@
-import { defineConfig } from 'vite';
-import path from 'path';
+import { defineConfig } from 'vite'
+import path from 'path'
+import vitePluginString from 'vite-plugin-string'
 
 export default defineConfig({
-    root: './', // Vite expects the root of the project to contain index.html
+    root: './', 
     build: {
-        outDir: 'dist', // Vite places output in `dist` by default
-        sourcemap: true, // Generates source maps
-        rollupOptions: {
-            input: {
-                main: path.resolve(__dirname, 'index.html'), // Entry point for the HTML file
-            },
-            output: {
-                entryFileNames: '[name].bundle.js',
-                assetFileNames: '[name].[ext]',
-                dir: path.resolve(__dirname, 'dist'),
-            },
-        },
+        outDir: 'dist',
+        sourcemap: true,
+        assetsDir: 'assets',
     },
+    plugins: [
+        vitePluginString({
+            include: [ '**/*.wgsl' ],   // Ensure WGSL files are included
+            compress: false,
+        }),
+    ],
     server: {
-        host: true, // Expose to the network
-        port: 3000, // Use port 3000 for the dev server
+        host: true,
+        port: 3000,
     },
     resolve: {
-        extensions: ['.js', '.ts'], // Resolve JS and TS files
+        alias: {
+            '@models': path.resolve(__dirname, 'src/assets/models'),
+            '@textures': path.resolve(__dirname, 'src/assets/textures'),
+        },
+        extensions: [ '.js', '.ts' ],
     },
-});
+})

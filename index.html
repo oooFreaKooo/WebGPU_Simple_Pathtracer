@@ -1,13 +1,13 @@
 <html>
 
-    <head>
-        <meta charset="UTF-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>WebGPU
-            Pathtacer</title>
-        <link rel="icon" href="data:;base64,iVBORwOKGO=">
-        <style>
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU
+      Pathtacer</title>
+    <link rel="icon" href="data:;base64,iVBORwOKGO=">
+    <style>
     :root {
       --bg-color: #f0f0f0;
       --panel-bg: #ffffff;
@@ -265,132 +265,133 @@
       }
     }
   </style>
-    </head>
+  </head>
 
-    <body>
-        <button class="settings-btn" id="settingsBtn">⚙️ Settings</button>
+  <body>
+    <button class="settings-btn" id="settingsBtn">⚙️ Settings</button>
 
-        <div class="control-panel" id="controlPanel">
-            <button class="control-panel-toggle"
-                id="controlPanelToggle">✖️</button>
-            <div class="control-group">
-                <div class="section">
-                    <h3>Scene Properties</h3>
+    <div class="control-panel" id="controlPanel">
+      <button class="control-panel-toggle"
+        id="controlPanelToggle">✖️</button>
+      <div class="control-group">
+        <div class="section">
+          <h3>Scene Properties</h3>
 
-                    <div class="control-item">
-                        <label for="bounces">Bounces</label>
-                        <input id="bounces" type="range" min="1" max="32"
-                            step="1"
-                            value="8" />
-                        <span class="slider-value" id="bouncesValue">8</span>
-                    </div>
+          <div class="control-item">
+            <label for="bounces">Bounces</label>
+            <input id="bounces" type="range" min="1" max="32"
+              step="1"
+              value="8" />
+            <span class="slider-value" id="bouncesValue">8</span>
+          </div>
 
-                    <div class="control-item">
-                        <label for="samples">Samples</label>
-                        <input id="samples" type="range" min="1" max="32"
-                            step="1"
-                            value="1" />
-                        <span class="slider-value" id="samplesValue">1</span>
-                    </div>
+          <div class="control-item">
+            <label for="samples">Samples</label>
+            <input id="samples" type="range" min="1" max="32"
+              step="1"
+              value="1" />
+            <span class="slider-value" id="samplesValue">1</span>
+          </div>
 
-                    <div class="control-item">
-                        <label for="fov">FOV</label>
-                        <input id="fov" type="range" min="60" max="220" step="5"
-                            value="135" />
-                        <span class="slider-value" id="fovValue">135</span>
-                    </div>
+          <div class="control-item">
+            <label for="fov">FOV</label>
+            <input id="fov" type="range" min="60" max="220" step="5"
+              value="135" />
+            <span class="slider-value" id="fovValue">135</span>
+          </div>
 
-                    <div class="control-item">
-                        <label for="focusDist">Focus Distance</label>
-                        <input id="focusDist" type="range" min="0.1" max="100"
-                            step="0.1"
-                            value="10" />
-                        <span class="slider-value"
-                            id="focusDistValue">10.0</span>
-                    </div>
+          <div class="control-item">
+            <label for="focusDist">Focus Distance</label>
+            <input id="focusDist" type="range" min="0.1" max="100"
+              step="0.1"
+              value="10" />
+            <span class="slider-value"
+              id="focusDistValue">10.0</span>
+          </div>
 
-                    <div class="control-item">
-                        <label for="apertureSize">Aperture Size</label>
-                        <input id="apertureSize" type="range" min="0" max="10"
-                            step="0.1"
-                            value="0.5" />
-                        <span class="slider-value"
-                            id="apertureSizeValue">0.5</span>
-                    </div>
-                </div>
-
-                <!-- Visual Effects Section -->
-                <div class="section">
-                    <h3>Visual Effects</h3>
-
-                    <div class="control-item">
-                        <label for="vignetteStrength">Vignette Strength</label>
-                        <input id="vignetteStrength" type="range" min="0"
-                            max="1"
-                            step="0.01" value="0.5" />
-                        <span class="slider-value"
-                            id="vignetteStrengthValue">0.50</span>
-                    </div>
-
-                    <div class="control-item">
-                        <label for="vignetteRadius">Vignette Radius</label>
-                        <input id="vignetteRadius" type="range" min="0" max="1"
-                            step="0.01"
-                            value="0.5" />
-                        <span class="slider-value"
-                            id="vignetteRadiusValue">0.50</span>
-                    </div>
-                </div>
-
-                <!-- Advanced Settings Section -->
-                <div class="section">
-                    <h3>Advanced Settings</h3>
-
-                    <div class="control-item">
-                        <label for="jitter">Jitter Scale</label>
-                        <input id="jitter" type="range" min="0" max="1"
-                            step="0.01"
-                            value="0.5" />
-                        <span class="slider-value" id="jitterValue">0.50</span>
-                    </div>
-
-                    <div class="control-item checkbox-control">
-                        <input id="backfaceCulling" type="checkbox" checked />
-                        <label for="backfaceCulling">Backface Culling</label>
-                    </div>
-
-                    <div class="control-item checkbox-control">
-                        <input id="skyTexture" type="checkbox" />
-                        <label for="skyTexture">Sky Texture</label>
-                    </div>
-                </div>
-            </div>
-
-            <div class="toggle-dark-mode">
-                <input type="checkbox" id="darkModeToggle" checked />
-                <label for="darkModeToggle">Dark Mode</label>
-            </div>
-
+          <div class="control-item">
+            <label for="apertureSize">Aperture Size</label>
+            <input id="apertureSize" type="range" min="0" max="10"
+              step="0.1"
+              value="0.5" />
+            <span class="slider-value"
+              id="apertureSizeValue">0.5</span>
+          </div>
         </div>
 
-        <div class="container">
-            <div id="canvasContainer"></div>
+        <!-- Visual Effects Section -->
+        <div class="section">
+          <h3>Visual Effects</h3>
+
+          <div class="control-item">
+            <label for="vignetteStrength">Vignette Strength</label>
+            <input id="vignetteStrength" type="range" min="0"
+              max="1"
+              step="0.01" value="0.5" />
+            <span class="slider-value"
+              id="vignetteStrengthValue">0.50</span>
+          </div>
+
+          <div class="control-item">
+            <label for="vignetteRadius">Vignette Radius</label>
+            <input id="vignetteRadius" type="range" min="0" max="1"
+              step="0.01"
+              value="0.5" />
+            <span class="slider-value"
+              id="vignetteRadiusValue">0.50</span>
+          </div>
         </div>
 
-        <div class="time-container">
-            <div class="time-item">
-                <span id="triangles"></span><span> triangles</span>
-            </div>
-            <div class="time-item">
-                <span id="render-time"></span><span> frames</span>
-            </div>
-            <div class="time-item">
-                <span id="frame-time"></span><span> fps</span>
-            </div>
-        </div>
+        <!-- Advanced Settings Section -->
+        <div class="section">
+          <h3>Advanced Settings</h3>
 
-        <script src="./dist/main.bundle.js"></script>
-        <script>
+          <div class="control-item">
+            <label for="jitter">Jitter Scale</label>
+            <input id="jitter" type="range" min="0" max="1"
+              step="0.01"
+              value="0.5" />
+            <span class="slider-value" id="jitterValue">0.50</span>
+          </div>
+
+          <div class="control-item checkbox-control">
+            <input id="backfaceCulling" type="checkbox" checked />
+            <label for="backfaceCulling">Backface Culling</label>
+          </div>
+
+          <div class="control-item checkbox-control">
+            <input id="skyTexture" type="checkbox" />
+            <label for="skyTexture">Sky Texture</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="toggle-dark-mode">
+        <input type="checkbox" id="darkModeToggle" checked />
+        <label for="darkModeToggle">Dark Mode</label>
+      </div>
+
+    </div>
+
+    <div class="container">
+      <div id="canvasContainer"></div>
+    </div>
+
+    <div class="time-container">
+      <div class="time-item">
+        <span id="triangles"></span><span> triangles</span>
+      </div>
+      <div class="time-item">
+        <span id="render-time"></span><span> frames</span>
+      </div>
+      <div class="time-item">
+        <span id="frame-time"></span><span> fps</span>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+
+    <script>
     const settingsBtn = document.getElementById('settingsBtn');
     const controlPanel = document.getElementById('controlPanel');
     const controlPanelToggle = document.getElementById('controlPanelToggle');
@@ -433,6 +434,6 @@
       });
     });
   </script>
-    </body>
+  </body>
 
 </html>
