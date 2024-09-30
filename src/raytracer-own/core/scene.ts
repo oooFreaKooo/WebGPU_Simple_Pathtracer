@@ -35,10 +35,9 @@ export class Scene {
     private nextMeshID = 0
 
     // Mapping relationships
-    blasTriangleIndexOffsets = new Map<string, number>()
-    private blasToNodeOffsetMap = new Map<string, number>()
+    blasTriangleOffsetMap = new Map<string, number>()
+    private blasNodeOffsetMap = new Map<string, number>()
     private blasOffsetToMeshIDMap = new Map<number, number>()
-    private meshIDtoBlasOffsetMap = new Map<number, number>()
     private meshIDToBLAS = new Map<number, BLAS>()
 
     // Top-Level Acceleration Structure
@@ -55,7 +54,7 @@ export class Scene {
 
             const blas = this.getOrCreateBLAS(modelPath, objectMesh.triangles)
 
-            const meshID = this.assignMeshID()
+            const meshID = this.nextMeshID++
 
             this.mapMeshToBLAS(meshID, blas.nodeOffset, blas.blas)
 
@@ -79,10 +78,6 @@ export class Scene {
         this.objectMeshes.push(objectMesh)
 
         return objectMesh
-    }
-
-    private assignMeshID (): number {
-        return this.nextMeshID++
     }
 
     private getMaterialIndex (material: Material): number {
@@ -114,41 +109,33 @@ export class Scene {
         )
     }
 
-
     private getOrCreateBLAS (modelPath: string, triangles: any[]): { blas: BLAS; nodeOffset: number } {
         const existingBLAS = this.uniqueGeometries.get(modelPath)
         if (existingBLAS) {
-            const nodeOffset = this.blasToNodeOffsetMap.get(existingBLAS.id)!
+            const nodeOffset = this.blasNodeOffsetMap.get(existingBLAS.id)!
             return { blas: existingBLAS, nodeOffset }
         }
-
-        const blasID = this.generateBLASID()
+    
+        const blasID = `blas_${this.blasArray.length}`
         const newBLAS = new BLAS(blasID, triangles)
         const nodeOffset = this.totalBLASNodeCount
-
+    
         this.storeBLAS(newBLAS, modelPath, nodeOffset)
-
+    
         return { blas: newBLAS, nodeOffset }
     }
-
-    private generateBLASID (): string {
-        return `blas_${this.blasArray.length}`
-    }
-
+    
     private storeBLAS (blas: BLAS, modelPath: string, nodeOffset: number) {
-
         this.blasArray.push(blas)
-
         this.uniqueGeometries.set(modelPath, blas)
-        this.blasToNodeOffsetMap.set(blas.id, nodeOffset)
-        this.blasTriangleIndexOffsets.set(blas.id, nodeOffset)
-
+        this.blasNodeOffsetMap.set(blas.id, nodeOffset)
+        // Ensure both maps are updated if needed
         this.totalBLASNodeCount += blas.m_nodes.length
     }
+    
 
     private mapMeshToBLAS (meshID: number, nodeOffset: number, blas: BLAS) {
 
-        this.meshIDtoBlasOffsetMap.set(meshID, nodeOffset)
         this.blasOffsetToMeshIDMap.set(nodeOffset, meshID)
         this.meshIDToBLAS.set(meshID, blas)
     }

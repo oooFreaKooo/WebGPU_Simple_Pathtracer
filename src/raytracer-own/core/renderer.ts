@@ -89,17 +89,11 @@ export class Renderer {
     }
 
     async setupDevice () {
-        if (!navigator.gpu.wgslLanguageFeatures.has('readonly_and_readwrite_storage_textures')) {
-            throw new Error('Read-only and read-write storage textures are not available')
-        }
         // adapter: wrapper around (physical) GPU.
         // Describes features and limits
         this.adapter = <GPUAdapter>await navigator.gpu?.requestAdapter({
             powerPreference: 'high-performance',
         })
-        if (!this.adapter) {
-            throw Error('Couldn\'t request WebGPU adapter.')
-        }
         const requiredLimits = {
             maxStorageBufferBindingSize: 1e9, // 1 GB
             maxComputeWorkgroupStorageSize: 16384, // 16 KB
@@ -428,56 +422,6 @@ export class Renderer {
         this.device.queue.writeBuffer(this.frameBuffer, 0, frameNum)
     }
 
-    private createTriangleBuffer () {
-    // Collect all triangles from all BLASes
-        let triangleOffset = 0
-        for (const blas of this.scene.blasArray) {
-            this.blasTriangleOffsets.set(blas, triangleOffset)
-            this.allTriangles.push(...blas.m_triangles)
-            triangleOffset += blas.m_triangles.length
-        }
-
-        const triangleSize = 96 // Each Triangle is 96 bytes (24 floats * 4 bytes)
-        const bufferSize = triangleSize * this.allTriangles.length
-
-        this.triangleBuffer = this.device.createBuffer({
-            size: bufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        })
-    }
-
-    private updateTriangleData () {
-        const triangleDataSize = 24
-
-        const triangleData = new Float32Array(triangleDataSize * this.allTriangles.length)
-
-        for (let i = 0; i < this.allTriangles.length; i++) {
-            const tri = this.allTriangles[i]
-            for (let corner = 0; corner < 2; corner++) {
-                triangleData[triangleDataSize * i + 8 * corner] = tri.corners[corner][0]
-                triangleData[triangleDataSize * i + 8 * corner + 1] = tri.corners[corner][1]
-                triangleData[triangleDataSize * i + 8 * corner + 2] = tri.corners[corner][2]
-                triangleData[triangleDataSize * i + 8 * corner + 3] = 0.0
-
-                triangleData[triangleDataSize * i + 8 * corner + 4] = tri.normals[corner][0]
-                triangleData[triangleDataSize * i + 8 * corner + 5] = tri.normals[corner][1]
-                triangleData[triangleDataSize * i + 8 * corner + 6] = tri.normals[corner][2]
-                triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0
-            }
-            triangleData[triangleDataSize * i + 16] = tri.corners[2][0]
-            triangleData[triangleDataSize * i + 17] = tri.corners[2][1]
-            triangleData[triangleDataSize * i + 18] = tri.corners[2][2]
-            triangleData[triangleDataSize * i + 19] = 0.0
-
-            triangleData[triangleDataSize * i + 20] = tri.normals[2][0]
-            triangleData[triangleDataSize * i + 21] = tri.normals[2][1]
-            triangleData[triangleDataSize * i + 22] = tri.normals[2][2]
-            triangleData[triangleDataSize * i + 23] = 0.0
-        }
-
-        this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.allTriangles.length)
-    }
-
     private createMaterialBuffer () {
         const materialSize = 80 // Each Material is 80 bytes (20 floats * 4 bytes)
         const bufferSize = materialSize * this.scene.materials.length
@@ -531,39 +475,7 @@ export class Renderer {
         )
     }
 
-    private createTriangleIndexBuffer () {
-        let totalIndices = 0
-        for (const blas of this.scene.blasArray) {
-            totalIndices += blas.m_triangleIndices.length
-        }
 
-        this.allTriangleIndices = new Uint32Array(totalIndices)
-
-        let indexOffset = 0
-        for (const blas of this.scene.blasArray) {
-            this.blasTriangleIndexOffsets.set(blas, indexOffset)
-            const triangleOffset = this.blasTriangleOffsets.get(blas)!
-
-            for (let i = 0; i < blas.m_triangleIndices.length; i++) {
-                this.allTriangleIndices[indexOffset + i] = blas.m_triangleIndices[i] + triangleOffset
-            }
-            indexOffset += blas.m_triangleIndices.length
-        }
-
-        const bufferSize = 4 * this.allTriangleIndices.length
-        this.triangleIndexBuffer = this.device.createBuffer({
-            size: bufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        })
-
-        this.device.queue.writeBuffer(
-            this.triangleIndexBuffer,
-            0,
-            this.allTriangleIndices.buffer,
-            this.allTriangleIndices.byteOffset,
-            this.allTriangleIndices.byteLength
-        )
-    }
 
     private createBlasInstanceBuffer () {
     // Get BLAS instances from the scene
@@ -580,42 +492,123 @@ export class Renderer {
         })
     }
 
+    private createTriangleBuffer () {
+        let triangleOffset = 0
+        for (const blas of this.scene.blasArray) {
+            this.scene.blasTriangleOffsetMap.set(blas.id, triangleOffset)
+            this.allTriangles.push(...blas.m_triangles)
+            triangleOffset += blas.m_triangles.length
+        }
+    
+        const triangleSize = 96 // Each Triangle is 96 bytes (24 floats * 4 bytes)
+        const bufferSize = triangleSize * this.allTriangles.length
+    
+        this.triangleBuffer = this.device.createBuffer({
+            size: bufferSize,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        })
+    }
+    
+    private updateTriangleData () {
+        const triangleDataSize = 24
+    
+        const triangleData = new Float32Array(triangleDataSize * this.allTriangles.length)
+    
+        for (let i = 0; i < this.allTriangles.length; i++) {
+            const tri = this.allTriangles[i]
+            for (let corner = 0; corner < 2; corner++) {
+                triangleData[triangleDataSize * i + 8 * corner] = tri.corners[corner][0]
+                triangleData[triangleDataSize * i + 8 * corner + 1] = tri.corners[corner][1]
+                triangleData[triangleDataSize * i + 8 * corner + 2] = tri.corners[corner][2]
+                triangleData[triangleDataSize * i + 8 * corner + 3] = 0.0
+    
+                triangleData[triangleDataSize * i + 8 * corner + 4] = tri.normals[corner][0]
+                triangleData[triangleDataSize * i + 8 * corner + 5] = tri.normals[corner][1]
+                triangleData[triangleDataSize * i + 8 * corner + 6] = tri.normals[corner][2]
+                triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0
+            }
+            triangleData[triangleDataSize * i + 16] = tri.corners[2][0]
+            triangleData[triangleDataSize * i + 17] = tri.corners[2][1]
+            triangleData[triangleDataSize * i + 18] = tri.corners[2][2]
+            triangleData[triangleDataSize * i + 19] = 0.0
+    
+            triangleData[triangleDataSize * i + 20] = tri.normals[2][0]
+            triangleData[triangleDataSize * i + 21] = tri.normals[2][1]
+            triangleData[triangleDataSize * i + 22] = tri.normals[2][2]
+            triangleData[triangleDataSize * i + 23] = 0.0
+        }
+    
+        this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.allTriangles.length)
+    }
+
+    private createTriangleIndexBuffer () {
+        let totalIndices = 0
+        for (const blas of this.scene.blasArray) {
+            totalIndices += blas.m_triangleIndices.length
+        }
+    
+        this.allTriangleIndices = new Uint32Array(totalIndices)
+    
+        let indexOffset = 0
+        for (const blas of this.scene.blasArray) {
+            const triangleOffset = this.scene.blasTriangleOffsetMap.get(blas.id)!
+            if (triangleOffset === undefined) {
+                console.error(`Triangle offset not found for BLAS ID: ${blas.id}`)
+                continue
+            }
+    
+            for (let i = 0; i < blas.m_triangleIndices.length; i++) {
+                this.allTriangleIndices[indexOffset + i] = blas.m_triangleIndices[i] + triangleOffset
+            }
+            indexOffset += blas.m_triangleIndices.length
+        }
+    
+        const bufferSize = 4 * this.allTriangleIndices.length
+        this.triangleIndexBuffer = this.device.createBuffer({
+            size: bufferSize,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        })
+    
+        this.device.queue.writeBuffer(
+            this.triangleIndexBuffer,
+            0,
+            this.allTriangleIndices.buffer,
+            this.allTriangleIndices.byteOffset,
+            this.allTriangleIndices.byteLength
+        )
+    }
+    
     private createBlasNodeBuffer () {
         let nodeOffset = 0
         this.allBlasNodes = []
-
+    
         for (const blas of this.scene.blasArray) {
-            const triangleIndexOffset = this.scene.blasTriangleIndexOffsets.get(blas.id)
-            if (triangleIndexOffset === undefined) {
-                continue
-            }
-
+            const triangleIndexOffset = this.scene.blasTriangleOffsetMap.get(blas.id)
+            const baseNodeOffset = nodeOffset
             for (const node of blas.m_nodes) {
-                // Depending on the node type (leaf or inner), update the leftFirst field
                 if (node.triangleCount > 0) {
                     node.leftFirst += triangleIndexOffset
                 } else {
-                    node.leftFirst += nodeOffset
+                    node.leftFirst += baseNodeOffset
                 }
                 this.allBlasNodes.push(node)
+                nodeOffset += 1
             }
-
-            nodeOffset += blas.m_nodes.length
         }
-
+    
         // Create the BLAS node buffer
         const nodeSize = 32
-        const bufferSizeUnaligned = nodeSize * this.allBlasNodes.length
-        const bufferSize = bufferSizeUnaligned
-
+        const bufferSize = nodeSize * this.allBlasNodes.length
+    
         this.nodeBufferBlas = this.device.createBuffer({
             size: bufferSize,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         })
-
+    
         this.floatDataBlas = new Float32Array(this.allBlasNodes.length * 8)
         this.uintDataBlas = new Uint32Array(this.floatDataBlas.buffer)
     }
+    
 
     private updateBlasNodeData () {
         const nodeCount = this.allBlasNodes.length
@@ -849,8 +842,9 @@ export class Renderer {
         }
 
         // Compute pass
-        const workGroupsX = Math.ceil(this.canvas.width / COMPUTE_WORKGROUP_SIZE_X)
-        const workGroupsY = Math.ceil(this.canvas.height / COMPUTE_WORKGROUP_SIZE_Y)
+        const workGroupsX = Math.ceil(this.canvas.width / (COMPUTE_WORKGROUP_SIZE_X))
+        const workGroupsY = Math.ceil(this.canvas.height / (COMPUTE_WORKGROUP_SIZE_Y))
+        
 
         computePass(
             this.device,
