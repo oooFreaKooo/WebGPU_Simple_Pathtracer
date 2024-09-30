@@ -1,2 +1,4 @@
 dist/main*
 node_modules
+.yarn
+dist
