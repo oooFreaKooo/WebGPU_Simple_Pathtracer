@@ -454,14 +454,17 @@ fn trace_blas(ray: Ray, instance: BLASInstance, renderState: HitPoint) -> HitPoi
 
             if triCount > 0u {
                 for (var i: u32 = 0u; i < triCount; i += 1u) {
-                    let triIdx: u32 = triIdxInfo[leftFirst + i];
-                    let triangle: Triangle = meshTriangles[triIdx];
-                    let newRenderState: HitPoint = hit_triangle(object_ray, triangle, 0.001, nearestHit);
 
-                    if newRenderState.hit && newRenderState.dist < nearestHit {
-                        nearestHit = newRenderState.dist;
-                        blasRenderState = newRenderState;
-                        blasRenderState.normal = normalize((instance.transform * vec4<f32>(blasRenderState.normal, 0.0)).xyz);
+                    let triIdx: u32 = triIdxInfo[leftFirst + i];
+
+                    let triangle: Triangle = meshTriangles[triIdx];
+
+                    let triangleHitPoint: HitPoint = hit_triangle(object_ray, triangle, 0.001, nearestHit);
+
+                    if triangleHitPoint.hit && triangleHitPoint.dist < nearestHit {
+                        nearestHit = triangleHitPoint.dist;
+                        blasRenderState = triangleHitPoint;
+                        blasRenderState.normal = (instance.transform * vec4<f32>(blasRenderState.normal, 0.0)).xyz;
                         blasRenderState.material = meshMaterial[instance.materialIdx];
                     }
                 }

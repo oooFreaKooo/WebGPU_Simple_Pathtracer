@@ -14,24 +14,23 @@ export class BLAS {
     m_triangles: Triangle[];
     m_nodes: BLASNode[];
     m_triangleIndices: Uint32Array;
-    private m_rootNodeIdx = 0;
-    private m_nodeCount = 1;
+    m_rootNodeIdx = 0;
+    m_nodeCount: number = 0;
 
     constructor(id: string, triangles: Triangle[]) {
         this.id = id;
         this.m_triangles = triangles;
-        const N = triangles.length;
-        this.m_nodes = new Array<BLASNode>(N * 2 - 1);
-        this.m_triangleIndices = new Uint32Array(N);
 
+        const N = triangles.length;
+        this.m_nodes = new Array<BLASNode>(N * 2 - 1); // Preallocate enough nodes
+        this.m_triangleIndices = new Uint32Array(N); // Indices for all triangles
+        this.m_nodeCount = 1; // Root node starts with count 1
         this._initializeBLAS();
     }
 
     private _initializeBLAS(): void {
         // Initialize triangle indices
-        this.m_triangleIndices.forEach((_, i) => {
-            this.m_triangleIndices[i] = i;
-        });
+        this.m_triangleIndices.forEach((_, i) => this.m_triangleIndices[i] = i);
 
         // Create root node
         this.m_nodes[this.m_rootNodeIdx] = {
@@ -43,17 +42,16 @@ export class BLAS {
         this._updateAABB(this.m_rootNodeIdx);
         this._subdivideNode(this.m_rootNodeIdx);
 
-        // Trim unused nodes
+        // Remove unused nodes after subdivision
         this.m_nodes.length = this.m_nodeCount;
     }
 
     private _updateAABB(nodeIdx: number): void {
         const node = this.m_nodes[nodeIdx];
-        const { leftFirst, triangleCount } = node;
         const nodeAABB = new AABB();
 
-        for (let i = 0; i < triangleCount; i++) {
-            const triIdx = this.m_triangleIndices[leftFirst + i];
+        for (let i = 0; i < node.triangleCount; i++) {
+            const triIdx = this.m_triangleIndices[node.leftFirst + i];
             const triangle = this.m_triangles[triIdx];
             triangle.corners.forEach(corner => nodeAABB.grow(corner));
         }
@@ -61,23 +59,28 @@ export class BLAS {
         node.aabb = nodeAABB;
     }
 
+
     private _findBestSplit(nodeIdx: number): [number, number, number] {
         const node = this.m_nodes[nodeIdx];
         let bestAxis = -1;
         let bestPos = 0;
-        let bestCost = Infinity;
+        let bestCost = Number.MAX_VALUE;
+
+        const centroidBounds: number[][] = [[], [], []]; // Store bounds for all axes
+
+
+        // Calculate bounds of centroids for each axis
+        for (let i = 0; i < node.triangleCount; i++) {
+            const triIdx = this.m_triangleIndices[node.leftFirst + i];
+            const centroid = this.m_triangles[triIdx].centroid;
+            for (let axis = 0; axis < 3; axis++) {
+                centroidBounds[axis][i] = centroid[axis];
+            }
+        }
 
         for (let axis = 0; axis < 3; axis++) {
-            let boundsMin = Infinity;
-            let boundsMax = -Infinity;
-
-            // Find bounds of centroids along the axis
-            for (let i = 0; i < node.triangleCount; i++) {
-                const triIdx = this.m_triangleIndices[node.leftFirst + i];
-                const centroid = this.m_triangles[triIdx].centroid;
-                boundsMin = Math.min(boundsMin, centroid[axis]);
-                boundsMax = Math.max(boundsMax, centroid[axis]);
-            }
+            const boundsMin = Math.min(...centroidBounds[axis]);
+            const boundsMax = Math.max(...centroidBounds[axis]);
 
             if (boundsMin === boundsMax) continue;
 
@@ -90,18 +93,17 @@ export class BLAS {
             // Distribute triangles into bins
             for (let i = 0; i < node.triangleCount; i++) {
                 const triIdx = this.m_triangleIndices[node.leftFirst + i];
-                const centroid = this.m_triangles[triIdx].centroid;
-                const binIdx = Math.min(BINS - 1, Math.floor((centroid[axis] - boundsMin) * scale));
+                const centroid = centroidBounds[axis][i];
+                const binIdx = Math.min(BINS - 1, Math.floor((centroid - boundsMin) * scale));
                 const bin = binsArray[binIdx];
                 bin.count++;
                 this.m_triangles[triIdx].corners.forEach(corner => bin.aabb.grow(corner));
             }
 
-            // Compute cumulative counts and areas
-            const leftCounts: number[] = [];
-            const rightCounts: number[] = [];
-            const leftAreas: number[] = [];
-            const rightAreas: number[] = [];
+            const leftCounts: number[] = new Array(BINS).fill(0);
+            const rightCounts: number[] = new Array(BINS).fill(0);
+            const leftAreas: number[] = new Array(BINS).fill(0);
+            const rightAreas: number[] = new Array(BINS).fill(0);
 
             let leftAABB = new AABB();
             let leftCount = 0;
@@ -137,6 +139,7 @@ export class BLAS {
         return [bestAxis, bestPos, bestCost];
     }
 
+
     private _calculateNodeCost(nodeIdx: number): number {
         const node = this.m_nodes[nodeIdx];
         return node.aabb.area() * node.triangleCount;
@@ -152,7 +155,7 @@ export class BLAS {
         const axis = bestAxis;
         const splitPos = bestPos;
         let i = node.leftFirst;
-        let j = node.leftFirst + node.triangleCount - 1;
+        let j = i + node.triangleCount - 1;
 
         // Partition triangles based on split
         while (i <= j) {
@@ -161,7 +164,9 @@ export class BLAS {
             if (centroid[axis] < splitPos) {
                 i++;
             } else {
-                [this.m_triangleIndices[i], this.m_triangleIndices[j]] = [this.m_triangleIndices[j], this.m_triangleIndices[i]];
+                let tmp = this.m_triangleIndices[i];
+                this.m_triangleIndices[i] = this.m_triangleIndices[j];
+                this.m_triangleIndices[j] = tmp;
                 j--;
             }
         }

@@ -39,27 +39,22 @@ export class TLAS {
      * Builds the TLAS by organizing BLAS instances into a hierarchy.
      */
     private _build(): void {
-        var numInstances = this.m_blasInstances.length;
-        const nodeIndices = new Uint32Array(numInstances);
+        let nodeIndices = this.m_blasInstances.length;
+        let nodeIdx: Uint32Array = new Uint32Array(nodeIndices);
 
         // Initialize TLAS nodes with BLAS instances
-        for (let i = 0; i < numInstances; i++) {
-            nodeIndices[i] = this.m_nodeUsed;
-
-            const blasInstance = this.m_blasInstances[i];
-            const meshID = this.m_offsetToMeshId.get(blasInstance.blasOffset);
-            if (meshID === undefined) {
-                throw new Error(`Mesh ID not found for BLAS offset: ${blasInstance.blasOffset}`);
-            }
+        for (let i = 0; i < this.m_blasInstances.length; ++i) {
+            nodeIdx[i] = this.m_nodeUsed;
+            const meshID = this.m_offsetToMeshId.get(this.m_blasInstances[i].blasOffset);
+            if (meshID === undefined) throw new Error("Mesh ID not found");
 
             const blas = this.m_meshIDtoBLAS.get(meshID);
-            if (blas === undefined) {
-                throw new Error(`BLAS not found for Mesh ID: ${meshID}`);
-            }
+            if (blas === undefined) throw new Error("BLAS not found");
 
             // Clone and transform the BLAS's AABB
             const blasAABB = blas.m_nodes[0].aabb.clone();
-            blasAABB.applyMatrix4(mat4.clone(blasInstance.transform));
+            const transform = this.m_blasInstances[i].transform;
+            blasAABB.applyMatrix4(transform);
 
             // Create a TLASNode for this BLAS instance
             const tlasNode: TLASNode = {
@@ -74,40 +69,35 @@ export class TLAS {
 
         // Start building the hierarchy by finding best matches to merge
         let A = 0;
-        let B = this._findBestMatch(nodeIndices, numInstances, A);
+        let B = this._findBestMatch(nodeIdx, nodeIndices, A);
 
-        while (numInstances > 1) {
-            const C = this._findBestMatch(nodeIndices, numInstances, B);
+        while (nodeIndices > 1) {
+            let C = this._findBestMatch(nodeIdx, nodeIndices, B);
 
             if (A === C) {
-                // Merge nodes A and B
-                const aabbA = this.m_tlasNodes[nodeIndices[A]].aabb;
-                const aabbB = this.m_tlasNodes[nodeIndices[B]].aabb;
-                const newAABB = aabbA.union(aabbB);
-
-                // Create a new parent node for A and B
+                // Combine the two nodes into a new parent node
                 const newNode: TLASNode = {
-                    aabb: newAABB,
-                    left: nodeIndices[A],
-                    right: nodeIndices[B],
-                    blas: 0, // Internal nodes do not hold a BLAS
+                    aabb: this.m_tlasNodes[nodeIdx[A]].aabb.clone().union(this.m_tlasNodes[nodeIdx[B]].aabb),
+                    left: nodeIdx[A],
+                    right: nodeIdx[B],
+                    blas: 0, // No BLAS for internal nodes
                 };
 
-                // Assign the new node and update nodeIndices
                 this.m_tlasNodes[this.m_nodeUsed] = newNode;
-                nodeIndices[A] = this.m_nodeUsed++;
-                nodeIndices[B] = nodeIndices[--numInstances];
-                B = this._findBestMatch(nodeIndices, numInstances, A);
+                nodeIdx[A] = this.m_nodeUsed++;
+                nodeIdx[B] = nodeIdx[--nodeIndices]; // Move the last node to replace the merged node
+                B = this._findBestMatch(nodeIdx, nodeIndices, A);
             } else {
-                // Move to the next node
+                // Advance A and B
                 A = B;
                 B = C;
             }
         }
 
         // Set the root node of the TLAS
-        this.m_tlasNodes[0] = this.m_tlasNodes[nodeIndices[A]];
+        this.m_tlasNodes[0] = this.m_tlasNodes[nodeIdx[A]];
     }
+
 
     private _findBestMatch(nodeIndices: Uint32Array, count: number, A: number): number {
         let smallestArea = Infinity;
@@ -121,17 +111,13 @@ export class TLAS {
             const aabbB = this.m_tlasNodes[nodeIndices[B]].aabb;
 
             // Compute the combined AABB of A and B
-            const combinedMax = vec3.create();
-            vec3.max(combinedMax, aabbA.bmax, aabbB.bmax);
+            const combinedMin = vec3.min(vec3.create(), aabbA.bmin, aabbB.bmin);
+            const combinedMax = vec3.max(vec3.create(), aabbA.bmax, aabbB.bmax);
 
-            const combinedMin = vec3.create();
-            vec3.min(combinedMin, aabbA.bmin, aabbB.bmin);
+            const extent = vec3.sub(vec3.create(), combinedMax, combinedMin);
 
-            const extent = vec3.create();
-            vec3.sub(extent, combinedMax, combinedMin);
-
-            // Calculate surface area as a simple metric
-            const surfaceArea = extent[0] * extent[1] + extent[1] * extent[2] + extent[2] * extent[0];
+            // Calculate surface area using the extent of the combined AABB
+            const surfaceArea = 2 * (extent[0] * extent[1] + extent[1] * extent[2] + extent[2] * extent[0]);
 
             // Update the best match if this surface area is smaller
             if (surfaceArea < smallestArea) {
@@ -142,4 +128,5 @@ export class TLAS {
 
         return bestB;
     }
+
 }

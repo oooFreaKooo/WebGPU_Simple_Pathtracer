@@ -45,10 +45,8 @@ export class ObjLoader {
   }
 
   private read_vertex_data(line: string) {
-    const parts = line.trim().split(/\s+/).map(Number)
-    if (parts.length < 4) return // Invalid vertex line
-    const [, x, y, z] = parts
-    const new_vertex = vec3.fromValues(x, y, z) // No transformation applied
+    const [, x, y, z] = line.split(" ").map(Number)
+    const new_vertex = vec3.fromValues(x, y, z)
 
     this.v.push(new_vertex)
     vec3.min(this.minCorner, this.minCorner, new_vertex)
@@ -56,21 +54,17 @@ export class ObjLoader {
   }
 
   private read_texcoord_data(line: string) {
-    const parts = line.trim().split(/\s+/).map(Number)
-    if (parts.length < 3) return // Invalid texcoord line
-    const [, u, v] = parts
+    const [, u, v] = line.split(" ").map(Number)
     this.vt.push([u, v])
   }
 
   private read_normal_data(line: string) {
-    const parts = line.trim().split(/\s+/).map(Number)
-    if (parts.length < 4) return // Invalid normal line
-    const [, nx, ny, nz] = parts
+    const [, nx, ny, nz] = line.split(" ").map(Number)
     this.vn.push([nx, ny, nz])
   }
 
   private read_face_data(line: string) {
-    const vertex_descriptions = line.trim().split(/\s+/)
+    const vertex_descriptions = line.trim().split(" ")
 
     if (vertex_descriptions.length === 4) {
       const tri = new Triangle()
@@ -97,14 +91,8 @@ export class ObjLoader {
   }
 
   private read_corner(vertex_description: string, tri: Triangle) {
-    const indices = vertex_description.split("/").map((v) => parseInt(v, 10) - 1)
-    const [vIndex, vtIndex, vnIndex] = indices
-    if (vIndex >= 0 && vIndex < this.v.length) {
-      tri.corners.push(this.v[vIndex])
-    }
-    if (vnIndex >= 0 && vnIndex < this.vn.length) {
-      tri.normals.push(this.vn[vnIndex])
-    }
-    // Optionally handle vtIndex if needed
+    const [vIndex, vtIndex, vnIndex] = vertex_description.split("/").map((v) => parseInt(v) - 1)
+    tri.corners.push(this.v[vIndex])
+    tri.normals.push(this.vn[vnIndex])
   }
 }
