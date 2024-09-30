@@ -6,7 +6,6 @@ import { CubeMapMaterial } from './material'
 import { computePass, createRenderPassDescriptor, createVertexBuffer, renderPass } from '../utils/webgpu'
 import { Triangle } from './triangle'
 import { BLAS, BLASNode } from './bvh/blas'
-import { Node } from './node'
 import { TLASNode } from './bvh/tlas'
 import { BLASInstance } from './bvh/blas-instance'
 
