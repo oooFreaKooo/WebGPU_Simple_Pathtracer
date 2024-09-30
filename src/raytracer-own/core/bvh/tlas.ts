@@ -1,11 +1,9 @@
-import { mat4, vec3 } from 'gl-matrix'
+import { vec3 } from 'gl-matrix'
 import { BLAS } from './blas'
 import { BLASInstance } from './blas-instance'
 import { AABB } from '../node'
 
-/**
- * Represents a node in the Top-Level Acceleration Structure (TLAS).
- */
+
 export interface TLASNode {
     aabb: AABB;
     left: number;
@@ -13,9 +11,6 @@ export interface TLASNode {
     blas: number; // Index of the BLAS instance
 }
 
-/**
- * Top-Level Acceleration Structure for organizing BLAS instances.
- */
 export class TLAS {
     m_tlasNodes: TLASNode[]
     m_offsetToMeshId: Map<number, number>
@@ -35,9 +30,6 @@ export class TLAS {
         this._build()
     }
 
-    /**
-     * Builds the TLAS by organizing BLAS instances into a hierarchy.
-     */
     private _build (): void {
         let nodeIndices = this.m_blasInstances.length
         const nodeIdx: Uint32Array = new Uint32Array(nodeIndices)

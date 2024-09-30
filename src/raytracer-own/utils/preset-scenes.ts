@@ -10,14 +10,112 @@ export interface ObjectProperties {
     objectID?: number
   }
 
-
+const defaults: Material = {
+    albedo: [ 0.8, 0.8, 0.8 ],
+    specularColor: [ 1.0, 1.0, 1.0 ],
+    emissionColor: [ 0.0, 0.0, 0.0 ],
+    emissionStrength: 0.0,
+    specularRoughness: 0.0,
+    specularChance: 0.0,
+    ior: 1.0,
+    refractionChance: 0.0,
+    refractionRoughness: 0.0,
+    refractionColor: [ 0.0, 0.0, 0.0 ],
+}
+const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
+const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
+const redMaterial = new Material({ albedo: [ 1.0, 0.0, 0.0 ] })
+const greenMaterial = new Material({ albedo: [ 0.0, 1.0, 0.0 ] })
+const blueMaterial = new Material({ albedo: [ 0.3, 0.31, 0.98 ] })
+const glowMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], emissionColor: [ 1.0, 0.8, 0.6 ], emissionStrength: 18.0 })
+const mirrorMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], specularRoughness: 0.05, specularChance: 1.0 })
+const shinyGoldMaterial = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], specularRoughness: 0.0, specularChance: 0.5 })
+const grey = new Material({ albedo: [ 0.84, 0.89, 0.82 ] })
+const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
+const lightSource = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
+const lightSource2 = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 50.0 })
+const glass = new Material({
+    specularChance: 0.02,
+    specularRoughness: 0.0,
+    ior: 1.25,
+    refractionChance: 1.0,
+    refractionRoughness: 0.0,
+})
+const woodenFloorMaterial = new Material({
+    albedo: [ 0.6, 0.4, 0.2 ],
+    specularColor: [ 0.1, 0.1, 0.1 ],
+    specularRoughness: 0.8,
+    specularChance: 0.1,
+})
+const water = new Material({
+    specularChance: 0.02,
+    specularRoughness: 0.0,
+    ior: 1.33,
+    refractionChance: 1.0,
+    refractionRoughness: 0.0,
+})
+const reflectiveSphere = new Material({
+    specularChance: 0.9,
+    specularRoughness: 0.05,
+    ior: 2.5,
+    refractionChance: 0.1,
+    refractionRoughness: 0.0,
+})
+const glassMaterial = new Material({
+    refractionChance: 1.0,
+    ior: 1.18,
+    specularChance: 0.15,
+    specularColor: [ 0.8, 0.8, 0.8 ],
+    specularRoughness: 0.0,
+    refractionRoughness: 0.0,
+})
+const roughGlassMaterial = new Material({
+    specularChance: 0.15,
+    refractionChance: 1.0,
+    specularRoughness: 0.1,
+    refractionRoughness: 0.15,
+    ior: 1.15,
+})
+const colorGlassMaterial = new Material({
+    specularChance: 0.05,
+    refractionChance: 1.0,
+    specularRoughness: 0.0,
+    refractionColor: [ 0.3, 0.1, 0.1 ],
+    ior: 1.45,
+})
+const mirrorRoughMaterial = new Material({
+    albedo: [ 0.0, 0.5, 0.0 ],
+    specularChance: 1.0,
+    specularRoughness: 0.5,
+})
+const metallicMatteMaterial = new Material({
+    albedo: [ 0.2, 0.0, 1.0 ],
+    specularColor: [ 0.8, 0.0, 0.0 ],
+    specularRoughness: 0.3,
+    specularChance: 0.5,
+    emissionColor: [ 0.2, 0.0, 1.0 ],
+    emissionStrength: 0.25,
+})
+const GlowGreenMaterial  = new Material({
+    emissionColor: [ 44 / 255, 250 / 255, 31 / 255 ],
+    emissionStrength: 0.25,
+    specularRoughness: 0.0,
+    refractionChance: 0.5,
+    refractionRoughness: 0.15,
+    ior: 1.25,
+})
+const shinyRedaterial = new Material({
+    albedo: [ 0.8, 0.2, 1.0 ],
+    specularColor: [ 1.0, 1.0, 0.0 ],
+    specularRoughness: 0.5,
+    specularChance: 0.5,
+    refractionChance: 0.5,
+    refractionColor: [ 0.0, 0.1, 0.15 ],
+    ior: 1.15,
+})
+  
 export function createCornellBox (): ObjectProperties[] {
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const redMaterial = new Material({ albedo: [ 1.0, 0.0, 0.0 ] })
-    const greenMaterial = new Material({ albedo: [ 0.0, 1.0, 0.0 ] })
-    const blueMaterial = new Material({ albedo: [ 0.3, 0.31, 0.98 ] })
-    const glowMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], emissionColor: [ 1.0, 0.8, 0.6 ], emissionStrength: 18.0 })
-    const mirrorMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], specularRoughness: 0.05, specularChance: 1.0 })
+
     return [
     // Ground
         {
@@ -91,11 +189,7 @@ export function createCornellBox (): ObjectProperties[] {
     ]
 }
 export function createCornellBox2 (): ObjectProperties[] {
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const redMaterial = new Material({ albedo: [ 1.0, 0.0, 0.0 ] })
-    const greenMaterial = new Material({ albedo: [ 0.0, 1.0, 0.0 ] })
-    const glowMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], emissionColor: [ 1.0, 0.8, 0.6 ], emissionStrength: 5.0 })
-    const mirrorMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], specularRoughness: 0.05, specularChance: 1.0 })
+
     return [
     // Ground
         {
@@ -161,11 +255,6 @@ export function createCornellBox2 (): ObjectProperties[] {
     ]
 }
 export function createCornellBox3 (): ObjectProperties[] {
-    const redMaterial = new Material({ albedo: [ 1.0, 0.0, 0.0 ] })
-    const blueMaterial = new Material({ albedo: [ 0.3, 0.31, 0.98 ] })
-    const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 0.8, 0.6 ], emissionStrength: 5.0 })
-    const mirrorMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], specularRoughness: 0.02, specularChance: 1.0 })
-    const glossyMaterial = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], specularRoughness: 0.05, specularChance: 1.0 })
     return [
     // Ground
         {
@@ -224,7 +313,7 @@ export function createCornellBox3 (): ObjectProperties[] {
         // Donut
         {
             modelPath: './src/assets/models/donut.obj',
-            material: glossyMaterial,
+            material: shinyGoldMaterial,
             position: [ 0.0, 1.0, 0.0 ],
             rotation: [ 0.0, 0.0, 0.0 ],
             scale: [ 1.0, 1.0, 1.0 ],
@@ -232,11 +321,6 @@ export function createCornellBox3 (): ObjectProperties[] {
     ]
 }
 export function createCornellBox4 (): ObjectProperties[] {
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const redMaterial = new Material({ albedo: [ 1.0, 0.0, 0.0 ] })
-    const greenMaterial = new Material({ albedo: [ 0.0, 1.0, 0.0 ] })
-    const blueMaterial = new Material({ albedo: [ 0.3, 0.31, 0.98 ] })
-    const glowMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 1.5 })
     return [
     // Ground
         {
@@ -296,20 +380,6 @@ export function createCornellBox4 (): ObjectProperties[] {
 }
 // Refraction Roughness Test
 export function createScene1 (): ObjectProperties[] {
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
-    const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
-
-    const glassBalls: Material = new Material({
-        specularChance: 0.02,
-        specularColor: [ 0.8, 0.8, 0.8 ],
-        specularRoughness: 0.0,
-        refractionColor: [ 0.0, 0.0, 0.0 ],
-        refractionChance: 1.0,
-        refractionRoughness: 0.0,
-        ior: 1.12,
-    })
-
     const numSpheres = 9
     const roughness_glass_test: ObjectProperties[] = []
 
@@ -320,7 +390,7 @@ export function createScene1 (): ObjectProperties[] {
         roughness_glass_test.push({
             modelPath: './src/assets/models/sphere.obj',
             material: {
-                ...glassBalls,
+                ...glass,
                 refractionRoughness: refractionRoughness,
             },
             position: [ positionX, 0.75, 0.0 ],
@@ -356,17 +426,29 @@ export function createScene1 (): ObjectProperties[] {
         })
     }
 
-    const lampCount = 3
-    const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
-
-    for (let i = 0; i < lampCount; i++) {
-        planes.push({
-            modelPath: './src/assets/models/plane.obj',
+    const lampWidth = 0.1
+    const lampLength = 5.0
+    const lampHeight = 0.0125
+    
+    const lamps: ObjectProperties[] = [
+        {
+            modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ -4 + i * lampSpacing, 2.0, 0.0 ],
-            scale: [ 0.1, 1.0, 0.1 ],
-            rotation: [ 0.0, 0.0, 180.0 ],
-        })
+            position: [ 0, 1.98, -0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        },
+        {
+            modelPath: './src/assets/models/cube.obj',
+            material: glowMaterial,
+            position: [ 0, 1.98, 0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        }
+    ]
+    
+    for (const lamp of lamps) {
+        planes.push(lamp)
     }
 
     for (const ball of roughness_glass_test) {
@@ -378,19 +460,6 @@ export function createScene1 (): ObjectProperties[] {
 
 // IOR Test
 export function createScene2 (): ObjectProperties[] {
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
-    const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
-
-    const glassBalls: Material = new Material({
-        specularChance: 0.02,
-        specularColor: [ 0.8, 0.8, 0.8 ],
-        specularRoughness: 0.0,
-        refractionChance: 1.0,
-        refractionRoughness: 0.0,
-        ior: 1.0,
-    })
-
     const numSpheres = 9
     const ior_test: ObjectProperties[] = []
 
@@ -401,7 +470,7 @@ export function createScene2 (): ObjectProperties[] {
         ior_test.push({
             modelPath: './src/assets/models/sphere.obj',
             material: {
-                ...glassBalls,
+                ...glass,
                 ior: ior,
             },
             position: [ positionX, 0.75, 0.0 ],
@@ -437,17 +506,29 @@ export function createScene2 (): ObjectProperties[] {
         })
     }
 
-    const lampCount = 3
-    const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
-
-    for (let i = 0; i < lampCount; i++) {
-        planes.push({
-            modelPath: './src/assets/models/plane.obj',
+    const lampWidth = 0.1
+    const lampLength = 5.0
+    const lampHeight = 0.0125
+    
+    const lamps: ObjectProperties[] = [
+        {
+            modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ -4 + i * lampSpacing, 2.0, 0.0 ],
-            scale: [ 0.1, 1.0, 0.1 ],
-            rotation: [ 0.0, 0.0, 180.0 ],
-        })
+            position: [ 0, 1.98, -0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        },
+        {
+            modelPath: './src/assets/models/cube.obj',
+            material: glowMaterial,
+            position: [ 0, 1.98, 0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        }
+    ]
+    
+    for (const lamp of lamps) {
+        planes.push(lamp)
     }
 
     for (const ball of ior_test) {
@@ -459,35 +540,22 @@ export function createScene2 (): ObjectProperties[] {
 
 // Refraction Color Test
 export function createScene3 (): ObjectProperties[] {
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
-    const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
-
-    const glassBalls: Material = new Material({
-        specularChance: 0.02,
-        specularColor: [ 1.0, 1.0, 1.0 ],
-        specularRoughness: 0.0,
-        refractionChance: 1.0,
-        refractionRoughness: 0.0,
-        ior: 1.1,
-    })
-
     const numSpheres = 9
 
     const test: ObjectProperties[] = []
 
     for (let i = 0; i < numSpheres; i++) {
         const positionX = -4.0 + i
-        const absorb = i / (numSpheres + i * 2)
+        const absorb = i / (numSpheres + i)
 
-        const refractionColor = vec3.fromValues(1.25, 1.0, 0.75)
+        const refractionColor = vec3.fromValues(1.0, 1.0, 0.25)
         refractionColor[0] *= absorb
         refractionColor[1] *= absorb
         refractionColor[2] *= absorb
         test.push({
             modelPath: './src/assets/models/sphere.obj',
             material: {
-                ...glassBalls,
+                ...glass,
                 refractionColor: refractionColor,
             },
             position: [ positionX, 0.75, 0.0 ],
@@ -523,17 +591,29 @@ export function createScene3 (): ObjectProperties[] {
         })
     }
 
-    const lampCount = 3
-    const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
-
-    for (let i = 0; i < lampCount; i++) {
-        planes.push({
-            modelPath: './src/assets/models/plane.obj',
+    const lampWidth = 0.1
+    const lampLength = 5.0
+    const lampHeight = 0.0125
+    
+    const lamps: ObjectProperties[] = [
+        {
+            modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ -4 + i * lampSpacing, 2.0, 0.0 ],
-            scale: [ 0.1, 1.0, 0.1 ],
-            rotation: [ 0.0, 0.0, 180.0 ],
-        })
+            position: [ 0, 1.98, -0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        },
+        {
+            modelPath: './src/assets/models/cube.obj',
+            material: glowMaterial,
+            position: [ 0, 1.98, 0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        }
+    ]
+    
+    for (const lamp of lamps) {
+        planes.push(lamp)
     }
 
     for (const ball of test) {
@@ -545,17 +625,6 @@ export function createScene3 (): ObjectProperties[] {
 
 // Reflection Test
 export function createScene4 (): ObjectProperties[] {
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
-    const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
-
-    const glassBalls: Material = new Material({
-        albedo: [ 0.9, 0.1, 0.1 ],
-        specularChance: 0.02,
-        specularColor: [ 0.8, 0.8, 0.8 ],
-        specularRoughness: 0.0,
-    })
-
     const numSpheres = 9
     const refl_test: ObjectProperties[] = []
 
@@ -566,7 +635,7 @@ export function createScene4 (): ObjectProperties[] {
         refl_test.push({
             modelPath: './src/assets/models/sphere.obj',
             material: {
-                ...glassBalls,
+                ...shinyGoldMaterial,
                 specularChance: refl,
                 specularRoughness: roughness,
             },
@@ -603,17 +672,29 @@ export function createScene4 (): ObjectProperties[] {
         })
     }
 
-    const lampCount = 3
-    const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
-
-    for (let i = 0; i < lampCount; i++) {
-        planes.push({
-            modelPath: './src/assets/models/plane.obj',
+    const lampWidth = 0.1
+    const lampLength = 5.0
+    const lampHeight = 0.0125
+    
+    const lamps: ObjectProperties[] = [
+        {
+            modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ -4 + i * lampSpacing, 2.0, 0.0 ],
-            scale: [ 0.1, 1.0, 0.1 ],
-            rotation: [ 0.0, 0.0, 180.0 ],
-        })
+            position: [ 0, 1.98, -0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        },
+        {
+            modelPath: './src/assets/models/cube.obj',
+            material: glowMaterial,
+            position: [ 0, 1.98, 0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        }
+    ]
+    
+    for (const lamp of lamps) {
+        planes.push(lamp)
     }
 
     for (const ball of refl_test) {
@@ -624,17 +705,6 @@ export function createScene4 (): ObjectProperties[] {
 }
 // Reflection roughtness Test
 export function createScene5 (): ObjectProperties[] {
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
-    const glowMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
-
-    const glassBalls: Material = new Material({
-        specularChance: 1.0,
-        albedo: [ 0.9, 0.1, 0.1 ],
-        specularColor: [ 1.0, 1.0, 1.0 ],
-        specularRoughness: 1.0,
-    })
-
     const numSpheres = 9
     const refl_test: ObjectProperties[] = []
 
@@ -646,7 +716,7 @@ export function createScene5 (): ObjectProperties[] {
         refl_test.push({
             modelPath: './src/assets/models/sphere.obj',
             material: {
-                ...glassBalls,
+                ...shinyGoldMaterial,
                 specularRoughness: refl,
                 specularChance: rough,
             },
@@ -683,17 +753,29 @@ export function createScene5 (): ObjectProperties[] {
         })
     }
 
-    const lampCount = 3
-    const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
-
-    for (let i = 0; i < lampCount; i++) {
-        planes.push({
-            modelPath: './src/assets/models/plane.obj',
+    const lampWidth = 0.1
+    const lampLength = 5.0
+    const lampHeight = 0.0125
+    
+    const lamps: ObjectProperties[] = [
+        {
+            modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ -4 + i * lampSpacing, 2.0, 0.0 ],
-            scale: [ 0.1, 1.0, 0.1 ],
-            rotation: [ 0.0, 0.0, 180.0 ],
-        })
+            position: [ 0, 1.98, -0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        },
+        {
+            modelPath: './src/assets/models/cube.obj',
+            material: glowMaterial,
+            position: [ 0, 1.98, 0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        }
+    ]
+    
+    for (const lamp of lamps) {
+        planes.push(lamp)
     }
 
     for (const ball of refl_test) {
@@ -704,12 +786,6 @@ export function createScene5 (): ObjectProperties[] {
 }
 // Emission Color Test
 export function createScene6 (): ObjectProperties[] {
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
-    const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
-
-    const glassBalls: Material = new Material()
-
     const numSpheres = 9
     const test: ObjectProperties[] = []
 
@@ -745,7 +821,7 @@ export function createScene6 (): ObjectProperties[] {
         test.push({
             modelPath: './src/assets/models/sphere.obj',
             material: {
-                ...glassBalls,
+                ...grey,
                 emissionColor: emissionVec3,
                 emissionStrength: 1.0,
             },
@@ -764,7 +840,7 @@ export function createScene6 (): ObjectProperties[] {
         // Ceiling
         {
             modelPath: './src/assets/models/plane.obj',
-            material: blackMaterial,
+            material: whiteMaterial,
             position: [ 0.0, 2.01, 0.0 ],
             scale: [ 1.0, 1.0, 0.25 ],
             rotation: [ 0.0, 0.0, 180.0 ],
@@ -778,19 +854,6 @@ export function createScene6 (): ObjectProperties[] {
             position: [ i, 1.0, 1.2 ],
             scale: [ 0.0125, 0.15, 0.15 ],
             rotation: [ 90.0, 180.0, 0.0 ],
-        })
-    }
-
-    const lampCount = 0
-    const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
-
-    for (let i = 0; i < lampCount; i++) {
-        planes.push({
-            modelPath: './src/assets/models/plane.obj',
-            material: glowMaterial,
-            position: [ -4 + i * lampSpacing, 2.0, 0.0 ],
-            scale: [ 0.1, 1.0, 0.1 ],
-            rotation: [ 0.0, 0.0, 180.0 ],
         })
     }
 
@@ -840,70 +903,50 @@ export function createScene7 (): ObjectProperties[] {
 
 // Dragon
 export function createScene8 (): ObjectProperties[] {
-    // create the Materials you want to use
-    const grey = new Material({ albedo: [ 0.84, 0.89, 0.82 ] })
-    const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
-    const lightSource = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
-    const gold = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], specularRoughness: 0.0, specularChance: 0.5 })
-
-    // create an array of objects you want to use
     const objectsToLoad: ObjectProperties[] = [
         {
             modelPath: './src/assets/models/plane.obj',
             material: grey,
             position: [ 0.0, 0.0, 0.0 ],
-            scale: [ 10.0, 0.1, 10.0 ], // Large floor plane
+            scale: [ 10.0, 0.1, 10.0 ],
         },
         {
             modelPath: './src/assets/models/plane.obj',
             material: mirrorBlurry,
             rotation: [ 0.0, 0.0, 90.0 ],
-            position: [ 5.0, 1.0, 0.0 ], // Mirror to the side and slightly behind the dragon
-            scale: [ 1.5, 0.1, 1.5 ], // Tall vertical mirror
+            position: [ 5.0, 1.0, 0.0 ],
+            scale: [ 1.5, 0.1, 1.5 ],
         },
         {
             modelPath: './src/assets/models/dragon.obj',
-            material: gold,
-            position: [ 0.0, 0.0, 0.0 ], // Center of the scene
-            scale: [ 1.0, 1.0, 1.0 ], // Appropriately sized dragon
+            material: shinyGoldMaterial,
+            position: [ 0.0, 0.0, 0.0 ],
+            scale: [ 1.0, 1.0, 1.0 ],
             rotation: [ 0.0, 65.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/plane.obj',
             material: lightSource,
-            position: [ 0.0, 8.0, 8.0 ], // Key light to the left and above the dragon
-            scale: [ 0.25, 0.25, 0.25 ], // Smaller plane for focused light
-            rotation: [ 45.0, 0.0, 0.0 ], // Angled down towards the dragon
+            position: [ 0.0, 8.0, 8.0 ],
+            scale: [ 0.25, 0.25, 0.25 ],
+            rotation: [ 45.0, 0.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/plane.obj',
             material: lightSource,
-            position: [ 0.0, 8.0, -8.0 ], // Fill light to the right and above the dragon
-            scale: [ 0.25, 0.25, 0.25 ], // Smaller plane for softer light
-            rotation: [ 135.0, 0.0, 0.0 ], // Angled down towards the dragon
+            position: [ 0.0, 8.0, -8.0 ],
+            scale: [ 0.25, 0.25, 0.25 ],
+            rotation: [ 135.0, 0.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/cube.obj',
             material: lightSource,
-            position: [ -8.0, 1.0, 0.0 ], // Rim light directly behind the dragon
-            scale: [ 0.2, 0.2, 4.0 ], // Thin, wide light for rim effect
+            position: [ -8.0, 1.0, 0.0 ],
+            scale: [ 0.2, 0.2, 4.0 ],
         },
     ]
 
     return objectsToLoad
-}
-
-const defaults: Material = {
-    albedo: [ 0.8, 0.8, 0.8 ],
-    specularColor: [ 1.0, 1.0, 1.0 ],
-    emissionColor: [ 0.0, 0.0, 0.0 ],
-    emissionStrength: 0.0,
-    specularRoughness: 0.0,
-    specularChance: 0.0,
-    ior: 1.0,
-    refractionChance: 0.0,
-    refractionRoughness: 0.0,
-    refractionColor: [ 0.0, 0.0, 0.0 ],
 }
 
 function randomInRange (min: number, max: number): number {
@@ -960,20 +1003,6 @@ export function createScene9 (): ObjectProperties[] {
 
 // Lamp
 export function createScene10 (): ObjectProperties[] {
-    // create the Materials you want to use
-    const grey = new Material({ albedo: [ 0.84, 0.89, 0.82 ] })
-    const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
-    const lightSource = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
-    const gold = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], specularRoughness: 0.0, specularChance: 0.5 })
-    const lightSource2 = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 50.0 })
-    const glass = new Material({
-        specularChance: 0.02, // how reflective, 1.0 is 100%
-        specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
-        ior: 1.25, // index of refraction
-        refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
-        refractionRoughness: 0.0, // self explanatory
-    })
-
     // create an array of objects you want to use
     const objectsToLoad: ObjectProperties[] = [
         {
@@ -991,7 +1020,7 @@ export function createScene10 (): ObjectProperties[] {
         },
         {
             modelPath: './src/assets/models/lamp_piece1.obj',
-            material: gold,
+            material: shinyGoldMaterial,
             position: [ 0.0, 0.0, -3 ],
             scale: [ 3.0, 3.0, 3.0 ],
             rotation: [ 0, 0.0, 0.0 ],
@@ -1018,7 +1047,7 @@ export function createScene10 (): ObjectProperties[] {
         },
         /*     {
       modelPath: "./src/assets/models/statue.obj",
-      material: gold,
+      material: shinyGoldMaterial,
       position: [0.0, 0.0, 1.0],
       scale: [1.2, 1.2, 1.2],
       rotation: [-90, 180.0, 0.0],
@@ -1061,40 +1090,6 @@ export function createScene10 (): ObjectProperties[] {
 }
 
 export function createScene11 (): ObjectProperties[] {
-    // create the Materials you want to use
-    const woodenFloorMaterial = new Material({
-        albedo: [ 0.6, 0.4, 0.2 ], // Brownish color for wood
-        specularColor: [ 0.1, 0.1, 0.1 ], // Minimal specular highlight
-        specularRoughness: 0.8, // High roughness for a matte finish
-        specularChance: 0.1, // Lower chance of specular reflection
-        emissionColor: [ 0.0, 0.0, 0.0 ], // No emission
-        emissionStrength: 0.0, // No emission strength
-    })
-    const lightSource = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
-    const glass = new Material({
-        specularChance: 0.02, // how reflective, 1.0 is 100%
-        specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
-        ior: 1.5, // index of refraction
-        refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
-        refractionRoughness: 0.0, // self explanatory
-    })
-
-    const water = new Material({
-        specularChance: 0.02, // how reflective, 1.0 is 100%
-        specularRoughness: 0.0, // how rough, 0.0 is 100% smooth
-        ior: 1.33, // index of refraction
-        refractionChance: 1.0, // how refractive/transparent, 1.0 is 100%
-        refractionRoughness: 0.0, // self explanatory
-    })
-
-    const reflectiveSphere = new Material({
-        specularChance: 0.9,
-        specularRoughness: 0.05,
-        ior: 2.5,
-        refractionChance: 0.1,
-        refractionRoughness: 0.0,
-    })
-
     const objectsToLoad: ObjectProperties[] = [
         {
             modelPath: './src/assets/models/plane.obj',
@@ -1145,71 +1140,6 @@ export function createScene11 (): ObjectProperties[] {
 }
 
 export function createScene12 (): ObjectProperties[] {
-    // Define materials for each type of sphere
-    const shinyGoldMaterial = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], specularRoughness: 0.0, specularChance: 0.7 })
-    const shinyRedaterial = new Material({
-        albedo: [ 0.8, 0.2, 1.0 ],
-        specularColor: [ 1.0, 1.0, 0.0 ],
-        specularRoughness: 0.5,
-        specularChance: 0.5,
-        refractionChance: 0.5,
-        refractionColor: [ 0.0, 0.1, 0.15 ],
-        ior: 1.15,
-    })
-    const emissiveMaterial = new Material({
-        emissionColor: [ 44 / 255, 250 / 255, 31 / 255 ],
-        emissionStrength: 0.25,
-        specularRoughness: 0.0,
-        refractionChance: 0.5,
-        refractionRoughness: 0.15,
-        ior: 1.25,
-    })
-
-    const glassMaterial = new Material({
-        refractionChance: 1.0,
-        ior: 1.18,
-        specularChance: 0.15,
-        specularColor: [ 0.8, 0.8, 0.8 ],
-        specularRoughness: 0.0,
-        refractionRoughness: 0.0,
-    })
-
-    const roughGlassMaterial = new Material({
-        specularChance: 0.15,
-        refractionChance: 1.0,
-        specularRoughness: 0.1,
-        refractionRoughness: 0.15,
-        ior: 1.15,
-    })
-    const colorGlassMaterial = new Material({
-        specularChance: 0.05,
-        refractionChance: 1.0,
-        specularRoughness: 0.0,
-        refractionColor: [ 0.3, 0.1, 0.1 ],
-        ior: 1.45,
-    })
-    const mirrorMaterial = new Material({
-        albedo: [ 0.0, 0.0, 0.0 ],
-        specularChance: 1.0,
-        specularRoughness: 0.0,
-    })
-    const mirrorRoughMaterial = new Material({
-        albedo: [ 0.0, 0.5, 0.0 ],
-        specularChance: 1.0,
-        specularRoughness: 0.5,
-    })
-    const metallicMatteMaterial = new Material({
-        albedo: [ 0.2, 0.0, 1.0 ],
-        specularColor: [ 0.8, 0.0, 0.0 ], // Slightly shiny
-        specularRoughness: 0.3, // High roughness for a matte finish
-        specularChance: 0.5, // Lower chance of specular reflection
-        emissionColor: [ 0.2, 0.0, 1.0 ],
-        emissionStrength: 0.25,
-    })
-
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
-    const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
 
     // Create spheres with these materials
     const spheres: ObjectProperties[] = []
@@ -1217,7 +1147,7 @@ export function createScene12 (): ObjectProperties[] {
     const materials = [
         shinyGoldMaterial,
         glassMaterial,
-        emissiveMaterial,
+        GlowGreenMaterial ,
         roughGlassMaterial,
         colorGlassMaterial,
         mirrorMaterial,
@@ -1308,29 +1238,13 @@ export function createScene12 (): ObjectProperties[] {
 
     return planes
 }
-const shinyGoldMaterial = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], specularRoughness: 0.0, specularChance: 0.7 })
+
 export function createScene13 (): ObjectProperties[] {
-    // Define materials for each type of sphere
-    const mirrorMaterial = new Material({
-        albedo: [ 0.0, 0.0, 0.0 ],
-        specularChance: 1.0,
-        specularRoughness: 0.0,
-    })
-    const mirrorRoughMaterial = new Material({
-        albedo: [ 0.0, 0.0, 0.0 ],
-        specularChance: 1.0,
-        specularRoughness: 0.25,
-    })
-
-    const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
-    const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
-    const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 3.0 })
-
     const spheres: ObjectProperties[] = []
 
     // Starting parameters for the Sphereflake
     const startScale = vec3.fromValues(1.5, 1.5, 1.5) // Initial scale of the central sphere
-    const maxDepth = 5 // Depth of recursion, adjust as needed
+    const maxDepth = 4 // Depth of recursion, adjust as needed
 
     // Create the Sphereflake
     const sphereflake = createSphereflake(vec3.fromValues(0.0, 0.75, -2.5), startScale, maxDepth)
@@ -1475,74 +1389,14 @@ function createSphereflake (position: vec3, scale: vec3, depth: number, fromDire
 }
 
 export function createScene14 (): ObjectProperties[] {
-    // Define materials for each type of sphere
-    const shinyGoldMaterial = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], specularRoughness: 0.0, specularChance: 0.7 })
-    const shinyRedaterial = new Material({
-        albedo: [ 0.8, 0.2, 1.0 ],
-        specularColor: [ 1.0, 1.0, 0.0 ],
-        specularRoughness: 0.5,
-        specularChance: 0.5,
-        refractionChance: 0.5,
-        refractionColor: [ 0.0, 0.1, 0.15 ],
-        ior: 1.15,
-    })
-    const emissiveMaterial = new Material({
-        emissionColor: [ 44 / 255, 250 / 255, 31 / 255 ],
-        emissionStrength: 0.25,
-        specularRoughness: 0.0,
-        refractionChance: 0.5,
-        refractionRoughness: 0.15,
-        ior: 1.25,
-    })
 
-    const glassMaterial = new Material({
-        refractionChance: 1.0,
-        ior: 1.18,
-        specularChance: 0.15,
-        specularColor: [ 0.8, 0.8, 0.8 ],
-        specularRoughness: 0.0,
-        refractionRoughness: 0.0,
-    })
-
-    const roughGlassMaterial = new Material({
-        specularChance: 0.15,
-        refractionChance: 1.0,
-        specularRoughness: 0.1,
-        refractionRoughness: 0.15,
-        ior: 1.15,
-    })
-    const colorGlassMaterial = new Material({
-        specularChance: 0.05,
-        refractionChance: 1.0,
-        specularRoughness: 0.0,
-        refractionColor: [ 0.3, 0.1, 0.1 ],
-        ior: 1.45,
-    })
-    const mirrorMaterial = new Material({
-        albedo: [ 0.0, 0.0, 0.0 ],
-        specularChance: 1.0,
-        specularRoughness: 0.0,
-    })
-    const mirrorRoughMaterial = new Material({
-        albedo: [ 0.0, 0.5, 0.0 ],
-        specularChance: 1.0,
-        specularRoughness: 0.5,
-    })
-    const metallicMatteMaterial = new Material({
-        albedo: [ 0.2, 0.0, 1.0 ],
-        specularColor: [ 0.8, 0.0, 0.0 ], // Slightly shiny
-        specularRoughness: 0.3, // High roughness for a matte finish
-        specularChance: 0.5, // Lower chance of specular reflection
-        emissionColor: [ 0.2, 0.0, 1.0 ],
-        emissionStrength: 0.25,
-    })
     // Create spheres with these materials
     const spheres: ObjectProperties[] = []
     const numSpheres = 9
     const materials = [
         shinyGoldMaterial,
         glassMaterial,
-        emissiveMaterial,
+        GlowGreenMaterial ,
         roughGlassMaterial,
         colorGlassMaterial,
         mirrorMaterial,
@@ -1593,17 +1447,29 @@ export function createScene14 (): ObjectProperties[] {
         })
     }
 
-    const lampCount = 3
-    const lampSpacing = 8 / (lampCount - 1) // 8 is the range from -4 to +4
-
-    for (let i = 0; i < lampCount; i++) {
-        planes.push({
-            modelPath: './src/assets/models/plane.obj',
+    const lampWidth = 0.1
+    const lampLength = 5.0
+    const lampHeight = 0.0125
+    
+    const lamps: ObjectProperties[] = [
+        {
+            modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ -4 + i * lampSpacing, 2.0, 0.0 ],
-            scale: [ 0.1, 1.0, 0.1 ],
-            rotation: [ 0.0, 0.0, 180.0 ],
-        })
+            position: [ 0, 1.98, -0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        },
+        {
+            modelPath: './src/assets/models/cube.obj',
+            material: glowMaterial,
+            position: [ 0, 1.98, 0.5 ],
+            scale: [ lampLength, lampHeight, lampWidth ],
+            rotation: [ 0.0, 0.0, 0.0 ],
+        }
+    ]
+    
+    for (const lamp of lamps) {
+        planes.push(lamp)
     }
 
     for (const ball of spheres) {

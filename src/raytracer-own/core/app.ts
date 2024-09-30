@@ -36,12 +36,12 @@ export class Application {
             scene10: presets.createScene10(),              // Lamp with glass donut
             scene11: presets.createScene11(),              // Lamp with a glass of water
             scene12: presets.createScene12(),              // All material types in one scene
-            scene13: presets.createScene13(),
+            scene13: presets.createScene13(),              // Sphereflake fractal (depth = 5)
             scene14: presets.createScene14(),
             scene15: presets.createScene15()
         }
         // Directly use a preset scene like cornellBox (or any scene of your choice)
-        await this.scene.createObjects(presetScenes.cornellBox)
+        await this.scene.createObjects(presetScenes.scene8)
 
         // Initialize the renderer
         await this.renderer.Initialize()
