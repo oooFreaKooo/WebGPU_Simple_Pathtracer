@@ -16,7 +16,7 @@ export class Scene {
     enableCulling = 1
     maxBounces = 8
     samples = 1
-    jitterScale = 1
+    jitterScale = 1.5
 
     // Camera and controls
     camera: Camera = new Camera([ 0.01, 2.5, -7 ])

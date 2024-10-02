@@ -15,83 +15,89 @@ const defaults: Material = {
     specularColor: [ 1.0, 1.0, 1.0 ],
     emissionColor: [ 0.0, 0.0, 0.0 ],
     emissionStrength: 0.0,
-    specularRoughness: 0.0,
-    specularChance: 0.0,
+    roughness: 0.0,
+    specularChance: 0.1,
     ior: 1.0,
     refractionChance: 0.0,
-    refractionRoughness: 0.0,
     refractionColor: [ 0.0, 0.0, 0.0 ],
+    sssColor: [ 1.0, 1.0, 1.0 ],
+    sssStrength: 0.0,
+    sssRadius: 1.0,
 }
-const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] })
+
+const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] , specularChance: 0.5 , roughness: 0.75 })
 const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
-const redMaterial = new Material({ albedo: [ 1.0, 0.0, 0.0 ] })
-const greenMaterial = new Material({ albedo: [ 0.0, 1.0, 0.0 ] })
+const redMaterial = new Material({ albedo: [ 1.0, 0.0, 0.0 ] , specularChance: 0.5 , roughness: 0.85 })
+const greenMaterial = new Material({ albedo: [ 0.0, 1.0, 0.0 ]  , specularChance: 0.5 , roughness: 0.85 })
 const blueMaterial = new Material({ albedo: [ 0.3, 0.31, 0.98 ] })
-const glowMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], emissionColor: [ 1.0, 0.8, 0.6 ], emissionStrength: 18.0 })
-const mirrorMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], specularRoughness: 0.05, specularChance: 1.0 })
-const shinyGoldMaterial = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], specularRoughness: 0.0, specularChance: 0.5 })
+const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 0.9, 0.9 ], emissionStrength: 20.0 })
+const mirrorMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], roughness: 0.05, specularChance: 1.0 })
+const shinyGoldMaterial = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], roughness: 0.0, specularChance: 0.5 })
 const grey = new Material({ albedo: [ 0.84, 0.89, 0.82 ] })
-const mirrorBlurry = new Material({ specularRoughness: 0.15, specularChance: 1.0 })
+const mirrorBlurry = new Material({ roughness: 0.15, specularChance: 1.0 })
 const lightSource = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 5.0 })
 const lightSource2 = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 50.0 })
+const skinMaterial = new Material({
+    albedo: [ 1.0, 0.7, 0.6 ], // Base color
+    specularColor: [ 0.5, 0.5, 0.5 ],
+    specularChance: 0.3,
+    sssColor: [ 1.0, 0.7, 0.6 ], // Similar to albedo for realistic skin
+    sssStrength: 0.5, // Moderate scattering
+    sssRadius: 2.0, // Light scatters up to 2 units within the material
+})
 const glass = new Material({
     specularChance: 0.02,
-    specularRoughness: 0.0,
+    roughness: 0.0,
     ior: 1.25,
     refractionChance: 1.0,
-    refractionRoughness: 0.0,
 })
 const woodenFloorMaterial = new Material({
     albedo: [ 0.6, 0.4, 0.2 ],
     specularColor: [ 0.1, 0.1, 0.1 ],
-    specularRoughness: 0.8,
+    roughness: 0.8,
     specularChance: 0.1,
 })
 const water = new Material({
     specularChance: 0.02,
-    specularRoughness: 0.0,
+    roughness: 0.0,
     ior: 1.33,
     refractionChance: 1.0,
-    refractionRoughness: 0.0,
 })
 const reflectiveSphere = new Material({
     specularChance: 0.9,
-    specularRoughness: 0.05,
+    roughness: 0.05,
     ior: 2.5,
     refractionChance: 0.1,
-    refractionRoughness: 0.0,
 })
 const glassMaterial = new Material({
     refractionChance: 1.0,
     ior: 1.18,
     specularChance: 0.15,
     specularColor: [ 0.8, 0.8, 0.8 ],
-    specularRoughness: 0.0,
-    refractionRoughness: 0.0,
+    roughness: 0.0,
 })
 const roughGlassMaterial = new Material({
     specularChance: 0.15,
     refractionChance: 1.0,
-    specularRoughness: 0.1,
-    refractionRoughness: 0.15,
+    roughness: 0.1,
     ior: 1.15,
 })
 const colorGlassMaterial = new Material({
     specularChance: 0.05,
     refractionChance: 1.0,
-    specularRoughness: 0.0,
+    roughness: 0.0,
     refractionColor: [ 0.3, 0.1, 0.1 ],
     ior: 1.45,
 })
 const mirrorRoughMaterial = new Material({
     albedo: [ 0.0, 0.5, 0.0 ],
     specularChance: 1.0,
-    specularRoughness: 0.5,
+    roughness: 0.5,
 })
 const metallicMatteMaterial = new Material({
     albedo: [ 0.2, 0.0, 1.0 ],
     specularColor: [ 0.8, 0.0, 0.0 ],
-    specularRoughness: 0.3,
+    roughness: 0.3,
     specularChance: 0.5,
     emissionColor: [ 0.2, 0.0, 1.0 ],
     emissionStrength: 0.25,
@@ -99,15 +105,15 @@ const metallicMatteMaterial = new Material({
 const GlowGreenMaterial  = new Material({
     emissionColor: [ 44 / 255, 250 / 255, 31 / 255 ],
     emissionStrength: 0.25,
-    specularRoughness: 0.0,
+    roughness: 0.0,
     refractionChance: 0.5,
-    refractionRoughness: 0.15,
+    refractionColor: [ 0.13, 0.13, 0.1 ],
     ior: 1.25,
 })
 const shinyRedaterial = new Material({
     albedo: [ 0.8, 0.2, 1.0 ],
     specularColor: [ 1.0, 1.0, 0.0 ],
-    specularRoughness: 0.5,
+    roughness: 0.5,
     specularChance: 0.5,
     refractionChance: 0.5,
     refractionColor: [ 0.0, 0.1, 0.15 ],
@@ -168,23 +174,23 @@ export function createCornellBox (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0.0, 4.95, 0.0 ],
-            scale: [ 0.85, 0.025, 0.85 ],
+            position: [ 0.0, 5, 0.0 ],
+            scale: [ 0.75, 0.010, 0.75 ],
         },
-        // Sphere
+        // Mirror
         {
             modelPath: './src/assets/models/cube.obj',
             material: mirrorMaterial,
-            position: [ -1.0, 1.65, 0.75 ],
+            position: [ -1.1, 1.5, 1 ],
             rotation: [ 0.0, -20.5, 0.0 ],
-            scale: [ 0.75, 1.65, 0.75 ],
+            scale: [ 0.75, 1.5, 0.75 ],
         },
         {
             modelPath: './src/assets/models/cube.obj',
             material: whiteMaterial,
-            position: [ 1.0, 0.75, -0.5 ],
+            position: [ 1.0, 0.7, -0.5 ],
             rotation: [ 0.0, 20.5, 0.0 ],
-            scale: [ 0.75, 0.75, 0.75 ],
+            scale: [ 0.7, 0.7, 0.7 ],
         },
     ]
 }
@@ -234,23 +240,30 @@ export function createCornellBox2 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0.0, 4.95, 0.0 ],
-            scale: [ 0.85, 0.025, 0.85 ],
+            position: [ 0.0, 5, 0.0 ],
+            scale: [ 0.75, 0.010, 0.75 ],
         },
-        // Sphere
+        // Mirror
         {
             modelPath: './src/assets/models/cube.obj',
             material: mirrorMaterial,
-            position: [ -1.0, 1.65, 0.75 ],
+            position: [ -1.1, 1.5, 1 ],
             rotation: [ 0.0, -20.5, 0.0 ],
-            scale: [ 0.75, 1.65, 0.75 ],
+            scale: [ 0.75, 1.5, 0.75 ],
         },
         {
             modelPath: './src/assets/models/cube.obj',
             material: whiteMaterial,
-            position: [ 1.0, 0.75, -0.5 ],
+            position: [ 1.0, 0.7, -0.5 ],
             rotation: [ 0.0, 20.5, 0.0 ],
-            scale: [ 0.75, 0.75, 0.75 ],
+            scale: [ 0.7, 0.7, 0.7 ],
+        },
+        {
+            modelPath: './src/assets/models/statue.obj',
+            material: skinMaterial,
+            position: [ -0.5, 0, -1.5 ],
+            rotation: [ -90.0, -170, 0.0 ],
+            scale: [ 1, 1, 1 ],
         },
     ]
 }
@@ -385,13 +398,13 @@ export function createScene1 (): ObjectProperties[] {
 
     for (let i = 0; i < numSpheres; i++) {
         const positionX = -4.0 + i
-        const refractionRoughness = (i / (numSpheres - 1)) * 0.5
+        const roughness = (i / (numSpheres - 1)) * 0.5
 
         roughness_glass_test.push({
             modelPath: './src/assets/models/sphere.obj',
             material: {
                 ...glass,
-                refractionRoughness: refractionRoughness,
+                roughness: roughness,
             },
             position: [ positionX, 0.75, 0.0 ],
             scale: [ 0.75, 0.75, 0.75 ],
@@ -637,7 +650,7 @@ export function createScene4 (): ObjectProperties[] {
             material: {
                 ...shinyGoldMaterial,
                 specularChance: refl,
-                specularRoughness: roughness,
+                roughness: roughness,
             },
             position: [ positionX, 0.75, 0.0 ],
             scale: [ 0.75, 0.75, 0.75 ],
@@ -717,7 +730,7 @@ export function createScene5 (): ObjectProperties[] {
             modelPath: './src/assets/models/sphere.obj',
             material: {
                 ...shinyGoldMaterial,
-                specularRoughness: refl,
+                roughness: refl,
                 specularChance: rough,
             },
             position: [ positionX, 0.75, 0.0 ],
@@ -958,11 +971,10 @@ function randomMaterial (): Material {
         ...defaults,
         albedo: [ randomInRange(0.5, 1), randomInRange(0.5, 1), randomInRange(0.5, 1) ],
         specularColor: [ randomInRange(0, 1), randomInRange(0, 1), randomInRange(0, 1) ],
-        specularRoughness: randomInRange(0, 1),
+        roughness: randomInRange(0, 1),
         specularChance: randomInRange(0, 1),
         ior: randomInRange(1, 2),
         refractionChance: randomInRange(0.5, 1),
-        refractionRoughness: randomInRange(0, 1),
     }
 }
 
@@ -994,7 +1006,7 @@ export function createScene9 (): ObjectProperties[] {
     })
     spheres.push({
         modelPath: './src/assets/models/plane.obj',
-        material: new Material({ specularRoughness: 0.25, specularChance: 1.0 }),
+        material: new Material({ roughness: 0.25, specularChance: 1.0 }),
         position: [ 0.0, -2.0, 0.0 ],
         scale: [ 6.0, 1.0, 6.0 ],
     })
@@ -1552,8 +1564,7 @@ export function createScene15 (): ObjectProperties[] {
             ior: 1.18,
             specularChance: 0.15,
             specularColor: [ 0.8, 0.8, 0.8 ],
-            specularRoughness: 0.0,
-            refractionRoughness: 0.0,
+            roughness: 0.0,
         }),
         position: new Float32Array([ 0.0, 0.0, 0.0 ]),
         scale: new Float32Array([ 3.0, 3.0, 3.0 ]),

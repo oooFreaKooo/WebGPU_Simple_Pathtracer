@@ -25,12 +25,14 @@ struct Material {
     albedo: vec3f,
     specChance: f32,
     specColor: vec3f,
-    specRoughness: f32,
+    roughness: f32,
     emissionColor: vec3f,
     emissionStrength: f32,
     refrColor: vec3f,
     refrChance: f32,
-    refrRoughness: f32,
+    sssColor: vec3f,
+    sssStrength: f32,
+    sssRadius: f32,
     ior: f32,
 }
 
@@ -68,7 +70,7 @@ struct CameraSettings {
 
 struct Uniforms {
 	screenDims: vec2f,
-	frameNum: f32,
+	frameNum: u32,
 	resetBuffer: f32,
 }
 
@@ -90,6 +92,13 @@ struct RayType {
     isRefractive: f32,
     regularBounces: u32,
 }
+
+struct SFC32State {
+    a: u32,
+    b: u32,
+    c: u32,
+    d: u32,
+};
 
 // Group 0: Uniforms and Settings
 @group(0) @binding(0) var<uniform> uniforms : Uniforms;
@@ -128,7 +137,7 @@ override WORKGROUP_SIZE_X: u32;
 override WORKGROUP_SIZE_Y: u32;
 
 var<private> pixelCoords : vec2f;
-var<private> randState : u32 = 0u;
+var<private> rngState: SFC32State;
 var<private> stack : array<u32, 64>;
 var<workgroup> sharedAccumulatedColor: array<vec3f, 64>;
 
@@ -150,7 +159,7 @@ fn main(
     pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
 
     // Random state initialization
-    randState = idx + u32(uniforms.frameNum) * 719393;
+    rngState = initialize_rng(coord * idx, uniforms.frameNum);
 
     // Precompute constants outside the loops
     let sqrt_spp = sqrt(f32(setting.numSamples));
@@ -173,7 +182,7 @@ fn main(
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
             // Generate stratified samples with precomputed rand state
-            let stratifiedSample = (vec2<f32>(i, j) + rand_state_vec) * recip_sqrt_spp;
+            let stratifiedSample = (vec2<f32>(i, j) + rand_state_vec) * recip_sqrt_spp * setting.jitterScale;
 
             // Calculate screen jittered coordinates
             let screen_jittered = pixelCoords + stratifiedSample - half_screen_dims;
@@ -203,6 +212,15 @@ fn main(
     framebuffer[idx] = vec4<f32>(acc_radiance, 1.0);
 }
 
+fn initialize_rng(id: vec2u, frameNum: u32) -> SFC32State {
+    return SFC32State(
+        frameNum ^ id.x,
+        frameNum ^ id.y,
+        frameNum ^ (id.x + id.y),
+        frameNum ^ (id.x * id.y)
+    );
+}
+
 fn trace(camRay: Ray) -> vec3f {
     var ray = camRay;
     var acc_radiance: vec3f = vec3(0.0, 0.0, 0.0);
@@ -224,9 +242,9 @@ fn trace(camRay: Ray) -> vec3f {
         var originalEnergy = throughput;
         M = ensure_energy_conservation(M);
         
-        // Absorption if inside the object
+        // TODO: Implement correct absobtion
         if hit.from_front {
-            throughput *= exp(-M.refrColor * hit.dist);
+            throughput *= exp(-M.refrColor * 10.0);
         }
 
         let n1 = select(1.0, M.ior, !hit.from_front);
@@ -257,7 +275,7 @@ fn trace(camRay: Ray) -> vec3f {
             mix(
                 refract(ray.direction, hit.normal, n1 / n2),
                 cosine_weighted_sampling_hemisphere(-hit.normal),
-                M.refrRoughness * M.refrRoughness
+                M.roughness * M.roughness
             )
         );
 
@@ -274,6 +292,26 @@ fn trace(camRay: Ray) -> vec3f {
 
         acc_radiance += throughput * M.emissionColor * M.emissionStrength;
 
+
+        // ----------------- Subsurface Scattering Integration -----------------
+
+        if M.sssStrength > 0.0 {
+            // 1. Calculate the attenuation based on the scattering radius
+            let distance = length(ray.direction);
+            let attenuation = exp(-distance / M.sssRadius);
+
+            // 2. Calculate the SSS contribution
+            let sssContribution = M.sssColor * M.sssStrength * attenuation;
+
+            // 3. Accumulate the SSS radiance
+            acc_radiance += throughput * sssContribution;
+
+            // 4. Optionally, adjust the throughput based on SSS
+            throughput *= (1.0 - M.sssStrength);
+        }
+
+        // ----------------------------------------------------------------------
+
         // Update throughput
         if rayType.isRefractive == 0.0 {
             throughput = originalEnergy * (M.albedo + M.specColor * rayType.isSpecular);
@@ -281,7 +319,7 @@ fn trace(camRay: Ray) -> vec3f {
 
         // Russian roulette
         let rr_prob = max(max(throughput.r, throughput.g), throughput.b);
-        if rand() >= rr_prob || length(throughput) < 0.001 {
+        if rand() >= rr_prob || length(throughput) < 0.5 {
                 break;
         }
 
@@ -317,7 +355,7 @@ fn determine_ray_type(specChance: f32, refrChance: f32, randVal: f32) -> RayType
 
 fn calculate_specular_dir(ray: Ray, hit: HitPoint) -> vec3<f32> {
     let V = -ray.direction;
-    let H = sample_ggx_importance(hit.material.specRoughness, hit.normal);
+    let H = sample_ggx_importance(hit.material.roughness, hit.normal);
     let L = reflect(-V, H);
 
     if dot(L, hit.normal) <= 0.0 {
@@ -329,13 +367,12 @@ fn calculate_specular_dir(ray: Ray, hit: HitPoint) -> vec3<f32> {
 
 fn ensure_energy_conservation(material: Material) -> Material {
     var M: Material = material;
-    let sum = M.albedo + M.specColor + M.refrColor;
+    let sum = M.albedo + M.specColor;
     let maxSum = max(sum.r, max(sum.g, sum.b));
     if maxSum > 1.0 {
         let factor = 1.0 / maxSum;
         M.albedo *= factor;
         M.specColor *= factor;
-        M.refrColor *= factor;
     }
     return M;
 }
@@ -383,10 +420,16 @@ fn cosine_weighted_sampling_hemisphere(normal: vec3f) -> vec3f {
     return normalize(u * x + v * y + w * z);
 }
 
+// SFC32 RNG implementation
 fn rand() -> f32 {
-    randState = randState * 747796405u + 2891336453u;
-    var word: u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
-    return f32((word >> 22u) ^ word) / 4294967295;
+    let t = rngState.a + rngState.b;
+    rngState.a = rngState.b ^ (rngState.b >> 9u);
+    rngState.b = rngState.c + (rngState.c << 3u);
+    rngState.c = (rngState.c << 21u) | (rngState.c >> 11u);
+    rngState.d = rngState.d + 1u;
+    let t_new = t + rngState.d;
+    rngState.c = rngState.c + t_new;
+    return f32(t_new) / 4294967296.0;
 }
 
 fn trace_tlas(ray: Ray, tMax: f32) -> HitPoint {

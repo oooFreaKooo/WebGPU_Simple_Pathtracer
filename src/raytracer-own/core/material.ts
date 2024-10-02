@@ -5,25 +5,29 @@ interface MaterialOptions {
   specularColor?: vec3 // the color tint of specular reflections
   emissionColor?: vec3 // how much the surface glows
   emissionStrength?: number
-  specularRoughness?: number // how rough the specular reflections are
+  roughness?: number // how rough the surface is
   specularChance?: number // percentage chance of doing a specular reflection
   ior?: number // index of refraction. used by fresnel and refraction.
   refractionChance?: number // percent chance of doing a refractive transmission
-  refractionRoughness?: number // how rough the refractive transmissions are
   refractionColor?: vec3 // absorption for beer's law
+  sssColor?: vec3 // color of the subsurface scattering
+  sssStrength?: number // intensity of the scattering
+  sssRadius?: number  // radius for scattering effect
 }
 
 export class Material {
     albedo: vec3
+    specularColor: vec3
     emissionColor: vec3
     emissionStrength: number
+    roughness: number
+    specularChance: number
     ior: number
     refractionChance: number
     refractionColor: vec3
-    refractionRoughness: number
-    specularChance: number
-    specularColor: vec3
-    specularRoughness: number
+    sssColor: vec3
+    sssStrength: number
+    sssRadius: number
 
     constructor (options: MaterialOptions = {}) {
         const defaults: MaterialOptions = {
@@ -31,12 +35,14 @@ export class Material {
             specularColor: [ 1.0, 1.0, 1.0 ],
             emissionColor: [ 0.0, 0.0, 0.0 ],
             emissionStrength: 0.0,
-            specularRoughness: 1.0,
+            roughness: 1.0,
             specularChance: 0.01,
             ior: 1.0,
             refractionChance: 0.0,
-            refractionRoughness: 0.0,
             refractionColor: [ 0.0, 0.0, 0.0 ],
+            sssColor: [ 1.0, 1.0, 1.0 ], // default white scattering
+            sssStrength: 0.0, // default no scattering
+            sssRadius: 1.0, // uniform scattering radius
         }
 
         const finalOptions = { ...defaults, ...options }
@@ -45,14 +51,17 @@ export class Material {
         this.specularColor = finalOptions.specularColor!
         this.emissionColor = finalOptions.emissionColor!
         this.emissionStrength = finalOptions.emissionStrength!
-        this.specularRoughness = finalOptions.specularRoughness!
+        this.roughness = finalOptions.roughness!
         this.specularChance = finalOptions.specularChance!
         this.ior = finalOptions.ior!
         this.refractionChance = finalOptions.refractionChance!
-        this.refractionRoughness = finalOptions.refractionRoughness!
         this.refractionColor = finalOptions.refractionColor!
+        this.sssColor = finalOptions.sssColor!
+        this.sssStrength = finalOptions.sssStrength!
+        this.sssRadius = finalOptions.sssRadius!
     }
 }
+
 
 export class CubeMapMaterial {
     private texture: GPUTexture

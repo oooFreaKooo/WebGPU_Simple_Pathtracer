@@ -423,7 +423,7 @@ export class Renderer {
     }
 
     private createMaterialBuffer () {
-        const materialSize = 80 // Each Material is 80 bytes (20 floats * 4 bytes)
+        const materialSize = 96 // Each Material is 80 bytes (24 floats * 4 bytes)
         const bufferSize = materialSize * this.scene.materials.length
         this.materialBuffer = this.device.createBuffer({
             size: bufferSize,
@@ -432,7 +432,7 @@ export class Renderer {
     }
 
     private updateMaterialData () {
-        const materialDataSize = 20 // 20 floats per material
+        const materialDataSize = 24 // 24 floats per material
         const materialData = new Float32Array(materialDataSize * this.scene.materials.length)
 
         for (let i = 0; i < this.scene.materials.length; i++) {
@@ -448,7 +448,7 @@ export class Renderer {
             materialData[baseIndex + 4] = material.specularColor[0]
             materialData[baseIndex + 5] = material.specularColor[1]
             materialData[baseIndex + 6] = material.specularColor[2]
-            materialData[baseIndex + 7] = material.specularRoughness
+            materialData[baseIndex + 7] = material.roughness
 
             materialData[baseIndex + 8] = material.emissionColor[0]
             materialData[baseIndex + 9] = material.emissionColor[1]
@@ -460,10 +460,15 @@ export class Renderer {
             materialData[baseIndex + 14] = material.refractionColor[2]
             materialData[baseIndex + 15] = material.refractionChance
 
-            materialData[baseIndex + 16] = material.refractionRoughness
-            materialData[baseIndex + 17] = material.ior
-            materialData[baseIndex + 18] = 0.0 // Padding
-            materialData[baseIndex + 19] = 0.0 // Padding
+            materialData[baseIndex + 16] = material.sssColor[0]
+            materialData[baseIndex + 17] = material.sssColor[1]
+            materialData[baseIndex + 18] = material.sssColor[2]
+            materialData[baseIndex + 19] = material.sssStrength
+
+            materialData[baseIndex + 20] = material.sssRadius
+            materialData[baseIndex + 21] = material.ior
+            materialData[baseIndex + 22] = 0.0
+            materialData[baseIndex + 23] = 0.0
         }
 
         this.device.queue.writeBuffer(

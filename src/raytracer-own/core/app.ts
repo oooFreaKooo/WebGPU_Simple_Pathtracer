@@ -41,7 +41,7 @@ export class Application {
             scene15: presets.createScene15()
         }
         // Directly use a preset scene like cornellBox (or any scene of your choice)
-        await this.scene.createObjects(presetScenes.scene8)
+        await this.scene.createObjects(presetScenes.cornellBox2)
 
         // Initialize the renderer
         await this.renderer.Initialize()
