@@ -67,6 +67,7 @@ export class Scene {
 
         // Initialize TLAS after all objects are processed
         this.tlas = new TLAS(this.blasInstanceArray, this.blasOffsetToMeshIDMap, this.meshIDToBLAS)
+        console.log(this.tlas.m_tlasNodes)
     }
 
     private async loadObjectMesh (modelPath: string): Promise<ObjLoader> {

@@ -138,9 +138,7 @@ override WORKGROUP_SIZE_Y: u32;
 
 var<private> pixelCoords : vec2f;
 var<private> rngState: SFC32State;
-var<private> stack : array<u32, 64>;
 var<workgroup> sharedAccumulatedColor: array<vec3f, 64>;
-
 
 @compute @workgroup_size(WORKGROUP_SIZE_X, WORKGROUP_SIZE_Y)
 fn main(
@@ -156,7 +154,7 @@ fn main(
     let DIMENSION = uniforms.screenDims;
     let coord = vec2u(workgroup_id.x * WORKGROUP_SIZE_X + local_invocation_id.x, workgroup_id.y * WORKGROUP_SIZE_Y + local_invocation_id.y);
     let idx = coord.y * u32(DIMENSION.x) + coord.x;
-    pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
+    let pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
 
     // Random state initialization
     rngState = initialize_rng(coord * idx, uniforms.frameNum);
@@ -173,11 +171,19 @@ fn main(
     let focus_dist = cam_setting.focusDistance;
     let aspect_ratio = setting.aspectRatio;
 
+    // Precompute coefficients
+    let fov_over_dim_x = FOV / f32(DIMENSION.x);
+    let fov_over_dim_y_ar = FOV / (f32(DIMENSION.y) * aspect_ratio);
+    let screen_base = pixelCoords - half_screen_dims;
+
+    // Precompute ray origin
     let rand_state_vec = vec2<f32>(rand(), rand());
+    let lens_point = rand_state_vec * cam_setting.apertureSize;
+    let ray_origin = POS + RIGHT * lens_point.x + UP * lens_point.y;
 
     var myRay: Ray;
     sharedAccumulatedColor[local_invocation_index] = vec3<f32>(0.0);
-    var sampleCount = 0.0;
+    let totalSamples = f32(setting.numSamples);
 
     for (var i: f32 = 0.0; i < sqrt_spp; i = i + 1.0) {
         for (var j: f32 = 0.0; j < sqrt_spp; j = j + 1.0) {
@@ -185,40 +191,29 @@ fn main(
             let stratifiedSample = (vec2<f32>(i, j) + rand_state_vec) * recip_sqrt_spp * setting.jitterScale;
 
             // Calculate screen jittered coordinates
-            let screen_jittered = pixelCoords + stratifiedSample - half_screen_dims;
+            let screen_jittered = screen_base + stratifiedSample;
 
-            // Calculate lens point and origin
-            let lens_point = rand_state_vec * cam_setting.apertureSize;
-            myRay.origin = POS + RIGHT * lens_point.x + UP * lens_point.y;
+            // Set ray origin (precomputed)
+            myRay.origin = ray_origin;
 
             // Calculate ray direction
-            let horizontal_coeff = FOV * screen_jittered.x / DIMENSION.x;
-            let vertical_coeff = FOV * screen_jittered.y / (DIMENSION.y * aspect_ratio);
+            let horizontal_coeff = fov_over_dim_x * screen_jittered.x;
+            let vertical_coeff = fov_over_dim_y_ar * screen_jittered.y;
             let focus_point = POS + normalize(FORWARD + horizontal_coeff * RIGHT + vertical_coeff * UP) * focus_dist;
             myRay.direction = normalize(focus_point - myRay.origin);
 
             // Trace the ray and accumulate color
             sharedAccumulatedColor[local_invocation_index] += trace(myRay) * recip_sqrt_spp;
-            sampleCount += 1.0;
         }
     }
 
-    var acc_radiance = sharedAccumulatedColor[local_invocation_index] / sampleCount;
+    var acc_radiance = sharedAccumulatedColor[local_invocation_index] / totalSamples;
 
     if uniforms.resetBuffer == 0.0 {
         acc_radiance += framebuffer[idx].xyz;
     }
 
     framebuffer[idx] = vec4<f32>(acc_radiance, 1.0);
-}
-
-fn initialize_rng(id: vec2u, frameNum: u32) -> SFC32State {
-    return SFC32State(
-        frameNum ^ id.x,
-        frameNum ^ id.y,
-        frameNum ^ (id.x + id.y),
-        frameNum ^ (id.x * id.y)
-    );
 }
 
 fn trace(camRay: Ray) -> vec3f {
@@ -336,6 +331,15 @@ fn update_ray_origin(ray: Ray, hit: HitPoint, isRefractive: f32) -> vec3f {
     );
 }
 
+fn initialize_rng(id: vec2u, frameNum: u32) -> SFC32State {
+    return SFC32State(
+        frameNum ^ id.x,
+        frameNum ^ id.y,
+        frameNum ^ (id.x + id.y),
+        frameNum ^ (id.x * id.y)
+    );
+}
+
 fn determine_ray_type(specChance: f32, refrChance: f32, randVal: f32) -> RayType {
     var result: RayType;
     result.isSpecular = 0.0;
@@ -439,28 +443,54 @@ fn trace_tlas(ray: Ray, tMax: f32) -> HitPoint {
     closestHit.hit = false;
     closestHit.dist = tMax;
 
-    var stack: array<u32, 64>;
-    var stackLocation: u32 = 0u;
+    var stack: array<u32, 32>;
+    var sp: u32 = 0u;
 
-    stack[stackLocation] = 0u;
-    stackLocation += 1u;
+    // Push root node
+    stack[sp] = 0u;
+    sp = sp + 1u;
 
-    while stackLocation > 0u {
-        stackLocation -= 1u;
-        let nodeIdx: u32 = stack[stackLocation];
-        let instance: BLASInstance = blasInstances[tlasNodes[nodeIdx].instanceIdx];
-        let distance: f32 = hit_aabb(ray, tlasNodes[nodeIdx].aabbMin, tlasNodes[nodeIdx].aabbMax, inverseDir);
-        if distance < closestHit.dist {
-            if tlasNodes[nodeIdx].left == 0u && tlasNodes[nodeIdx].right == 0u {
-                let blasHit: HitPoint = trace_blas(ray, instance, closestHit);
-                if blasHit.hit && blasHit.dist < closestHit.dist {
-                    closestHit = blasHit;
+    while sp > 0u {
+        sp = sp - 1u;
+        let nodeIdx: u32 = stack[sp];
+        let tlasNode = tlasNodes[nodeIdx];
+
+        // Early AABB hit test
+        let distance: f32 = hit_aabb(ray, tlasNode.aabbMin, tlasNode.aabbMax, inverseDir);
+        if distance >= closestHit.dist {
+            continue; // Skip if AABB is beyond current closest hit
+        }
+
+        let isLeaf = (tlasNode.left == 0u) && (tlasNode.right == 0u);
+        if isLeaf {
+            let instance: BLASInstance = blasInstances[tlasNode.instanceIdx];
+            let blasHit: HitPoint = trace_blas(ray, instance, closestHit);
+            if blasHit.hit && blasHit.dist < closestHit.dist {
+                closestHit = blasHit;
+            }
+        } else {
+            // Traverse children in order of proximity
+            let leftDistance = hit_aabb(ray, tlasNode.aabbMin, tlasNode.aabbMax, inverseDir);
+            let rightDistance = hit_aabb(ray, tlasNode.aabbMin, tlasNode.aabbMax, inverseDir);
+
+            if leftDistance < rightDistance {
+                if tlasNode.right != 0u {
+                    stack[sp] = tlasNode.right;
+                    sp = sp + 1u;
+                }
+                if tlasNode.left != 0u {
+                    stack[sp] = tlasNode.left;
+                    sp = sp + 1u;
                 }
             } else {
-                stack[stackLocation] = tlasNodes[nodeIdx].left;
-                stackLocation += 1u;
-                stack[stackLocation] = tlasNodes[nodeIdx].right;
-                stackLocation += 1u;
+                if tlasNode.left != 0u {
+                    stack[sp] = tlasNode.left;
+                    sp = sp + 1u;
+                }
+                if tlasNode.right != 0u {
+                    stack[sp] = tlasNode.right;
+                    sp = sp + 1u;
+                }
             }
         }
     }
@@ -473,54 +503,94 @@ fn trace_blas(ray: Ray, instance: BLASInstance, renderState: HitPoint) -> HitPoi
     blasRenderState.hit = false;
     var nearestHit: f32 = blasRenderState.dist;
 
+    // Transform the ray into object space
     var object_ray: Ray;
     object_ray.origin = (instance.invTransform * vec4<f32>(ray.origin, 1.0)).xyz;
     object_ray.direction = (instance.invTransform * vec4<f32>(ray.direction, 0.0)).xyz;
     let inverseDir: vec3<f32> = 1.0 / object_ray.direction;
 
-    var stack: array<u32, 64>;
+    // Cache material to avoid repeated indexing
+    let material: Material = meshMaterial[instance.materialIdx];
+
+    var stack: array<u32, 32>;
     var stackLocation: u32 = 0u;
     let rootIdx: u32 = instance.blasOffset;
 
     stack[stackLocation] = rootIdx;
     stackLocation += 1u;
 
+    // Traverse the BVH
     while stackLocation > 0u {
         stackLocation -= 1u;
         let nodeIdx: u32 = stack[stackLocation];
         let node: BLASNode = blasNodes[nodeIdx];
-        let distance: f32 = hit_aabb(object_ray, node.aabbMin, node.aabbMax, inverseDir);
 
-        if distance < nearestHit {
-            let triCount: u32 = node.triCount;
-            let leftFirst: u32 = node.leftFirst;
+        let hitDistance: f32 = hit_aabb(object_ray, node.aabbMin, node.aabbMax, inverseDir);
 
-            if triCount > 0u {
-                for (var i: u32 = 0u; i < triCount; i += 1u) {
+        if hitDistance >= nearestHit {
+            continue;
+        }
 
-                    let triIdx: u32 = triIdxInfo[leftFirst + i];
+        let triCount: u32 = node.triCount;
+        let leftFirst: u32 = node.leftFirst;
 
-                    let triangle: Triangle = meshTriangles[triIdx];
+        if triCount > 0u {
+            // Leaf node: Test all triangles
+            // Use manual unrolling for known maximum triangles
+            var i: u32 = 0u;
+            loop {
+                if i >= triCount || i >= 2u {
+                    break;
+                }
+                let triIdx: u32 = triIdxInfo[leftFirst + i];
+                let triangle: Triangle = meshTriangles[triIdx];
+                let triangleHitPoint: HitPoint = hit_triangle(object_ray, triangle, 0.001, nearestHit);
 
-                    let triangleHitPoint: HitPoint = hit_triangle(object_ray, triangle, 0.001, nearestHit);
+                if triangleHitPoint.hit && triangleHitPoint.dist < nearestHit {
+                    nearestHit = triangleHitPoint.dist;
+                    blasRenderState = triangleHitPoint;
+                    blasRenderState.normal = (instance.transform * vec4<f32>(blasRenderState.normal, 0.0)).xyz;
+                    blasRenderState.material = material;
+                }
+                i += 1u;
+            }
+        } else {
+            // Internal node: Traverse children in front-to-back order
+            let childIdx1: u32 = leftFirst;
+            let childIdx2: u32 = leftFirst + 1u;
 
-                    if triangleHitPoint.hit && triangleHitPoint.dist < nearestHit {
-                        nearestHit = triangleHitPoint.dist;
-                        blasRenderState = triangleHitPoint;
-                        blasRenderState.normal = (instance.transform * vec4<f32>(blasRenderState.normal, 0.0)).xyz;
-                        blasRenderState.material = meshMaterial[instance.materialIdx];
-                    }
+            let child1: BLASNode = blasNodes[childIdx1];
+            let child2: BLASNode = blasNodes[childIdx2];
+
+            let hitDist1: f32 = hit_aabb(object_ray, child1.aabbMin, child1.aabbMax, inverseDir);
+            let hitDist2: f32 = hit_aabb(object_ray, child2.aabbMin, child2.aabbMax, inverseDir);
+
+            // Push the farther child first to ensure front-to-back traversal
+            if hitDist1 < hitDist2 {
+                if hitDist2 < nearestHit {
+                    stack[stackLocation] = childIdx2;
+                    stackLocation += 1u;
+                }
+                if hitDist1 < nearestHit {
+                    stack[stackLocation] = childIdx1;
+                    stackLocation += 1u;
                 }
             } else {
-                stack[stackLocation] = leftFirst;
-                stackLocation += 1u;
-                stack[stackLocation] = leftFirst + 1u;
-                stackLocation += 1u;
+                if hitDist1 < nearestHit {
+                    stack[stackLocation] = childIdx1;
+                    stackLocation += 1u;
+                }
+                if hitDist2 < nearestHit {
+                    stack[stackLocation] = childIdx2;
+                    stackLocation += 1u;
+                }
             }
         }
     }
+
     return blasRenderState;
 }
+
 
 fn hit_triangle(
     ray: Ray,

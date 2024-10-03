@@ -986,30 +986,33 @@ export function createScene9 (): ObjectProperties[] {
     const spacing = 5 // Assuming you want a fixed spacing, replace with randomInRange(5, 5) if needed
 
     for (let i = -halfGridSize; i <= halfGridSize; i++) {
-        for (let k = -halfGridSize; k <= halfGridSize; k++) {
-            // Skip the center position if you don't want an object at the exact center
-            if (i === 0 && k === 0) {continue}
-
-            spheres.push({
-                modelPath: './src/assets/models/monkey.obj',
-                material: new Material(randomMaterial()),
-                position: [ i * spacing, 1.0, k * spacing ],
-                scale: [ 1.0, 1.0, 1.0 ],
-            })
+        for (let j = -halfGridSize; j <= halfGridSize; j++) {
+            for (let k = -halfGridSize; k <= halfGridSize; k++) {
+                // Skip the center position if you don't want an object at the exact center
+                if (i === 0 && j === 0 && k === 0) {continue}
+    
+                spheres.push({
+                    modelPath: './src/assets/models/monkey.obj',
+                    material: new Material(randomMaterial()),
+                    position: [ i * spacing, j * spacing, k * spacing ],
+                    scale: [ 1.0, 1.0, 1.0 ],
+                })
+            }
         }
     }
+    
     spheres.push({
         modelPath: './src/assets/models/sphere.obj',
         material: new Material({ emissionColor: [ 1.0, 1.0, 1.0 ], emissionStrength: 10 }),
         position: [ 0.0, 50.0, 0.0 ],
         scale: [ 25.0, 25.0, 25.0 ],
     })
-    spheres.push({
+    /*     spheres.push({
         modelPath: './src/assets/models/plane.obj',
         material: new Material({ roughness: 0.25, specularChance: 1.0 }),
         position: [ 0.0, -2.0, 0.0 ],
         scale: [ 6.0, 1.0, 6.0 ],
-    })
+    }) */
     return spheres
 }
 

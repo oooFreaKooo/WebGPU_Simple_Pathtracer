@@ -1,18 +1,5 @@
 import { mat4, vec3 } from 'gl-matrix'
 
-export class Node {
-    aabbMax: vec3
-    aabbMin: vec3
-    leftFirst: number
-    triCount: number
-    constructor () {
-        this.aabbMin = [ 0, 0, 0 ]
-        this.aabbMax = [ 0, 0, 0 ]
-        this.leftFirst = 0
-        this.triCount = 0
-    }
-}
-
 export class AABB {
     bmax: vec3
     bmin: vec3
@@ -43,6 +30,13 @@ export class AABB {
     growByAABB (aabb: AABB): void {
         vec3.min(this.bmin, this.bmin, aabb.bmin)
         vec3.max(this.bmax, this.bmax, aabb.bmax)
+    }
+
+    surfaceArea (): number {
+        const dx = this.bmax[0] - this.bmin[0]
+        const dy = this.bmax[1] - this.bmin[1]
+        const dz = this.bmax[2] - this.bmin[2]
+        return 2.0 * (dx * dy + dy * dz + dz * dx)
     }
 
     union (aabb: AABB): AABB {
