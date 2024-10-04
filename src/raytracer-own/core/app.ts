@@ -38,7 +38,7 @@ export class Application {
             scene12: presets.createScene12(),              // All material types in one scene
             scene13: presets.createScene13(),              // Sphereflake fractal (depth = 5)
             scene14: presets.createScene14(),
-            scene15: presets.createScene15()
+            scene15: presets.createScene15(),              //
         }
         // Directly use a preset scene like cornellBox (or any scene of your choice)
         await this.scene.createObjects(presetScenes.cornellBox)

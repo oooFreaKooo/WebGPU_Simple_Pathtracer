@@ -31,17 +31,13 @@ export class TLAS {
     }
 
     private _build (): void {
-        let nodeIndices = this.m_blasInstances.length
-        const nodeIdx: Uint32Array = new Uint32Array(nodeIndices)
-
         // Initialize TLAS nodes with BLAS instances
         for (let i = 0; i < this.m_blasInstances.length; ++i) {
-            nodeIdx[i] = this.m_nodeUsed
             const meshID = this.m_offsetToMeshId.get(this.m_blasInstances[i].blasOffset)
-            if (meshID === undefined) {throw new Error('Mesh ID not found')}
+            if (meshID === undefined) { throw new Error('Mesh ID not found') }
 
             const blas = this.m_meshIDtoBLAS.get(meshID)
-            if (blas === undefined) {throw new Error('BLAS not found')}
+            if (blas === undefined) { throw new Error('BLAS not found') }
 
             // Clone and transform the BLAS's AABB
             const blasAABB = blas.m_nodes[0].aabb.clone()
@@ -53,72 +49,112 @@ export class TLAS {
                 aabb: blasAABB,
                 left: 0,
                 right: 0,
-                blas: i,
+                blas: i, // Leaf node references the BLAS index
             }
 
             this.m_tlasNodes[this.m_nodeUsed++] = tlasNode
         }
 
-        // Start building the hierarchy by finding best matches to merge
-        let A = 0
-        let B = this._findBestMatch(nodeIdx, nodeIndices, A)
+        const leafIndices = Array.from({ length: this.m_blasInstances.length }, (_, i) => i + 1)
 
-        while (nodeIndices > 1) {
-            const C = this._findBestMatch(nodeIdx, nodeIndices, B)
-
-            if (A === C) {
-                // Combine the two nodes into a new parent node
-                const newNode: TLASNode = {
-                    aabb: this.m_tlasNodes[nodeIdx[A]].aabb.clone().union(this.m_tlasNodes[nodeIdx[B]].aabb),
-                    left: nodeIdx[A],
-                    right: nodeIdx[B],
-                    blas: 0, // No BLAS for internal nodes
-                }
-
-                this.m_tlasNodes[this.m_nodeUsed] = newNode
-                nodeIdx[A] = this.m_nodeUsed++
-                nodeIdx[B] = nodeIdx[--nodeIndices] // Move the last node to replace the merged node
-                B = this._findBestMatch(nodeIdx, nodeIndices, A)
-            } else {
-                // Advance A and B
-                A = B
-                B = C
-            }
-        }
+        const rootIdx = this._buildRecursiveWithSAH(leafIndices)
 
         // Set the root node of the TLAS
-        this.m_tlasNodes[0] = this.m_tlasNodes[nodeIdx[A]]
+        this.m_tlasNodes[0] = this.m_tlasNodes[rootIdx]
     }
-
-
-    private _findBestMatch (nodeIndices: Uint32Array, count: number, A: number): number {
-        let smallestArea = Infinity
-        let bestB = -1
-
-        const aabbA = this.m_tlasNodes[nodeIndices[A]].aabb
-
-        for (let B = 0; B < count; B++) {
-            if (A === B) {continue}
-
-            const aabbB = this.m_tlasNodes[nodeIndices[B]].aabb
-
-            // Compute the combined AABB of A and B
-            const combinedMin = vec3.min(vec3.create(), aabbA.bmin, aabbB.bmin)
-            const combinedMax = vec3.max(vec3.create(), aabbA.bmax, aabbB.bmax)
-
-            const extent = vec3.sub(vec3.create(), combinedMax, combinedMin)
-
-            // Calculate surface area using the extent of the combined AABB
-            const surfaceArea = 2 * (extent[0] * extent[1] + extent[1] * extent[2] + extent[2] * extent[0])
-
-            // Update the best match if this surface area is smaller
-            if (surfaceArea < smallestArea) {
-                smallestArea = surfaceArea
-                bestB = B
+    
+    private _findBestSplit (indices: number[]): { axis: number; splitIndex: number } {
+        let bestAxis = -1
+        let bestSplit = -1
+        let minCost = Infinity
+    
+        for (let axis = 0; axis < 3; axis++) {
+            // Sort indices based on centroid along the current axis
+            indices.sort((a, b) => {
+                const centroidA = vec3.scale(vec3.create(), vec3.add(vec3.create(), this.m_tlasNodes[a].aabb.bmin, this.m_tlasNodes[a].aabb.bmax), 0.5)[axis]
+                const centroidB = vec3.scale(vec3.create(), vec3.add(vec3.create(), this.m_tlasNodes[b].aabb.bmin, this.m_tlasNodes[b].aabb.bmax), 0.5)[axis]
+                return centroidA - centroidB
+            })
+    
+            for (let i = 1; i < indices.length; i++) {
+                const left = indices.slice(0, i)
+                const right = indices.slice(i)
+    
+                // Compute bounding boxes for left and right subsets
+                let leftAABB = this.m_tlasNodes[left[0]].aabb.clone()
+                for (let j = 1; j < left.length; j++) {
+                    leftAABB = this._combineAABB(leftAABB, this.m_tlasNodes[left[j]].aabb)
+                }
+    
+                let rightAABB = this.m_tlasNodes[right[0]].aabb.clone()
+                for (let j = 1; j < right.length; j++) {
+                    rightAABB = this._combineAABB(rightAABB, this.m_tlasNodes[right[j]].aabb)
+                }
+    
+                const cost = this._computeSurfaceArea(leftAABB) + this._computeSurfaceArea(rightAABB)
+    
+                if (cost < minCost) {
+                    minCost = cost
+                    bestAxis = axis
+                    bestSplit = i
+                }
             }
         }
-
-        return bestB
+    
+        return { axis: bestAxis, splitIndex: bestSplit }
     }
-
+    
+    private _buildRecursiveWithSAH (indices: number[]): number {
+        if (indices.length === 1) {
+            return indices[0]
+        }
+    
+        // Find the best split using SAH
+        const { axis, splitIndex } = this._findBestSplit(indices)
+    
+        let leftIndices: number[]
+        let rightIndices: number[]
+    
+        if (axis === -1 || splitIndex === -1) {
+            // Fallback to median split if no good split is found
+            const mid = Math.floor(indices.length / 2)
+            leftIndices = indices.slice(0, mid)
+            rightIndices = indices.slice(mid)
+        } else {
+            leftIndices = indices.slice(0, splitIndex)
+            rightIndices = indices.slice(splitIndex)
+        }
+    
+        // Recursively build child nodes
+        const leftChild = this._buildRecursiveWithSAH(leftIndices)
+        const rightChild = this._buildRecursiveWithSAH(rightIndices)
+    
+        // Create a new internal node
+        const leftAABB = this.m_tlasNodes[leftChild].aabb
+        const rightAABB = this.m_tlasNodes[rightChild].aabb
+        const parentAABB = this._combineAABB(leftAABB, rightAABB)
+    
+        const parentNode: TLASNode = {
+            aabb: parentAABB,
+            left: leftChild,
+            right: rightChild,
+            blas: 0, // Internal nodes do not reference a BLAS
+        }
+    
+        this.m_tlasNodes[this.m_nodeUsed] = parentNode
+        const parentIdx = this.m_nodeUsed++
+        return parentIdx
+    }
+    
+    private _computeSurfaceArea (aabb: AABB): number {
+        const extent = vec3.sub(vec3.create(), aabb.bmax, aabb.bmin)
+        return 2 * (extent[0] * extent[1] + extent[1] * extent[2] + extent[2] * extent[0])
+    }
+    
+    private _combineAABB (aabb1: AABB, aabb2: AABB): AABB {
+        const combined = new AABB()
+        combined.bmin = vec3.min(vec3.create(), aabb1.bmin, aabb2.bmin)
+        combined.bmax = vec3.max(vec3.create(), aabb1.bmax, aabb2.bmax)
+        return combined
+    }
 }

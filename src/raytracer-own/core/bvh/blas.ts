@@ -1,14 +1,14 @@
 import { Triangle } from '../triangle'
 import { AABB } from '../node'
-import { vec3 } from 'gl-matrix'
 
 export interface BLASNode {
-    leftFirst: number;
-    triangleCount: number;
-    aabb: AABB;
+    leftFirst: number
+    triangleCount: number
+    aabb: AABB
 }
 
-const BINS = 8
+const DEFAULT_BINS = 16
+const MIN_TRIANGLES_PER_NODE = 2 // Minimum triangles to allow subdivision
 
 export class BLAS {
     id: string
@@ -49,10 +49,82 @@ export class BLAS {
             aabb: rootAABB,
         }
 
-        // Subdivide the root node
-        this._subdivideNode(this.m_rootNodeIdx)
+        // Use a stack to manage node subdivision iteratively
+        const stack: number[] = [ this.m_rootNodeIdx ]
 
-        // Remove unused nodes after subdivision
+        while (stack.length > 0) {
+            const currentNodeIdx = stack.pop()!
+            const currentNode = this.m_nodes[currentNodeIdx]
+
+            // Skip leaf nodes
+            if (currentNode.triangleCount <= MIN_TRIANGLES_PER_NODE) {
+                continue
+            }
+
+            const [ bestAxis, bestPos, bestCost ] = this._findBestSplit(currentNodeIdx)
+            const parentCost = this._calculateNodeCost(currentNodeIdx)
+
+            if (bestCost >= parentCost) {
+                // Leaf node; no beneficial split
+                continue
+            }
+
+            const axis = bestAxis
+            const splitPos = bestPos
+            let i = currentNode.leftFirst
+            let j = currentNode.leftFirst + currentNode.triangleCount - 1
+
+            // Partition triangles based on split
+            while (i <= j) {
+                const triIdx = this.m_triangleIndices[i]
+                const centroid = this.m_triangles[triIdx].centroid[axis]
+                if (centroid < splitPos) {
+                    i++
+                } else {
+                    // Swap triangles
+                    const tmp = this.m_triangleIndices[i]
+                    this.m_triangleIndices[i] = this.m_triangleIndices[j]
+                    this.m_triangleIndices[j] = tmp
+                    j--
+                }
+            }
+
+            const leftCount = i - currentNode.leftFirst
+            if (leftCount === 0 || leftCount === currentNode.triangleCount) {
+                // Failed to split; make this node a leaf
+                continue
+            }
+
+            // Create child nodes
+            const leftChildIdx = this.m_nodeCount++
+            const rightChildIdx = this.m_nodeCount++
+
+            this.m_nodes[leftChildIdx] = {
+                leftFirst: currentNode.leftFirst,
+                triangleCount: leftCount,
+                aabb: new AABB(),
+            }
+
+            this.m_nodes[rightChildIdx] = {
+                leftFirst: i,
+                triangleCount: currentNode.triangleCount - leftCount,
+                aabb: new AABB(),
+            }
+
+            // Update current node to internal node
+            currentNode.leftFirst = leftChildIdx // Store left child index
+            currentNode.triangleCount = 0 // Internal nodes have triangleCount = 0
+            this.m_nodes[currentNodeIdx] = currentNode
+
+            // Update AABBs for child nodes
+            this._updateAABB(leftChildIdx)
+            this._updateAABB(rightChildIdx)
+
+            // Push child nodes to the stack for further subdivision
+            stack.push(leftChildIdx, rightChildIdx)
+        }
+
+        // Trim unused nodes
         this.m_nodes.length = this.m_nodeCount
     }
 
@@ -62,30 +134,28 @@ export class BLAS {
         let bestPos = 0
         let bestCost = Number.MAX_VALUE
 
-        const centroidBounds: [number, number, number][] = []
+        const centroidMin = [ Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY ]
+        const centroidMax = [ Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY ]
 
-        // Calculate bounds of centroids for each axis
+        // Compute bounds of centroids
         for (let i = 0; i < node.triangleCount; i++) {
             const triIdx = this.m_triangleIndices[node.leftFirst + i]
-            const centroid: vec3 = this.m_triangles[triIdx].centroid
-            // Convert vec3 to [number, number, number]
-            centroidBounds.push([ centroid[0], centroid[1], centroid[2] ])
+            const centroid = this.m_triangles[triIdx].centroid
+            for (let axis = 0; axis < 3; axis++) {
+                if (centroid[axis] < centroidMin[axis]) {centroidMin[axis] = centroid[axis]}
+                if (centroid[axis] > centroidMax[axis]) {centroidMax[axis] = centroid[axis]}
+            }
         }
 
         for (let axis = 0; axis < 3; axis++) {
-            let min = Number.POSITIVE_INFINITY
-            let max = Number.NEGATIVE_INFINITY
-
-            for (let i = 0; i < centroidBounds.length; i++) {
-                const value = centroidBounds[i][axis]
-                if (value < min) {min = value}
-                if (value > max) {max = value}
-            }
+            const min = centroidMin[axis]
+            const max = centroidMax[axis]
 
             if (min === max) {continue} // All centroids are on the same position on this axis
 
-            const scale = BINS / (max - min)
-            const binsArray: { aabb: AABB; count: number }[] = Array.from({ length: BINS }, () => ({
+            const binCount = DEFAULT_BINS
+            const scale = binCount / (max - min)
+            const bins: { aabb: AABB; count: number }[] = Array.from({ length: binCount }, () => ({
                 aabb: new AABB(),
                 count: 0,
             }))
@@ -93,42 +163,47 @@ export class BLAS {
             // Distribute triangles into bins
             for (let i = 0; i < node.triangleCount; i++) {
                 const triIdx = this.m_triangleIndices[node.leftFirst + i]
-                const centroid = centroidBounds[i][axis]
-                const binIdx = Math.min(BINS - 1, Math.floor((centroid - min) * scale))
-                const bin = binsArray[binIdx]
+                const centroid = this.m_triangles[triIdx].centroid[axis]
+                const binIdx = Math.min(binCount - 1, Math.floor((centroid - min) * scale))
+                const bin = bins[binIdx]
                 bin.count++
                 this.m_triangles[triIdx].corners.forEach(corner => bin.aabb.grow(corner))
             }
 
             // Compute prefix sums for left and right splits
-            const leftCounts: number[] = new Array(BINS).fill(0)
-            const rightCounts: number[] = new Array(BINS).fill(0)
-            const leftAreas: number[] = new Array(BINS).fill(0)
-            const rightAreas: number[] = new Array(BINS).fill(0)
+            const leftCounts: number[] = new Array(binCount).fill(0)
+            const rightCounts: number[] = new Array(binCount).fill(0)
+            const leftAreas: number[] = new Array(binCount).fill(0)
+            const rightAreas: number[] = new Array(binCount).fill(0)
 
             const leftAABB = new AABB()
             let leftCount = 0
-            for (let i = 0; i < BINS - 1; i++) {
-                leftCount += binsArray[i].count
+            for (let i = 0; i < binCount - 1; i++) {
+                leftCount += bins[i].count
                 leftCounts[i] = leftCount
-                leftAABB.growByAABB(binsArray[i].aabb)
+                leftAABB.growByAABB(bins[i].aabb)
                 leftAreas[i] = leftAABB.area()
             }
 
             const rightAABB = new AABB()
             let rightCount = 0
-            for (let i = BINS - 1; i > 0; i--) {
-                rightCount += binsArray[i].count
+            for (let i = binCount - 1; i > 0; i--) {
+                rightCount += bins[i].count
                 rightCounts[i - 1] = rightCount
-                rightAABB.growByAABB(binsArray[i].aabb)
+                rightAABB.growByAABB(bins[i].aabb)
                 rightAreas[i - 1] = rightAABB.area()
             }
 
-            const binWidth = (max - min) / BINS
+            const binWidth = (max - min) / binCount
 
-            // Evaluate split cost
-            for (let i = 0; i < BINS - 1; i++) {
-                const cost = leftCounts[i] * leftAreas[i] + rightCounts[i] * rightAreas[i]
+            // Evaluate split cost using Surface Area Heuristic (SAH)
+            for (let i = 0; i < binCount - 1; i++) {
+                const countLeft = leftCounts[i]
+                const countRight = rightCounts[i]
+                if (countLeft === 0 || countRight === 0) {continue}
+
+                const cost = leftAreas[i] * countLeft + rightAreas[i] * countRight
+
                 if (cost < bestCost) {
                     bestAxis = axis
                     bestPos = min + binWidth * (i + 1)
@@ -137,78 +212,17 @@ export class BLAS {
             }
         }
 
+        // If no valid split found, return default values
+        if (bestAxis === -1) {
+            return [ -1, 0, Number.MAX_VALUE ]
+        }
+
         return [ bestAxis, bestPos, bestCost ]
     }
 
     private _calculateNodeCost (nodeIdx: number): number {
         const node = this.m_nodes[nodeIdx]
         return node.aabb.area() * node.triangleCount
-    }
-
-    private _subdivideNode (nodeIdx: number): void {
-        const node = this.m_nodes[nodeIdx]
-        const [ bestAxis, bestPos, bestCost ] = this._findBestSplit(nodeIdx)
-        const parentCost = this._calculateNodeCost(nodeIdx)
-
-        if (bestCost >= parentCost) {
-            // Leaf node; no beneficial split
-            return
-        }
-
-        const axis = bestAxis
-        const splitPos = bestPos
-        let i = node.leftFirst
-        let j = node.leftFirst + node.triangleCount - 1
-
-        // Partition triangles based on split
-        while (i <= j) {
-            const triIdx = this.m_triangleIndices[i]
-            const centroid = this.m_triangles[triIdx].centroid
-            if (centroid[axis] < splitPos) {
-                i++
-            } else {
-                // Swap triangles
-                const tmp = this.m_triangleIndices[i]
-                this.m_triangleIndices[i] = this.m_triangleIndices[j]
-                this.m_triangleIndices[j] = tmp
-                j--
-            }
-        }
-
-        const leftCount = i - node.leftFirst
-        if (leftCount === 0 || leftCount === node.triangleCount) {
-            // Failed to split; make this node a leaf
-            return
-        }
-
-        // Create child nodes
-        const leftChildIdx = this.m_nodeCount++
-        const rightChildIdx = this.m_nodeCount++
-
-        this.m_nodes[leftChildIdx] = {
-            leftFirst: node.leftFirst,
-            triangleCount: leftCount,
-            aabb: new AABB(),
-        }
-
-        this.m_nodes[rightChildIdx] = {
-            leftFirst: i,
-            triangleCount: node.triangleCount - leftCount,
-            aabb: new AABB(),
-        }
-
-        // Update current node to internal node
-        node.leftFirst = leftChildIdx // Store left child index
-        node.triangleCount = 0 // Internal nodes have triangleCount = 0
-        this.m_nodes[nodeIdx] = node
-
-        // Update AABBs for child nodes
-        this._updateAABB(leftChildIdx)
-        this._updateAABB(rightChildIdx)
-
-        // Recursively subdivide child nodes
-        this._subdivideNode(leftChildIdx)
-        this._subdivideNode(rightChildIdx)
     }
 
     private _updateAABB (nodeIdx: number): void {

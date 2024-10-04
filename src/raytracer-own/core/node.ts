@@ -32,21 +32,6 @@ export class AABB {
         vec3.max(this.bmax, this.bmax, aabb.bmax)
     }
 
-    surfaceArea (): number {
-        const dx = this.bmax[0] - this.bmin[0]
-        const dy = this.bmax[1] - this.bmin[1]
-        const dz = this.bmax[2] - this.bmin[2]
-        return 2.0 * (dx * dy + dy * dz + dz * dx)
-    }
-
-    union (aabb: AABB): AABB {
-        const newBmin = vec3.create()
-        const newBmax = vec3.create()
-        vec3.min(newBmin, this.bmin, aabb.bmin)
-        vec3.max(newBmax, this.bmax, aabb.bmax)
-        return new AABB(newBmax, newBmin)
-    }
-
     applyMatrix4 (matrix: mat4): void {
     // Transform the AABB by a matrix by transforming all 8 corners
         const points = [

@@ -1494,84 +1494,174 @@ export function createScene14 (): ObjectProperties[] {
     return planes
 }
 
-export function createScene15 (): ObjectProperties[] {
-    const createGlowMaterial = (r: number, g: number, b: number, strength: number) =>
-        new Material({ emissionColor: [ r, g, b ], emissionStrength: strength })
 
-    const createDynamicMaterial = (i: number) =>
-        createGlowMaterial(
-            Math.sin(i * 0.1) * 0.5 + 0.5,
-            Math.sin(i * 0.1 + Math.PI / 3) * 0.5 + 0.5,
-            Math.sin(i * 0.1 + (2 * Math.PI) / 3) * 0.5 + 0.5,
-            5.0,
-        )
+export function createScene15 (): ObjectProperties[] {
+    // Function to create a glowing material with specified properties
+    const createGlowMaterial = (
+        r: number,
+        g: number,
+        b: number,
+        strength: number
+    ): Material => ({
+        albedo: [ r, g, b ],
+        specularColor: [ 1.0, 1.0, 1.0 ],
+        emissionColor: [ r, g, b ],
+        emissionStrength: strength,
+        roughness: 0.2,
+        specularChance: 0.3,
+        ior: 1.0,
+        refractionChance: 1,
+        refractionColor: [ 1.0, 1.0, 1.0 ],
+        sssColor: [ 1.0, 1.0, 1.0 ],
+        sssStrength: 2.0,
+        sssRadius: 1.0,
+    })
 
     const objectsToLoad: ObjectProperties[] = []
 
-    const numSpheres = 200
-    const angleIncrement = (24 * Math.PI) / numSpheres
+    const numTurns = 2 // Total number of helical turns
+    const pointsPerTurn = 25 // Number of spheres per turn
+    const totalPoints = numTurns * pointsPerTurn // Total number of spheres per backbone
+    const helixRadius = 2.0 // Radius of the helix
+    const helixPitch = 10
+    const sphereSize = 0.5
+    // Colors for backbones and base pairs
+    const backboneColor = createGlowMaterial(0.2, 0.6, 1.0, 5.5) // Blue backbone
+    const basePairColor1 = createGlowMaterial(1.0, 0.8, 0.0, 0.25) // Yellow base pair part 1
+    const basePairColor2 = createGlowMaterial(0.0, 1.0, 0.8, 0.25) // Cyan base pair part 2
 
-    // Spiral of glowing spheres
-    for (let i = 0; i < numSpheres; i++) {
-        const angle = i * angleIncrement
-        const x = 5 * Math.sin(4 * angle) * Math.cos(angle)
-        const z = 5 * Math.sin(4 * angle) * Math.sin(angle)
-        const y = 5 * Math.cos(4 * angle)
+    // Generate Backbone Spheres for both strands
+    for (let i = 0; i < totalPoints; i++) {
+        const angle = (i / pointsPerTurn) * 2 * Math.PI
+        const y = (i / pointsPerTurn) * helixPitch
+
+        const x1 = helixRadius * Math.cos(angle)
+        const z1 = helixRadius * Math.sin(angle)
+        const x2 = helixRadius * Math.cos(angle + Math.PI)
+        const z2 = helixRadius * Math.sin(angle + Math.PI)
+
+        // Add first backbone sphere
+        objectsToLoad.push({
+            modelPath: './src/assets/models/sphere.obj',
+            material: backboneColor,
+            position: vec3.fromValues(x1, y, z1),
+            scale: vec3.fromValues(sphereSize, sphereSize, sphereSize),
+            rotation: vec3.fromValues(0.0, 0.0, 0.0),
+            objectID: objectsToLoad.length,
+        })
+
+        // Add second backbone sphere
+        objectsToLoad.push({
+            modelPath: './src/assets/models/sphere.obj',
+            material: backboneColor,
+            position: vec3.fromValues(x2, y, z2),
+            scale: vec3.fromValues(sphereSize, sphereSize, sphereSize),
+            rotation: vec3.fromValues(0.0, 0.0, 0.0),
+            objectID: objectsToLoad.length,
+        })
+
+        const start = vec3.fromValues(x1, y, z1)
+        const end = vec3.fromValues(x2, y, z2)
+        const midpoint1 = vec3.create()
+        const midpoint2 = vec3.create()
+        vec3.lerp(midpoint1, start, end, 0.25)
+        vec3.lerp(midpoint2, start, end, 0.75)
+
+        const distance = vec3.distance(start, end)
+        const cylinderScale = vec3.fromValues(0.1, distance / 2, 0.1)
+
+        const rotationZ = 90
+        const rotationX = -(i / totalPoints * helixRadius) * 360
+        const rotation = vec3.fromValues(rotationX, 0, rotationZ)
+
+        objectsToLoad.push({
+            modelPath: './src/assets/models/cylinder.obj',
+            material: basePairColor1,
+            position: midpoint1,
+            scale: cylinderScale,
+            rotation: rotation,
+            objectID: objectsToLoad.length,
+        })
+
+        objectsToLoad.push({
+            modelPath: './src/assets/models/cylinder.obj',
+            material: basePairColor2,
+            position: midpoint2,
+            scale: cylinderScale,
+            rotation: rotation,
+            objectID: objectsToLoad.length,
+        })
+    }
+    
+    const lightColors = [
+        [ 1.0, 0.5, 0.5 ],
+        [ 0.5, 1.0, 0.5 ],
+        [ 0.5, 0.5, 1.0 ],
+        [ 1.0, 1.0, 0.5 ],
+    ]
+
+    lightColors.forEach((color, i) => {
+        const angle = (i / lightColors.length) * Math.PI * 2
+        const radius = 8
+        const x = radius * Math.cos(angle)
+        const z = radius * Math.sin(angle)
+        const y = 4 * Math.sin(angle / 2)
 
         objectsToLoad.push({
             modelPath: './src/assets/models/sphere.obj',
-            material: createDynamicMaterial(i),
-            position: new Float32Array([ x, y, z ]),
-            scale: new Float32Array([ 0.4, 0.4, 0.4 ]),
+            material: createGlowMaterial(color[0], color[1], color[2], 10.0),
+            position: vec3.fromValues(x, y, z),
+            scale: vec3.fromValues(0.5, 0.5, 0.5),
+            rotation: vec3.fromValues(0.0, 0.0, 0.0),
+            objectID: objectsToLoad.length,
         })
-    }
+    })
 
-    // Fractal arrangement using other shapes
-    const fractalDepth = 3
-    const fractalScale = 2.5
-
-    const createFractal = (modelPath: string, material: Material, position: Float32Array, scale: Float32Array, depth: number) => {
-        if (depth === 0) {return}
+    for (let i = 0; i < 100; i++) {
+        const position = vec3.fromValues(
+            (Math.random() - 0.5) * 20,
+            (Math.random() - 0.5) * 20,
+            (Math.random() - 0.5) * 20
+        )
+        const scale = vec3.fromValues(0.1, 0.1, 0.1)
+        const material: Material = {
+            albedo: [
+                Math.random() * 0.5 + 0.5,
+                Math.random() * 0.5 + 0.5,
+                Math.random() * 0.5 + 0.5,
+            ],
+            specularColor: [ 1.0, 1.0, 1.0 ],
+            emissionColor: [
+                Math.random(),
+                Math.random(),
+                Math.random(),
+            ],
+            emissionStrength: Math.random() * 3 + 2,
+            roughness: 0.0,
+            specularChance: 0.5,
+            ior: 1.0,
+            refractionChance: 0.0,
+            refractionColor: [ 0.0, 0.0, 0.0 ],
+            sssColor: [ 1.0, 1.0, 1.0 ],
+            sssStrength: 0.0,
+            sssRadius: 1.0,
+        }
 
         objectsToLoad.push({
-            modelPath,
+            modelPath: './src/assets/models/sphere.obj',
             material,
             position,
             scale,
+            rotation: vec3.fromValues(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            ),
+            objectID: objectsToLoad.length,
         })
-
-        const nextScale = new Float32Array(scale.map((s) => s / fractalScale))
-
-        for (const dx of [ -1, 1 ]) {
-            for (const dy of [ -1, 1 ]) {
-                for (const dz of [ -1, 1 ]) {
-                    const nextPosition = new Float32Array([ position[0] + dx * scale[0], position[1] + dy * scale[1], position[2] + dz * scale[2] ])
-
-                    createFractal(modelPath, material, nextPosition, nextScale, depth - 1)
-                }
-            }
-        }
     }
-
-    const fractalMaterials = Array.from({ length: 5 }, (_, i) => createDynamicMaterial(i))
-
-    fractalMaterials.forEach((material) => {
-        createFractal('./src/assets/models/cube.obj', material, new Float32Array([ 0.0, 0.0, 0.0 ]), new Float32Array([ 1.0, 1.0, 1.0 ]), fractalDepth)
-    })
-
-    // Adding a large central glass object
-    objectsToLoad.push({
-        modelPath: './src/assets/models/glass.obj',
-        material: new Material({
-            refractionChance: 1.0,
-            ior: 1.18,
-            specularChance: 0.15,
-            specularColor: [ 0.8, 0.8, 0.8 ],
-            roughness: 0.0,
-        }),
-        position: new Float32Array([ 0.0, 0.0, 0.0 ]),
-        scale: new Float32Array([ 3.0, 3.0, 3.0 ]),
-    })
 
     return objectsToLoad
 }
+
+
