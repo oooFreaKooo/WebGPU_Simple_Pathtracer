@@ -668,13 +668,13 @@ export class Renderer {
             this.floatDataTlas[baseIndex + 1] = node.aabb.bmin[1]
             this.floatDataTlas[baseIndex + 2] = node.aabb.bmin[2]
             this.uintDataTlas[baseIndex + 3] = node.left >= 0 ? node.left : 0
+            
             this.floatDataTlas[baseIndex + 4] = node.aabb.bmax[0]
             this.floatDataTlas[baseIndex + 5] = node.aabb.bmax[1]
             this.floatDataTlas[baseIndex + 6] = node.aabb.bmax[2]
             this.uintDataTlas[baseIndex + 7] = node.right >= 0 ? node.right : 0
+            
             this.uintDataTlas[baseIndex + 8] = node.blas >= 0 ? node.blas : 0
-
-            // Padding (3 slots for alignment)
             this.uintDataTlas[baseIndex + 9] = 0
             this.uintDataTlas[baseIndex + 10] = 0
             this.uintDataTlas[baseIndex + 11] = 0

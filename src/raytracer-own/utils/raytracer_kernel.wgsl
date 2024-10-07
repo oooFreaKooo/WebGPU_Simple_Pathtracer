@@ -98,7 +98,7 @@ struct SFC32State {
     b: u32,
     c: u32,
     d: u32,
-};
+}
 
 // Group 0: Uniforms and Settings
 @group(0) @binding(0) var<uniform> uniforms : Uniforms;
@@ -128,9 +128,6 @@ const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
 const INV_PI: f32 = 0.31830988618;
-const TLAS_STACK_SIZE: u32 = 64u;
-const BLAS_STACK_SIZE: u32 = 32u;
-const T_MIN = 0.001f;
 const T_MAX = 10000f;
 
 override WORKGROUP_SIZE_X: u32;
@@ -206,6 +203,7 @@ fn main(
 }
 
 fn trace(camRay: Ray) -> vec3f {
+    var hit: HitPoint;
     var ray = camRay;
     var acc_radiance: vec3f = vec3(0.0, 0.0, 0.0);
     var throughput = vec3(1.0, 1.0, 1.0);
@@ -214,7 +212,10 @@ fn trace(camRay: Ray) -> vec3f {
     let skyTextureEnabled = setting.SKY_TEXTURE == 1.0;
 
     for (var bounce: u32 = 0u; bounce < maxBounces; bounce++) {
-        let hit = trace_tlas(ray, T_MAX);
+        hit.hit = false;
+        hit.dist = T_MAX;
+
+        trace_tlas(ray, &hit);
 
         if !hit.hit {
             // Accumulate sky radiance if no hit occurs
@@ -428,39 +429,41 @@ fn rand2() -> vec2f {
     return vec2f(rand(), rand());
 }
 
-fn trace_tlas(ray: Ray, tMax: f32) -> HitPoint {
+fn trace_tlas(ray: Ray, hit_point: ptr<function, HitPoint>) {
     let inverseDir: vec3<f32> = 1.0 / ray.direction;
-
-    var closestHit: HitPoint;
-    closestHit.hit = false;
-    closestHit.dist = tMax;
-
-    var stack: array<u32, 64>; // Increased stack size
+    var stack: array<u32, 64>;
     var sp: u32 = 0u;
 
     // Push root node
     stack[sp] = 0u;
-    sp = sp + 1u;
+    sp += 1u;
 
     while sp > 0u {
-        sp = sp - 1u;
+        sp -= 1u;
         let nodeIdx: u32 = stack[sp];
         let tlasNode = tlasNodes[nodeIdx];
 
         // Early AABB hit test
         let nodeDistance: f32 = hit_aabb(ray, tlasNode.aabbMin, tlasNode.aabbMax, inverseDir);
-        if nodeDistance >= closestHit.dist {
-            continue; // Skip if AABB is beyond current closest hit
+        if nodeDistance >= (*hit_point).dist {
+            continue;
         }
 
         let isLeaf = (tlasNode.left == 0u) && (tlasNode.right == 0u);
         if isLeaf {
             let instance: BLASInstance = blasInstances[tlasNode.instanceIdx];
-            let blasHit: HitPoint = trace_blas(ray, instance, closestHit);
-            if blasHit.hit && blasHit.dist < closestHit.dist {
-                closestHit = blasHit;
+            var blasHit: HitPoint;
+            // Initialize blasHit
+            blasHit.hit = false;
+            blasHit.dist = (*hit_point).dist;
+
+            // Pass pointers
+            trace_blas(ray, instance, &blasHit);
+
+            if blasHit.hit && blasHit.dist < (*hit_point).dist {
+                (*hit_point) = blasHit;
                 // Early exit if hit is very close
-                if blasHit.dist < 1e-4 { // Threshold can be adjusted
+                if blasHit.dist < 1e-4 {
                     break;
                 }
             }
@@ -481,34 +484,30 @@ fn trace_tlas(ray: Ray, tMax: f32) -> HitPoint {
 
             // Traverse closer child first
             if leftDistance < rightDistance {
-                if rightIdx != 0u && rightDistance < closestHit.dist {
+                if rightIdx != 0u && rightDistance < (*hit_point).dist {
                     stack[sp] = rightIdx;
-                    sp = sp + 1u;
+                    sp += 1u;
                 }
-                if leftIdx != 0u && leftDistance < closestHit.dist {
+                if leftIdx != 0u && leftDistance < (*hit_point).dist {
                     stack[sp] = leftIdx;
-                    sp = sp + 1u;
+                    sp += 1u;
                 }
             } else {
-                if leftIdx != 0u && leftDistance < closestHit.dist {
+                if leftIdx != 0u && leftDistance < (*hit_point).dist {
                     stack[sp] = leftIdx;
-                    sp = sp + 1u;
+                    sp += 1u;
                 }
-                if rightIdx != 0u && rightDistance < closestHit.dist {
+                if rightIdx != 0u && rightDistance < (*hit_point).dist {
                     stack[sp] = rightIdx;
-                    sp = sp + 1u;
+                    sp += 1u;
                 }
             }
         }
     }
-
-    return closestHit;
 }
 
-fn trace_blas(ray: Ray, instance: BLASInstance, renderState: HitPoint) -> HitPoint {
-    var blasRenderState: HitPoint = renderState;
-    blasRenderState.hit = false;
-    var nearestHit: f32 = blasRenderState.dist;
+fn trace_blas(ray: Ray, instance: BLASInstance, hit_point: ptr<function, HitPoint>) {
+    var nearestHit: f32 = (*hit_point).dist;
 
     // Transform the ray into object space
     var object_ray: Ray;
@@ -516,7 +515,7 @@ fn trace_blas(ray: Ray, instance: BLASInstance, renderState: HitPoint) -> HitPoi
     object_ray.direction = (instance.invTransform * vec4<f32>(ray.direction, 0.0)).xyz;
     let inverseDir: vec3<f32> = 1.0 / object_ray.direction;
 
-    // Cache material to avoid repeated indexing
+    // Cache material
     let material: Material = meshMaterial[instance.materialIdx];
 
     var stack: array<u32, 32>;
@@ -543,7 +542,6 @@ fn trace_blas(ray: Ray, instance: BLASInstance, renderState: HitPoint) -> HitPoi
 
         if triCount > 0u {
             // Leaf node: Test all triangles
-            // Use manual unrolling for known maximum triangles
             var i: u32 = 0u;
             loop {
                 if i >= triCount || i >= 2u {
@@ -551,20 +549,26 @@ fn trace_blas(ray: Ray, instance: BLASInstance, renderState: HitPoint) -> HitPoi
                 }
                 let triIdx: u32 = triIdxInfo[leftFirst + i];
                 let triangle: Triangle = meshTriangles[triIdx];
-                let triangleHitPoint: HitPoint = hit_triangle(object_ray, triangle, 0.001, nearestHit);
+                var triangleHitPoint: HitPoint;
+                // Initialize triangleHitPoint
+                triangleHitPoint.hit = false;
+                triangleHitPoint.dist = nearestHit;
+
+                // Pass pointer to triangleHitPoint
+                hit_triangle(object_ray, triangle, 0.001, nearestHit, &triangleHitPoint);
 
                 if triangleHitPoint.hit && triangleHitPoint.dist < nearestHit {
                     nearestHit = triangleHitPoint.dist;
-                    blasRenderState = triangleHitPoint;
-                    blasRenderState.normal = (instance.transform * vec4<f32>(blasRenderState.normal, 0.0)).xyz;
-                    blasRenderState.material = material;
+                    (*hit_point) = triangleHitPoint;
+                    (*hit_point).normal = (instance.transform * vec4<f32>((*hit_point).normal, 0.0)).xyz;
+                    (*hit_point).material = material;
                 }
                 i += 1u;
             }
         } else {
             // Internal node: Traverse children in front-to-back order
-            let childIdx1: u32 = leftFirst;
-            let childIdx2: u32 = leftFirst + 1u;
+            let childIdx1: u32 = node.leftFirst;
+            let childIdx2: u32 = node.leftFirst + 1u;
 
             let child1: BLASNode = blasNodes[childIdx1];
             let child2: BLASNode = blasNodes[childIdx2];
@@ -594,19 +598,15 @@ fn trace_blas(ray: Ray, instance: BLASInstance, renderState: HitPoint) -> HitPoi
             }
         }
     }
-
-    return blasRenderState;
 }
 
 fn hit_triangle(
     ray: Ray,
     tri: Triangle,
     tMin: f32,
-    tMax: f32
-) -> HitPoint {
-    var surfacePoint: HitPoint;
-    surfacePoint.hit = false;
-
+    tMax: f32,
+    hit_point: ptr<function, HitPoint>
+) {
     let edge1 = tri.corner_b - tri.corner_a;
     let edge2 = tri.corner_c - tri.corner_a;
     let h = cross(ray.direction, edge2);
@@ -614,7 +614,7 @@ fn hit_triangle(
 
     // Early rejection based on backface culling and parallelism
     if (a < EPSILON && setting.BACKFACE_CULLING == 1.0) || abs(a) < EPSILON {
-        return surfacePoint;
+        return;
     }
 
     let f = 1.0 / a;
@@ -622,20 +622,20 @@ fn hit_triangle(
     let u = f * dot(s, h);
 
     if u < 0.0 || u > 1.0 {
-        return surfacePoint;
+        return;
     }
 
     let q = cross(s, edge1);
     let v = f * dot(ray.direction, q);
 
     if v < 0.0 || (u + v) > 1.0 {
-        return surfacePoint;
+        return;
     }
 
     let dist = f * dot(edge2, q);
 
     if dist < tMin || dist > tMax {
-        return surfacePoint;
+        return;
     }
 
     let interpolated_normal = tri.normal_a * (1.0 - u - v) + tri.normal_b * u + tri.normal_c * v;
@@ -643,12 +643,10 @@ fn hit_triangle(
     let frontFace = dotProduct < 0.0;
     let finalNormal = select(interpolated_normal, -interpolated_normal, !frontFace);
 
-    surfacePoint.dist = dist;
-    surfacePoint.hit = true;
-    surfacePoint.normal = finalNormal;
-    surfacePoint.from_front = frontFace;
-
-    return surfacePoint;
+    (*hit_point).dist = dist;
+    (*hit_point).hit = true;
+    (*hit_point).normal = finalNormal;
+    (*hit_point).from_front = frontFace;
 }
 
 fn hit_aabb(ray: Ray, aabbMin: vec3<f32>, aabbMax: vec3<f32>, inverseDir: vec3<f32>) -> f32 {
@@ -661,7 +659,7 @@ fn hit_aabb(ray: Ray, aabbMin: vec3<f32>, aabbMax: vec3<f32>, inverseDir: vec3<f
     let t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
     let condition: bool = (t_min > t_max) || (t_max < 0.0);
-    return select(t_min, 99999.0, condition);
+    return select(t_min, T_MAX, condition);
 }
 
 fn is_on_border(point: vec3<f32>, aabbMin: vec3<f32>, aabbMax: vec3<f32>, epsilon: f32) -> bool {

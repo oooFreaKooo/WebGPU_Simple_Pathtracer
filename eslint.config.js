@@ -3,7 +3,7 @@ import eslintParserTs from '@typescript-eslint/parser'
 
 export default [
     {
-        files: [ '**/*.ts', '**/*.js' ], // Apply to TypeScript and JavaScript files
+        files: [ 'src/**/*.ts', 'src/**/*.js' ], // Apply to TypeScript and JavaScript files
         languageOptions: {
             ecmaVersion: 'latest',  // Enable the latest ECMAScript features
             sourceType: 'module',   // Use ES Modules
