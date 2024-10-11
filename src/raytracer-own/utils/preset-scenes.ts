@@ -25,12 +25,12 @@ const defaults: Material = {
     sssRadius: 1.0,
 }
 
-const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] , specularChance: 0.5 , roughness: 0.75 })
+const whiteMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ] , specularChance: 0.25 , roughness: 0.75 })
 const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
-const redMaterial = new Material({ albedo: [ 1.0, 0.0, 0.0 ] , specularChance: 0.5 , roughness: 0.85 })
-const greenMaterial = new Material({ albedo: [ 0.0, 1.0, 0.0 ]  , specularChance: 0.5 , roughness: 0.85 })
+const redMaterial = new Material({ albedo: [ 1.0, 0.0, 0.0 ] , specularChance: 0.25 , roughness: 0.85 })
+const greenMaterial = new Material({ albedo: [ 0.0, 1.0, 0.0 ]  , specularChance: 0.25 , roughness: 0.85 })
 const blueMaterial = new Material({ albedo: [ 0.3, 0.31, 0.98 ] })
-const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 0.9, 0.9 ], emissionStrength: 20.0 })
+const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 0.9, 0.9 ], emissionStrength: 15.0 })
 const mirrorMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], roughness: 0.05, specularChance: 1.0 })
 const shinyGoldMaterial = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], roughness: 0.0, specularChance: 0.5 })
 const grey = new Material({ albedo: [ 0.84, 0.89, 0.82 ] })
@@ -447,14 +447,14 @@ export function createScene1 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, -0.5 ],
+            position: [ 0, 1.99, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, 0.5 ],
+            position: [ 0, 1.99, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         }
@@ -527,14 +527,14 @@ export function createScene2 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, -0.5 ],
+            position: [ 0, 1.99, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, 0.5 ],
+            position: [ 0, 1.99, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         }
@@ -559,12 +559,12 @@ export function createScene3 (): ObjectProperties[] {
 
     for (let i = 0; i < numSpheres; i++) {
         const positionX = -4.0 + i
-        const absorb = i / (numSpheres + i)
+        const absorb = i  / (numSpheres)
 
         const refractionColor = vec3.fromValues(1.0, 1.0, 0.25)
-        refractionColor[0] *= absorb
-        refractionColor[1] *= absorb
-        refractionColor[2] *= absorb
+        refractionColor[0] *= absorb - i / (numSpheres - 1)
+        refractionColor[1] *= absorb - i / (numSpheres - 1)
+        refractionColor[2] *= absorb - i / (numSpheres - 1)
         test.push({
             modelPath: './src/assets/models/sphere.obj',
             material: {
@@ -612,14 +612,14 @@ export function createScene3 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, -0.5 ],
+            position: [ 0, 1.99, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, 0.5 ],
+            position: [ 0, 1.99, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         }
@@ -693,14 +693,14 @@ export function createScene4 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, -0.5 ],
+            position: [ 0, 1.99, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, 0.5 ],
+            position: [ 0, 1.99, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         }
@@ -774,14 +774,14 @@ export function createScene5 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, -0.5 ],
+            position: [ 0, 1.99, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, 0.5 ],
+            position: [ 0, 1.99, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         }
@@ -942,7 +942,7 @@ export function createScene8 (): ObjectProperties[] {
             material: lightSource,
             position: [ 0.0, 8.0, 8.0 ],
             scale: [ 0.25, 0.25, 0.25 ],
-            rotation: [ 45.0, 0.0, 0.0 ],
+            rotation: [ -135.0, 0.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/plane.obj',
@@ -1470,14 +1470,14 @@ export function createScene14 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, -0.5 ],
+            position: [ 0, 1.99, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.98, 0.5 ],
+            position: [ 0, 1.99, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         }

@@ -12,9 +12,6 @@ import { BLASInstance } from './bvh/blas-instance'
 const frameTimeLabel: HTMLElement = <HTMLElement>document.getElementById('frame-time')
 const renderTimeLabel: HTMLElement = <HTMLElement>document.getElementById('render-time')
 
-const COMPUTE_WORKGROUP_SIZE_X = 8
-const COMPUTE_WORKGROUP_SIZE_Y = 8
-
 export class Renderer {
     private canvas: HTMLCanvasElement
 
@@ -143,10 +140,6 @@ export class Renderer {
             compute: {
                 module: this.device.createShaderModule({ code: raytracer_kernel }),
                 entryPoint: 'main',
-                constants: {
-                    WORKGROUP_SIZE_X: COMPUTE_WORKGROUP_SIZE_X,
-                    WORKGROUP_SIZE_Y: COMPUTE_WORKGROUP_SIZE_Y,
-                },
             },
         })
 
@@ -847,8 +840,8 @@ export class Renderer {
         }
 
         // Compute pass
-        const workGroupsX = Math.ceil(this.canvas.width / (COMPUTE_WORKGROUP_SIZE_X))
-        const workGroupsY = Math.ceil(this.canvas.height / (COMPUTE_WORKGROUP_SIZE_Y))
+        const workGroupsX = Math.ceil(this.canvas.width / 8)
+        const workGroupsY = Math.ceil(this.canvas.height / 8)
         
 
         computePass(
