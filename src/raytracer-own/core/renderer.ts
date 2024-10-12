@@ -508,36 +508,49 @@ export class Renderer {
     }
     
     private updateTriangleData () {
-        const triangleDataSize = 24
-    
+        const triangleDataSize = 24 // Each triangle takes 24 floats
+        
         const triangleData = new Float32Array(triangleDataSize * this.allTriangles.length)
     
         for (let i = 0; i < this.allTriangles.length; i++) {
             const tri = this.allTriangles[i]
-            for (let corner = 0; corner < 2; corner++) {
-                triangleData[triangleDataSize * i + 8 * corner] = tri.corners[corner][0]
-                triangleData[triangleDataSize * i + 8 * corner + 1] = tri.corners[corner][1]
-                triangleData[triangleDataSize * i + 8 * corner + 2] = tri.corners[corner][2]
-                triangleData[triangleDataSize * i + 8 * corner + 3] = 0.0
     
-                triangleData[triangleDataSize * i + 8 * corner + 4] = tri.normals[corner][0]
-                triangleData[triangleDataSize * i + 8 * corner + 5] = tri.normals[corner][1]
-                triangleData[triangleDataSize * i + 8 * corner + 6] = tri.normals[corner][2]
-                triangleData[triangleDataSize * i + 8 * corner + 7] = 0.0
-            }
-            triangleData[triangleDataSize * i + 16] = tri.corners[2][0]
-            triangleData[triangleDataSize * i + 17] = tri.corners[2][1]
-            triangleData[triangleDataSize * i + 18] = tri.corners[2][2]
-            triangleData[triangleDataSize * i + 19] = 0.0
+            // Store edge1 (3 floats for x, y, z, and 1 padding)
+            triangleData[triangleDataSize * i + 0] = tri.edge1[0]
+            triangleData[triangleDataSize * i + 1] = tri.edge1[1]
+            triangleData[triangleDataSize * i + 2] = tri.edge1[2]
+            triangleData[triangleDataSize * i + 3] = 0.0 // padding for alignment
+    
+            triangleData[triangleDataSize * i + 4] = tri.edge2[0]
+            triangleData[triangleDataSize * i + 5] = tri.edge2[1]
+            triangleData[triangleDataSize * i + 6] = tri.edge2[2]
+            triangleData[triangleDataSize * i + 7] = 0.0 // padding
+
+            triangleData[triangleDataSize * i + 8] = tri.corners[0][0]
+            triangleData[triangleDataSize * i + 9] = tri.corners[0][1]
+            triangleData[triangleDataSize * i + 10] = tri.corners[0][2]
+            triangleData[triangleDataSize * i + 11] = 0.0 // padding
+    
+            triangleData[triangleDataSize * i + 12] = tri.normals[0][0]
+            triangleData[triangleDataSize * i + 13] = tri.normals[0][1]
+            triangleData[triangleDataSize * i + 14] = tri.normals[0][2]
+            triangleData[triangleDataSize * i + 15] = 0.0 // padding
+    
+            triangleData[triangleDataSize * i + 16] = tri.normals[1][0]
+            triangleData[triangleDataSize * i + 17] = tri.normals[1][1]
+            triangleData[triangleDataSize * i + 18] = tri.normals[1][2]
+            triangleData[triangleDataSize * i + 19] = 0.0 // padding
     
             triangleData[triangleDataSize * i + 20] = tri.normals[2][0]
             triangleData[triangleDataSize * i + 21] = tri.normals[2][1]
             triangleData[triangleDataSize * i + 22] = tri.normals[2][2]
-            triangleData[triangleDataSize * i + 23] = 0.0
+            triangleData[triangleDataSize * i + 23] = 0.0 // padding
         }
     
+        // Write the updated buffer
         this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.allTriangles.length)
     }
+    
 
     private createTriangleIndexBuffer () {
         let totalIndices = 0

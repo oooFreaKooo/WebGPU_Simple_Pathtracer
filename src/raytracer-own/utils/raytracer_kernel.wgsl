@@ -37,11 +37,11 @@ struct Material {
 }
 
 struct Triangle {
+    edge1: vec3f,
+    edge2: vec3f,
     corner_a: vec3f,
     normal_a: vec3f,
-    corner_b: vec3f,
     normal_b: vec3f,
-    corner_c: vec3f,
     normal_c: vec3f,
 }
 
@@ -116,6 +116,7 @@ struct SFC32State {
 @group(2) @binding(3) var<storage, read> tlasNodes: array<TLASNode>;
 @group(2) @binding(4) var<storage, read> triIdxInfo: array<u32>;
 @group(2) @binding(5) var<storage, read> meshMaterial : array<Material>;
+//@group(2) @binding(6) var object_textures: texture_2d_array<f32>;
 
 // Group 3: Textures and Samplers
 @group(3) @binding(0) var skyTexture : texture_cube<f32>;
@@ -608,10 +609,8 @@ fn hit_triangle(
     tMax: f32,
     hit_point: ptr<function, HitPoint>
 ) {
-    let edge1 = tri.corner_b - tri.corner_a;
-    let edge2 = tri.corner_c - tri.corner_a;
-    let h = cross(ray.direction, edge2);
-    let a = dot(edge1, h);
+    let h = cross(ray.direction, tri.edge2);
+    let a = dot(tri.edge1, h);
 
     // Early rejection based on backface culling and parallelism
     if (a < EPSILON && setting.BACKFACE_CULLING == 1.0) || abs(a) < EPSILON {
@@ -626,14 +625,14 @@ fn hit_triangle(
         return;
     }
 
-    let q = cross(s, edge1);
+    let q = cross(s, tri.edge1);
     let v = f * dot(ray.direction, q);
 
     if v < 0.0 || (u + v) > 1.0 {
         return;
     }
 
-    let dist = f * dot(edge2, q);
+    let dist = f * dot(tri.edge2, q);
 
     if dist < tMin || dist > tMax {
         return;
@@ -649,6 +648,7 @@ fn hit_triangle(
     (*hit_point).normal = finalNormal;
     (*hit_point).from_front = frontFace;
 }
+
 
 fn hit_aabb(ray: Ray, aabbMin: vec3<f32>, aabbMax: vec3<f32>, inverseDir: vec3<f32>) -> f32 {
     let t1: vec3<f32> = (aabbMin - ray.origin) * inverseDir;

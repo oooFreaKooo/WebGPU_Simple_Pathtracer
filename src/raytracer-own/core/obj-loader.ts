@@ -24,25 +24,35 @@ export class ObjLoader {
     async readFile (url: string) {
         const response = await fetch(url)
         const file_contents = await response.text()
-        const lines = file_contents.split('\n')
-
+        const lines = file_contents.split(/\r?\n/) 
+    
         lines.forEach((line) => {
-            switch (line.substr(0, 2)) {
+            const trimmedLine = line.trim()
+            if (trimmedLine.length === 0 || trimmedLine.startsWith('#')) {
+                return
+            }
+    
+            const prefix = trimmedLine.slice(0, 2)
+            switch (prefix) {
             case 'v ':
-                this.read_vertex_data(line)
+                this.read_vertex_data(trimmedLine)
                 break
             case 'vt':
-                this.read_texcoord_data(line)
+                this.read_texcoord_data(trimmedLine)
                 break
             case 'vn':
-                this.read_normal_data(line)
+                this.read_normal_data(trimmedLine)
                 break
             case 'f ':
-                this.read_face_data(line)
+                this.read_face_data(trimmedLine)
+                break
+            default:
+                // Optionally handle other prefixes or ignore
                 break
             }
         })
     }
+    
 
     private read_vertex_data (line: string) {
         const [ , x, y, z ] = line.split(' ').map(Number)
@@ -91,9 +101,19 @@ export class ObjLoader {
     }
 
     private read_corner (vertex_description: string, tri: Triangle) {
-        const [ vIndex, , vnIndex ] = vertex_description.split('/').map((v) => parseInt(v) - 1)
+        const parts = vertex_description.split('/')
+        const vIndex = parseInt(parts[0], 10) - 1
+        const vtIndex = parts[1] ? parseInt(parts[1], 10) - 1 : -1
+        const vnIndex = parts[2] ? parseInt(parts[2], 10) - 1 : -1
+
         tri.corners.push(this.v[vIndex])
         tri.normals.push(this.vn[vnIndex])
-    }
-    
+
+        if (vtIndex >= 0) {
+            tri.uvs.push(this.vt[vtIndex])
+        } else {
+        // If no UV is provided, push a default UV (e.g., [0, 0])
+            tri.uvs.push(vec2.fromValues(0, 0))
+        }
+    }  
 }
