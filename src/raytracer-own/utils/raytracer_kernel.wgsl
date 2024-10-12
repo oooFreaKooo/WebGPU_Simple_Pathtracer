@@ -127,14 +127,17 @@ const DEBUG = false;
 const EPSILON : f32 = 0.00001;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
-const INV_PI: f32 = 0.31830988618;
-const T_MAX = 10000f;
-const STACK_SIZE: u32 = 32;
 
 var<private> pixelCoords : vec2f;
-var<private> threadIndex : u32;
 var<private> rngState: SFC32State;
 var<workgroup> sharedAccumulatedColor: array<vec3f, 64>;
+
+// BVH Vars
+const STACK_SIZE_TLAS: u32 = 16u;
+const STACK_SIZE_BLAS: u32 = 16u;
+const TOTAL_STACK_SIZE: u32 = 32u;
+const T_MAX = 10000f;
+var<private> threadIndex : u32;
 var<workgroup> sharedStack: array<u32, 2048>;
 
 @compute @workgroup_size(8, 8)
@@ -427,22 +430,30 @@ fn get_thread_index(local_invocation_id: vec3<u32>) -> u32 {
     return local_invocation_id.x + local_invocation_id.y * 8u + local_invocation_id.z * 8u * 8u;
 }
 
+fn get_tlas_stack_base(threadIndex: u32) -> u32 {
+    return threadIndex * TOTAL_STACK_SIZE;
+}
+
+fn get_blas_stack_base(threadIndex: u32) -> u32 {
+    return threadIndex * TOTAL_STACK_SIZE + STACK_SIZE_TLAS;
+}
+
 fn trace_tlas(ray: Ray, hit_point: ptr<function, HitPoint>) {
     let inverseDir: vec3<f32> = 1.0 / ray.direction;
     
-    // Calculate the base index for this thread's stack slice
-    let stackBase: u32 = threadIndex * STACK_SIZE;
+    // Calculate the base index for TLAS stack slice
+    let tlasStackBase: u32 = get_tlas_stack_base(threadIndex);
     
-    // Initialize stack pointer
-    var sp: u32 = 0u;
+    // Initialize TLAS stack pointer
+    var tlas_sp: u32 = 0u;
 
-    // Push root node onto the shared stack
-    sharedStack[stackBase + sp] = 0u;
-    sp += 1u;
+    // Push root node onto the TLAS shared stack
+    sharedStack[tlasStackBase + tlas_sp] = 0u;
+    tlas_sp += 1u;
 
-    while sp > 0u {
-        sp -= 1u;
-        let nodeIdx: u32 = sharedStack[stackBase + sp];
+    while tlas_sp > 0u {
+        tlas_sp -= 1u;
+        let nodeIdx: u32 = sharedStack[tlasStackBase + tlas_sp];
         let tlasNode = tlasNodes[nodeIdx];
 
         // Early AABB hit test
@@ -455,12 +466,11 @@ fn trace_tlas(ray: Ray, hit_point: ptr<function, HitPoint>) {
         if isLeaf {
             let instance: BLASInstance = blasInstances[tlasNode.instanceIdx];
             var blasHit: HitPoint;
-            // Initialize blasHit
             blasHit.hit = false;
             blasHit.dist = (*hit_point).dist;
 
-            // Pass pointers
-            trace_blas(ray, instance, &blasHit);
+            // Call trace_blas with shared stack
+            trace_blas(ray, instance, &blasHit, threadIndex, &tlas_sp);
 
             if blasHit.hit && blasHit.dist < (*hit_point).dist {
                 (*hit_point) = blasHit;
@@ -487,28 +497,34 @@ fn trace_tlas(ray: Ray, hit_point: ptr<function, HitPoint>) {
             // Traverse closer child first
             if leftDistance < rightDistance {
                 if rightIdx != 0u && rightDistance < (*hit_point).dist {
-                    sharedStack[stackBase + sp] = rightIdx;
-                    sp += 1u;
+                    sharedStack[tlasStackBase + tlas_sp] = rightIdx;
+                    tlas_sp += 1u;
                 }
                 if leftIdx != 0u && leftDistance < (*hit_point).dist {
-                    sharedStack[stackBase + sp] = leftIdx;
-                    sp += 1u;
+                    sharedStack[tlasStackBase + tlas_sp] = leftIdx;
+                    tlas_sp += 1u;
                 }
             } else {
                 if leftIdx != 0u && leftDistance < (*hit_point).dist {
-                    sharedStack[stackBase + sp] = leftIdx;
-                    sp += 1u;
+                    sharedStack[tlasStackBase + tlas_sp] = leftIdx;
+                    tlas_sp += 1u;
                 }
                 if rightIdx != 0u && rightDistance < (*hit_point).dist {
-                    sharedStack[stackBase + sp] = rightIdx;
-                    sp += 1u;
+                    sharedStack[tlasStackBase + tlas_sp] = rightIdx;
+                    tlas_sp += 1u;
                 }
             }
         }
     }
 }
 
-fn trace_blas(ray: Ray, instance: BLASInstance, hit_point: ptr<function, HitPoint>) {
+fn trace_blas(
+    ray: Ray,
+    instance: BLASInstance,
+    hit_point: ptr<function, HitPoint>,
+    threadIndex: u32,
+    tlas_sp: ptr<function, u32>
+) {
     var nearestHit: f32 = (*hit_point).dist;
 
     // Transform the ray into object space
@@ -520,17 +536,19 @@ fn trace_blas(ray: Ray, instance: BLASInstance, hit_point: ptr<function, HitPoin
     // Cache material
     let material: Material = meshMaterial[instance.materialIdx];
 
-    var stack: array<u32, 32>;
-    var sp: u32 = 0u;
-    let rootIdx: u32 = instance.blasOffset;
+    // Calculate the base index for BLAS stack slice
+    let blasStackBase: u32 = get_blas_stack_base(threadIndex);
+    
+    // Initialize BLAS stack pointer
+    var blas_sp: u32 = 0u;
 
-    stack[sp] = rootIdx;
-    sp += 1u;
+    // Push root node onto the BLAS shared stack
+    sharedStack[blasStackBase + blas_sp] = instance.blasOffset;
+    blas_sp += 1u;
 
-    // Traverse the BVH
-    while sp > 0u {
-        sp -= 1u;
-        let nodeIdx: u32 = stack[sp];
+    while blas_sp > 0u {
+        blas_sp -= 1u;
+        let nodeIdx: u32 = sharedStack[blasStackBase + blas_sp];
         let node: BLASNode = blasNodes[nodeIdx];
 
         let hitDistance: f32 = hit_aabb(object_ray, node.aabbMin, node.aabbMax, inverseDir);
@@ -552,7 +570,6 @@ fn trace_blas(ray: Ray, instance: BLASInstance, hit_point: ptr<function, HitPoin
                 let triIdx: u32 = triIdxInfo[leftFirst + i];
                 let triangle: Triangle = meshTriangles[triIdx];
                 var triangleHitPoint: HitPoint;
-                // Initialize triangleHitPoint
                 triangleHitPoint.hit = false;
                 triangleHitPoint.dist = nearestHit;
 
@@ -581,26 +598,30 @@ fn trace_blas(ray: Ray, instance: BLASInstance, hit_point: ptr<function, HitPoin
             // Push the farther child first to ensure front-to-back traversal
             if hitDist1 < hitDist2 {
                 if hitDist2 < nearestHit {
-                    stack[sp] = childIdx2;
-                    sp += 1u;
+                    sharedStack[blasStackBase + blas_sp] = childIdx2;
+                    blas_sp += 1u;
                 }
                 if hitDist1 < nearestHit {
-                    stack[sp] = childIdx1;
-                    sp += 1u;
+                    sharedStack[blasStackBase + blas_sp] = childIdx1;
+                    blas_sp += 1u;
                 }
             } else {
                 if hitDist1 < nearestHit {
-                    stack[sp] = childIdx1;
-                    sp += 1u;
+                    sharedStack[blasStackBase + blas_sp] = childIdx1;
+                    blas_sp += 1u;
                 }
                 if hitDist2 < nearestHit {
-                    stack[sp] = childIdx2;
-                    sp += 1u;
+                    sharedStack[blasStackBase + blas_sp] = childIdx2;
+                    blas_sp += 1u;
                 }
             }
         }
     }
+
+    // Update hit_point.dist if necessary
+    (*hit_point).dist = nearestHit;
 }
+
 
 fn hit_triangle(
     ray: Ray,
