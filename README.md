@@ -1,13 +1,6 @@
 ```markdown
 # A Simple WebGPU Pathtracer
 
-![projektbild](https://github.com/user-attachments/assets/cba4d817-094c-4a78-8b2d-f365d7bd4f54)
-![dragon1](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/7f8c6265-2c88-486d-8ad9-17761430a193)
-![sphereflake2](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/92c27dca-96e5-4ff2-a43c-effc1ed5baa6)
-![manyobjects](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/21047ea3-939c-4cda-8802-b2e59d3dee6d)
-![caustic1](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/3dd66f00-3575-4703-a26b-b76a4af91ded)
-
-
 Welcome to the repository of my WebGPU Pathtracer project! This project is a straightforward implementation of a pathtracer using WebGPU and TypeScript. It's designed to be a starting point for those interested in exploring the capabilities of WebGPU in rendering and graphics programming.
 
 ![projektbild](https://github.com/user-attachments/assets/cba4d817-094c-4a78-8b2d-f365d7bd4f54)
