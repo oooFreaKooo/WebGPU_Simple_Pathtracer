@@ -32,6 +32,12 @@ export class AABB {
         vec3.max(this.bmax, this.bmax, aabb.bmax)
     }
 
+    expandByPoint (point: vec3): void {
+        // Expand the bounding box to include the given point
+        vec3.min(this.bmin, this.bmin, point)
+        vec3.max(this.bmax, this.bmax, point)
+    }    
+
     applyMatrix4 (matrix: mat4): void {
     // Transform the AABB by a matrix by transforming all 8 corners
         const points = [

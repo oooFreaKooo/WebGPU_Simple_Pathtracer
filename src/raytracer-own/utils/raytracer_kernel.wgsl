@@ -56,7 +56,7 @@ struct Settings {
     maxBounces: f32,
     numSamples: f32,
     BACKFACE_CULLING: f32,
-    SKY_TEXTURE: f32,
+    skyMode: f32,
     aspectRatio: f32,
     jitterScale: f32,
     numLights: f32,
@@ -124,7 +124,7 @@ struct SFC32State {
 
 
 const DEBUG = false;
-const EPSILON : f32 = 0.00001;
+const EPSILON: f32 = 1.0e-7;
 const PI  = 3.14159265358979323846;
 const TWO_PI: f32 = 6.28318530718;
 
@@ -151,7 +151,10 @@ fn main(
         return;
     }
     let DIMENSION = uniforms.screenDims;
-    let coord = vec2u(workgroup_id.x * 8u + local_invocation_id.x, workgroup_id.y * 8u + local_invocation_id.y);
+    let coord = vec2u(
+        workgroup_id.x * 8u + local_invocation_id.x,
+        workgroup_id.y * 8u + local_invocation_id.y
+    );
     let idx = coord.y * u32(DIMENSION.x) + coord.x;
     let pixelCoords = vec2<f32>(f32(coord.x), f32(coord.y));
 
@@ -160,39 +163,31 @@ fn main(
     rngState = initialize_rng(coord * idx, uniforms.frameNum);
 
     // Precompute constants outside the loops
-    let FORWARD = cam.forward;
-    let RIGHT = cam.right;
-    let UP = cam.up;
-    let POS = cam.pos;
     let FOV = cam_setting.cameraFOV;
-    let focus_dist = cam_setting.focusDistance;
-    let aspect_ratio = setting.aspectRatio;
-
-    // Precompute coefficients
     let fov_over_dim_x = FOV / f32(DIMENSION.x);
-    let fov_over_dim_y_ar = FOV / (f32(DIMENSION.y) * aspect_ratio);
-    let screen_base = pixelCoords - (DIMENSION.xy) * 0.5;
-
-    // Precompute ray origin
-    let rand_state_vec = rand2();
-    let lens_point = rand_state_vec * cam_setting.apertureSize;
-    let ray_origin = POS + RIGHT * lens_point.x + UP * lens_point.y;
+    let fov_over_dim_y_ar = FOV / (f32(DIMENSION.y) * setting.aspectRatio);
 
     var myRay: Ray;
+    myRay.origin = cam.pos;
+
     sharedAccumulatedColor[local_invocation_index] = vec3<f32>(0.0);
 
     for (var i: u32 = 0u; i < u32(setting.numSamples); i += 1u) {
-        let randomOffset: vec2<f32> = setting.jitterScale * (rand_state_vec - vec2<f32>(0.5));
-        let screen_jittered = screen_base + randomOffset;
+        // Generate random offsets in x and y between -0.5 and 0.5
+        let randOffset = rand2() - vec2f(0.5);
 
-        myRay.origin = ray_origin;
+        // Adjust pixelCoords with random offsets
+        let sampleCoords = pixelCoords + vec2<f32>(randOffset.x, randOffset.y) * setting.jitterScale;
 
-        let horizontal_coeff = fov_over_dim_x * screen_jittered.x;
-        let vertical_coeff = fov_over_dim_y_ar * screen_jittered.y;
+        // Recompute screen_base, horizontal_coeff, vertical_coeff
+        let screen_base = sampleCoords - (DIMENSION.xy) * 0.5;
+        let horizontal_coeff = fov_over_dim_x * screen_base.x;
+        let vertical_coeff = fov_over_dim_y_ar * screen_base.y;
 
-        let focus_point = POS + normalize(FORWARD + horizontal_coeff * RIGHT + vertical_coeff * UP) * focus_dist;
 
-        myRay.direction = normalize(focus_point - myRay.origin);
+        myRay.direction = normalize(
+            cam.forward + horizontal_coeff * cam.right + vertical_coeff * cam.up
+        );
 
         sharedAccumulatedColor[local_invocation_index] += trace(myRay);
     }
@@ -206,6 +201,7 @@ fn main(
     framebuffer[idx] = vec4<f32>(acc_radiance, 1.0);
 }
 
+
 fn trace(camRay: Ray) -> vec3f {
     var hit: HitPoint;
     var ray = camRay;
@@ -213,176 +209,147 @@ fn trace(camRay: Ray) -> vec3f {
     var throughput: vec3f = vec3(1.0);
 
     let maxBounces = u32(setting.maxBounces);
-    let skyTextureEnabled = setting.SKY_TEXTURE == 1.0;
-    let inv_maxBounces = 1.0 / f32(maxBounces); // Precompute if needed
 
     for (var bounce: u32 = 0u; bounce < maxBounces; bounce++) {
-        // Initialize hit
+
+        // ------ Initialize hit and trace scene ------
         hit.hit = false;
         hit.dist = T_MAX;
-        
-        // Trace the ray
         trace_tlas(ray, &hit);
-        
-        // Accumulate sky radiance if no hit occurs
+
+        // ------ Handle sky radiance if no hit ------
         if !hit.hit {
-            acc_radiance += throughput * select(
-                proceduralSky(ray.direction),
-                //vec3f(0.0) for black sky
-                textureSampleLevel(skyTexture, skySampler, ray.direction, 0.0).xyz,
-                skyTextureEnabled
-            );
+            let sky_radiance = getSkyRadiance(ray.direction, setting.skyMode);
+            acc_radiance = acc_radiance + throughput * sky_radiance;
             break;
         }
-        
-        // Material handling
-        var M = ensure_energy_conservation(hit.material);
-        let originalEnergy = throughput;
 
-        // Russian Roulette for Path Termination
+        let M = hit.material;
+
+        // ------ Russian Roulette for path termination ------
         let rr_prob = max(max(throughput.r, throughput.g), throughput.b);
-        if rand() >= rr_prob || length(throughput) < 0.1 {
+        if rr_prob < 0.1 || rand() >= rr_prob {
             break;
         }
         throughput /= rr_prob;
 
-        // TODO: Implement correct absorption
-        throughput *= select(vec3<f32>(1.0), exp(-M.refrColor * 5.0), hit.from_front);
+        // ------ Update throughput with absorption ------
+        let absorption = select(vec3f(1.0), exp(-M.refrColor * 10.0), hit.from_front);
+        throughput *= absorption;
 
-        // Indices of refraction
-        let n1 = select(1.0, M.ior, !hit.from_front);
-        let n2 = select(1.0, M.ior, hit.from_front);
-        
-        // Fresnel effect
-        let randVal = rand();
-        var specChance = M.specChance;
-        var refrChance = M.refrChance;
+        // ------ Precompute roughness squared ------
+        let roughness2 = M.roughness * M.roughness;
 
-        if specChance > 0.0 {
-            specChance = FresnelReflectAmount(n1, n2, hit.normal, ray.direction, M.specChance, 1.0);
-            refrChance *= (1.0 - specChance) / max(1.0 - M.specChance, EPSILON);
+        // ------ Determine ray type (diffuse, specular, refractive) ------
+        var rayType: RayType;
+
+        let rnd = rand();
+        if M.specChance > 0.0 && rnd < M.specChance {
+            rayType.isSpecular = 1.0;
+        } else if M.refrChance > 0.0 && rnd < (M.specChance + M.refrChance) {
+            rayType.isRefractive = 1.0;
+        } else {
+            rayType.regularBounces += 1u;
         }
 
-        var rayType = determine_ray_type(specChance, refrChance, randVal);
-        
-        // Early termination for diffuse rays
+        // ------ Early termination for diffuse rays ------
         if rayType.regularBounces >= 4u && rayType.isSpecular == 0.0 {
             break;
         }
 
-        // ------ Update ray origin ------
-        ray.origin = update_ray_origin(ray, hit, rayType.isRefractive);
+        // ------ Update ray origin based on hit information and ray type ------
+        let offset = select(hit.normal, -hit.normal, rayType.isRefractive == 1.0) * EPSILON;
+        ray.origin = ray.origin + ray.direction * hit.dist + offset;
 
-        // ------ Diffuse & Specular & Refraction Directions ------
-        let diffuseDir = cosine_weighted_sampling_hemisphere(hit.normal);
-        var specularDir = normalize(reflect(ray.direction, hit.normal));
-        specularDir = normalize(mix(specularDir, diffuseDir, M.roughness * M.roughness));
+        // ------ Calculate refraction indices ------
+        let n1 = select(1.0, M.ior, !hit.from_front);
+        let n2 = select(1.0, M.ior, hit.from_front);
 
+        // ------ Compute new ray directions ------
+
+        // Diffuse direction
+        let diffuseDir = cosine_weighted_hemisphere(hit.normal);
+
+        // Specular direction
+        var specularDir = reflect(ray.direction, hit.normal);
+        specularDir = normalize(mix(specularDir, diffuseDir, roughness2));
+
+
+        // Refractive direction
         var refractDir = refract(ray.direction, hit.normal, n1 / n2);
-        refractDir = normalize(mix(refractDir, cosine_weighted_sampling_hemisphere(-hit.normal), M.roughness * M.roughness));
-        
-        // Combine directions
-        ray.direction = mix(diffuseDir, specularDir, rayType.isSpecular);
-        ray.direction = mix(ray.direction, refractDir, rayType.isRefractive);
-        
-        // Accumulate emission
+        let totalInternalReflection = length(refractDir) == 0.0;
+        refractDir = select(refractDir, specularDir, totalInternalReflection);
+        refractDir = normalize(mix(refractDir, cosine_weighted_hemisphere(-hit.normal), roughness2));
+
+        // ------ Mix and update ray direction ------
+        ray.direction = mix(
+            mix(diffuseDir, specularDir, rayType.isSpecular),
+            refractDir,
+            rayType.isRefractive
+        );
+
+        // ------ Accumulate emission ------
         acc_radiance += throughput * M.emissionColor * M.emissionStrength;
-        
-        // ------ Subsurface scattering ------
+
+        // ------ Handle subsurface scattering ------
         if M.sssStrength > 0.0 {
-            let distance = length(ray.direction);
-            let attenuation = exp(-distance / M.sssRadius);
+            let attenuation = exp(-length(ray.direction) / M.sssRadius);
             acc_radiance += throughput * (M.sssColor * M.sssStrength * attenuation);
             throughput *= (1.0 - M.sssStrength);
         }
 
-        if rayType.isRefractive == 0.0 {
-            throughput *= (M.albedo + M.specColor * rayType.isSpecular);
-        }
+        // ------ Update throughput with albedo and specular contribution ------
+        throughput *= (M.albedo + M.specColor * rayType.isSpecular);
     }
 
     return acc_radiance;
 }
 
-fn proceduralSky(direction: vec3<f32>) -> vec3<f32> {
-    let t = 0.5 * (direction.y + 1.0);
-    let randColor = vec3<f32>(0.2, 0.2, 0.2) * t;
-    return randColor;
-}
+fn getSkyRadiance(rayDirection: vec3<f32>, skyMode: f32) -> vec3<f32> {
+    let skyModeInt = i32(skyMode);
+    var sky_radiance: vec3<f32>;
 
-fn update_ray_origin(ray: Ray, hit: HitPoint, isRefractive: f32) -> vec3f {
-    return select(
-        (ray.origin + ray.direction * hit.dist) + hit.normal * EPSILON,
-        (ray.origin + ray.direction * hit.dist) - hit.normal * EPSILON,
-        isRefractive == 1.0
-    );
-}
-
-fn determine_ray_type(specChance: f32, refrChance: f32, randVal: f32) -> RayType {
-    var result: RayType;
-    result.isSpecular = 0.0;
-    result.isRefractive = 0.0;
-    result.regularBounces = 1u;
-
-    if specChance > 0.0 && randVal < specChance {
-        result.isSpecular = 1.0;
-    } else if refrChance > 0.0 && randVal < (specChance + refrChance) {
-        result.isRefractive = 1.0;
-    } else {
-        result.regularBounces += 1u;
-    }
-
-    return result;
-}
-
-
-fn FresnelReflectAmount(
-    n1: f32,
-    n2: f32,
-    normal: vec3<f32>,
-    incident: vec3<f32>,
-    f0: f32,
-    f90: f32
-) -> f32 {
-    // Calculate r0
-    var r0: f32 = (n1 - n2) / (n1 + n2);
-    r0 = r0 * r0;
-    var cosX: f32 = -dot(normal, incident);
-    if n1 > n2 {
-        let eta: f32 = n1 / n2;
-        let sinT2: f32 = eta * eta * (1.0 - cosX * cosX);
-        if sinT2 > 1.0 {
-            return f90;
+    switch (skyModeInt) {
+        case 0: { // Black Sky
+            sky_radiance = vec3<f32>(0.0, 0.0, 0.0);
         }
-        cosX = sqrt(1.0 - sinT2);
+        case 1: { // Procedural Sky
+            sky_radiance = proceduralSky(rayDirection);
+        }
+        case 2: { // Sky Texture
+            sky_radiance = textureSampleLevel(skyTexture, skySampler, rayDirection, 0.0).xyz;
+        }
+        default: {
+            sky_radiance = vec3<f32>(0.0, 0.0, 0.0);
+        }
     }
 
-    let x: f32 = 1.0 - cosX;
-    let ret: f32 = r0 + (1.0 - r0) * pow(x, 5.0);
+    return sky_radiance;
+}
 
-    return mix(f0, f90, ret);
+fn proceduralSky(direction: vec3<f32>) -> vec3<f32> {
+    let sunDirection = normalize(vec3<f32>(0.0, 0.99, 0.5));
+    let sunColor = vec3<f32>(1.0, 0.9, 0.6);
+    let sunIntensity = max(dot(direction, sunDirection), 0.0);
+    let horizonColor = vec3<f32>(0.8, 0.9, 1.0);
+    let zenithColor = vec3<f32>(0.1, 0.4, 0.8);
+    let t = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
+    let skyColor = mix(horizonColor, zenithColor, t);
+
+    // Add sun glow
+    let sunGlow = sunColor * pow(sunIntensity, 128.0);
+    let color = skyColor + sunGlow;
+
+    // Apply atmospheric attenuation
+    let betaRayleigh = vec3<f32>(5.5e-6, 13.0e-6, 22.4e-6); // Rayleigh scattering coefficients
+    let opticalDepth = exp(-direction.y * 0.1); // Simplified optical depth
+    let atmosphericColor = color * exp(-betaRayleigh * opticalDepth);
+
+    return clamp(atmosphericColor, vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
 
-fn ensure_energy_conservation(material: Material) -> Material {
-    var M: Material = material;
-
-    let sum = M.albedo + M.specColor;
-    let maxSum = max(sum.r, max(sum.g, sum.b));
-
-    if maxSum > 1.0 {
-        let factor = 1.0 / maxSum;
-        M.albedo *= factor;
-        M.specColor *= factor;
-    }
-
-    M.albedo = clamp(M.albedo, vec3f(0.0), vec3f(1.0));
-    M.specColor = clamp(M.specColor, vec3f(0.0), vec3f(1.0));
-
-    return M;
-}
-
-fn cosine_weighted_sampling_hemisphere(normal: vec3f) -> vec3f {
+fn cosine_weighted_hemisphere(normal: vec3f) -> vec3f {
     let r1 = rand();
     let r2 = rand();
     let r = sqrt(r1);

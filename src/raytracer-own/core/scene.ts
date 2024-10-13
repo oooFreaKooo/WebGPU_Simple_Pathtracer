@@ -10,13 +10,15 @@ import { ObjectProperties } from '../utils/preset-scenes'
 
 export class Scene {
     // Rendering settings
-    vignetteStrength = 0.5
-    vignetteRadius = 0.75
-    enableSkytexture = 0
+    enableACES = 1.0
+    enableFilmic = 0.0
+    enableGammaCorrection = 1.0
+
+    skyMode: number = 0
     enableCulling = 1
     maxBounces = 8
     samples = 1
-    jitterScale = 1.5
+    jitterScale = 1.0
 
     // Camera and controls
     camera: Camera = new Camera([ 0.01, 2.5, -7 ])

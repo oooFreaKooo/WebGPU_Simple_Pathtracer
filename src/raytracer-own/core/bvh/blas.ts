@@ -7,9 +7,6 @@ export interface BLASNode {
     aabb: AABB
 }
 
-const DEFAULT_BINS = 16
-const MIN_TRIANGLES_PER_NODE = 2 // Minimum triangles to allow subdivision
-
 export class BLAS {
     id: string
     m_triangles: Triangle[]
@@ -56,13 +53,8 @@ export class BLAS {
             const currentNodeIdx = stack.pop()!
             const currentNode = this.m_nodes[currentNodeIdx]
 
-            // Skip leaf nodes
-            if (currentNode.triangleCount <= MIN_TRIANGLES_PER_NODE) {
-                continue
-            }
-
-            const [ bestAxis, bestPos, bestCost ] = this._findBestSplit(currentNodeIdx)
             const parentCost = this._calculateNodeCost(currentNodeIdx)
+            const [ bestAxis, bestPos, bestCost ] = this._findBestSplit(currentNodeIdx)
 
             if (bestCost >= parentCost) {
                 // Leaf node; no beneficial split
@@ -153,7 +145,8 @@ export class BLAS {
 
             if (min === max) {continue} // All centroids are on the same position on this axis
 
-            const binCount = DEFAULT_BINS
+            const maxBins = 8
+            const binCount = Math.min(maxBins, node.triangleCount)
             const scale = binCount / (max - min)
             const bins: { aabb: AABB; count: number }[] = Array.from({ length: binCount }, () => ({
                 aabb: new AABB(),
@@ -171,11 +164,15 @@ export class BLAS {
             }
 
             // Compute prefix sums for left and right splits
-            const leftCounts: number[] = new Array(binCount).fill(0)
-            const rightCounts: number[] = new Array(binCount).fill(0)
-            const leftAreas: number[] = new Array(binCount).fill(0)
-            const rightAreas: number[] = new Array(binCount).fill(0)
+            const leftCounts: number[] = new Array(binCount - 1)
+            const rightCounts: number[] = new Array(binCount - 1)
+            const leftAreas: number[] = new Array(binCount - 1)
+            const rightAreas: number[] = new Array(binCount - 1)
 
+            const leftAABBs: AABB[] = []
+            const rightAABBs: AABB[] = []
+
+            // Left to right
             const leftAABB = new AABB()
             let leftCount = 0
             for (let i = 0; i < binCount - 1; i++) {
@@ -183,8 +180,10 @@ export class BLAS {
                 leftCounts[i] = leftCount
                 leftAABB.growByAABB(bins[i].aabb)
                 leftAreas[i] = leftAABB.area()
+                leftAABBs[i] = leftAABB.clone()
             }
 
+            // Right to left
             const rightAABB = new AABB()
             let rightCount = 0
             for (let i = binCount - 1; i > 0; i--) {
@@ -192,6 +191,7 @@ export class BLAS {
                 rightCounts[i - 1] = rightCount
                 rightAABB.growByAABB(bins[i].aabb)
                 rightAreas[i - 1] = rightAABB.area()
+                rightAABBs[i - 1] = rightAABB.clone()
             }
 
             const binWidth = (max - min) / binCount
