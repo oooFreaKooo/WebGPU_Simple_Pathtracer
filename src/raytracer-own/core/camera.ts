@@ -11,9 +11,6 @@ export class Camera {
     theta: number= 0
     up: vec3
 
-    focusDistance: number = 4
-    apertureSize: number = 0.005
-
     constructor (initialPosition: vec3) {
         this.position = vec3.clone(initialPosition)
         this.theta = 0.0

@@ -5,7 +5,7 @@ import { Deg2Rad, addEventListeners } from '../utils/helper'
 import { CubeMapMaterial } from './material'
 import { computePass, createRenderPassDescriptor, createVertexBuffer, renderPass } from '../utils/webgpu'
 import { Triangle } from './triangle'
-import { BLAS, BLASNode } from './bvh/blas'
+import { BLASNode } from './bvh/blas'
 import { TLASNode } from './bvh/tlas'
 import { BLASInstance } from './bvh/blas-instance'
 
@@ -37,10 +37,8 @@ export class Renderer {
 
     private triangleBuffer: GPUBuffer
     private allTriangles: Triangle[] = []
-    private blasTriangleOffsets: Map<BLAS, number> = new Map()
     private triangleIndexBuffer: GPUBuffer
     private allTriangleIndices: Uint32Array
-    private blasTriangleIndexOffsets: Map<BLAS, number> = new Map()
 
     private settingsBuffer: GPUBuffer
     private camsettingsBuffer: GPUBuffer
@@ -343,7 +341,7 @@ export class Renderer {
     }
 
     async createSkyTexture () {
-        const textureID = 0 // 0 = space, 2 = mars, 3 = town, 4 = garden
+        const textureID = 4 // 0 = space, 2 = mars, 3 = town, 4 = garden
         const urls = [
             './src/assets/textures/skybox/right.png',
             './src/assets/textures/skybox/left.png',
@@ -399,12 +397,14 @@ export class Renderer {
 
     updateImgSettings () {
         const camSettings = {
-            vignetteStrength: this.scene.vignetteStrength,
-            vignetteRadius: this.scene.vignetteRadius,
+            gamma: this.scene.enableGammaCorrection,
+            aces: this.scene.enableACES,
+            filmic: this.scene.enableFilmic,
         }
 
-        this.device.queue.writeBuffer(this.imgOutputBuffer, 0, new Float32Array([ camSettings.vignetteStrength, camSettings.vignetteRadius ]), 0, 2)
+        this.device.queue.writeBuffer(this.imgOutputBuffer, 0, new Float32Array([ camSettings.gamma, camSettings.aces, camSettings.filmic ]), 0, 3)
     }
+
     private createFrameBuffer () {
         const frameNum = new Float32Array(this.canvas.width * this.canvas.height * 4).fill(0)
         this.frameBuffer = this.device.createBuffer({
@@ -494,7 +494,10 @@ export class Renderer {
         let triangleOffset = 0
         for (const blas of this.scene.blasArray) {
             this.scene.blasTriangleOffsetMap.set(blas.id, triangleOffset)
-            this.allTriangles.push(...blas.m_triangles)
+            // Use a loop to push triangles
+            for (const triangle of blas.m_triangles) {
+                this.allTriangles.push(triangle)
+            }
             triangleOffset += blas.m_triangles.length
         }
     
@@ -506,6 +509,8 @@ export class Renderer {
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         })
     }
+    
+    
     
     private updateTriangleData () {
         const triangleDataSize = 24 // Each triangle takes 24 floats
@@ -787,29 +792,29 @@ export class Renderer {
     updateCamSettings () {
         const camSettings = {
             fov: Deg2Rad(this.scene.camera.fov),
-            focusDistance: this.scene.camera.focusDistance,
-            apertureSize: this.scene.camera.apertureSize,
         }
 
         this.device.queue.writeBuffer(
             this.camsettingsBuffer,
             0,
-            new Float32Array([ camSettings.fov, camSettings.focusDistance, camSettings.apertureSize ]),
+            new Float32Array([ camSettings.fov ]),
             0,
-            3,
+            1,
         )
     }
 
     updateSettings () {
+        this.updateImgSettings()
+      
         const settingsData = {
             maxBounces: this.scene.maxBounces,
             samples: this.scene.samples,
             culling: this.scene.enableCulling,
-            skytexture: this.scene.enableSkytexture,
+            skyMode: this.scene.skyMode,
             aspectRatio: this.canvas.width / this.canvas.height,
             jitterScale: this.scene.jitterScale,
         }
-
+      
         this.device.queue.writeBuffer(
             this.settingsBuffer,
             0,
@@ -817,14 +822,15 @@ export class Renderer {
                 settingsData.maxBounces,
                 settingsData.samples,
                 settingsData.culling,
-                settingsData.skytexture,
+                settingsData.skyMode,
                 settingsData.aspectRatio,
                 settingsData.jitterScale,
             ]),
             0,
-            6,
+            6
         )
     }
+      
 
     totalFrametime = 0
     totalFrames = 0

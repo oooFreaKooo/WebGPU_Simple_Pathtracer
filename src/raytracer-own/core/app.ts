@@ -34,14 +34,14 @@ export class Application {
             scene8: presets.createScene8(),                // Dragon model
             scene9: presets.createScene9(),                // Monkeys with random materials
             scene10: presets.createScene10(),              // Lamp with glass donut
-            scene11: presets.createScene11(),              // Lamp with a glass of water
-            scene12: presets.createScene12(),              // All material types in one scene
+            scene11: presets.createScene11(),              // Glass of water with caustics
+            scene12: presets.createScene12(),              // Objects with different materials
             scene13: presets.createScene13(),              // Sphereflake fractal (depth = 5)
-            scene14: presets.createScene14(),
-            scene15: presets.createScene15(),              //
+            scene14: presets.createScene14(),              // Spheres with mixed materials
+            scene15: presets.createScene15(),              // DNA
         }
         // Directly use a preset scene like cornellBox (or any scene of your choice)
-        await this.scene.createObjects(presetScenes.cornellBox)
+        await this.scene.createObjects(presetScenes.scene1)
 
         // Initialize the renderer
         await this.renderer.Initialize()

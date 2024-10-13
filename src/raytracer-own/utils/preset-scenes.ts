@@ -30,7 +30,7 @@ const blackMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ] })
 const redMaterial = new Material({ albedo: [ 1.0, 0.0, 0.0 ] , specularChance: 0.25 , roughness: 0.85 })
 const greenMaterial = new Material({ albedo: [ 0.0, 1.0, 0.0 ]  , specularChance: 0.25 , roughness: 0.85 })
 const blueMaterial = new Material({ albedo: [ 0.3, 0.31, 0.98 ] })
-const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 0.9, 0.9 ], emissionStrength: 15.0 })
+const glowMaterial = new Material({ albedo: [ 0.0, 0.0, 0.0 ], emissionColor: [ 1.0, 0.9, 0.9 ], emissionStrength: 5.0 })
 const mirrorMaterial = new Material({ albedo: [ 1.0, 1.0, 1.0 ], roughness: 0.05, specularChance: 1.0 })
 const shinyGoldMaterial = new Material({ albedo: [ 218 / 255, 133 / 255, 32 / 225 ], roughness: 0.0, specularChance: 0.5 })
 const grey = new Material({ albedo: [ 0.84, 0.89, 0.82 ] })
@@ -46,7 +46,7 @@ const skinMaterial = new Material({
     sssRadius: 2.0, // Light scatters up to 2 units within the material
 })
 const glass = new Material({
-    specularChance: 0.02,
+    specularChance: 0.1,
     roughness: 0.0,
     ior: 1.25,
     refractionChance: 1.0,
@@ -423,7 +423,7 @@ export function createScene1 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/plane.obj',
             material: blackMaterial,
-            position: [ 0.0, 2.01, 0.0 ],
+            position: [ 0.0, 2.05, 0.0 ],
             scale: [ 1.0, 1.0, 0.25 ],
             rotation: [ 0.0, 0.0, 180.0 ],
         },
@@ -439,24 +439,24 @@ export function createScene1 (): ObjectProperties[] {
         })
     }
 
-    const lampWidth = 0.1
-    const lampLength = 5.0
-    const lampHeight = 0.0125
+    const lampWidth = 0.025
+    const lampLength = 1.0
+    const lampHeight = 1.0
     
     const lamps: ObjectProperties[] = [
         {
-            modelPath: './src/assets/models/cube.obj',
+            modelPath: './src/assets/models/plane.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, -0.5 ],
+            position: [ 0, 2.049, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
-            rotation: [ 0.0, 0.0, 0.0 ],
+            rotation: [ 180.0, 0.0, 0.0 ],
         },
         {
-            modelPath: './src/assets/models/cube.obj',
+            modelPath: './src/assets/models/plane.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, 0.5 ],
+            position: [ 0, 2.049, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
-            rotation: [ 0.0, 0.0, 0.0 ],
+            rotation: [ 180.0, 0.0, 0.0 ],
         }
     ]
     
@@ -503,7 +503,7 @@ export function createScene2 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/plane.obj',
             material: blackMaterial,
-            position: [ 0.0, 2.01, 0.0 ],
+            position: [ 0.0, 2.05, 0.0 ],
             scale: [ 1.0, 1.0, 0.25 ],
             rotation: [ 0.0, 0.0, 180.0 ],
         },
@@ -519,24 +519,24 @@ export function createScene2 (): ObjectProperties[] {
         })
     }
 
-    const lampWidth = 0.1
-    const lampLength = 5.0
-    const lampHeight = 0.0125
+    const lampWidth = 0.025
+    const lampLength = 1.0
+    const lampHeight = 1.0
     
     const lamps: ObjectProperties[] = [
         {
-            modelPath: './src/assets/models/cube.obj',
+            modelPath: './src/assets/models/plane.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, -0.5 ],
+            position: [ 0, 2.049, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
-            rotation: [ 0.0, 0.0, 0.0 ],
+            rotation: [ 180.0, 0.0, 0.0 ],
         },
         {
-            modelPath: './src/assets/models/cube.obj',
+            modelPath: './src/assets/models/plane.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, 0.5 ],
+            position: [ 0, 2.049, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
-            rotation: [ 0.0, 0.0, 0.0 ],
+            rotation: [ 180.0, 0.0, 0.0 ],
         }
     ]
     
@@ -588,7 +588,7 @@ export function createScene3 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/plane.obj',
             material: blackMaterial,
-            position: [ 0.0, 2.01, 0.0 ],
+            position: [ 0.0, 2.05, 0.0 ],
             scale: [ 1.0, 1.0, 0.25 ],
             rotation: [ 0.0, 0.0, 180.0 ],
         },
@@ -604,24 +604,24 @@ export function createScene3 (): ObjectProperties[] {
         })
     }
 
-    const lampWidth = 0.1
-    const lampLength = 5.0
-    const lampHeight = 0.0125
+    const lampWidth = 0.025
+    const lampLength = 1.0
+    const lampHeight = 1.0
     
     const lamps: ObjectProperties[] = [
         {
-            modelPath: './src/assets/models/cube.obj',
+            modelPath: './src/assets/models/plane.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, -0.5 ],
+            position: [ 0, 2.049, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
-            rotation: [ 0.0, 0.0, 0.0 ],
+            rotation: [ 180.0, 0.0, 0.0 ],
         },
         {
-            modelPath: './src/assets/models/cube.obj',
+            modelPath: './src/assets/models/plane.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, 0.5 ],
+            position: [ 0, 2.049, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
-            rotation: [ 0.0, 0.0, 0.0 ],
+            rotation: [ 180.0, 0.0, 0.0 ],
         }
     ]
     
@@ -669,7 +669,7 @@ export function createScene4 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/plane.obj',
             material: blackMaterial,
-            position: [ 0.0, 2.01, 0.0 ],
+            position: [ 0.0, 2.05, 0.0 ],
             scale: [ 1.0, 1.0, 0.25 ],
             rotation: [ 0.0, 0.0, 180.0 ],
         },
@@ -685,24 +685,24 @@ export function createScene4 (): ObjectProperties[] {
         })
     }
 
-    const lampWidth = 0.1
-    const lampLength = 5.0
-    const lampHeight = 0.0125
+    const lampWidth = 0.025
+    const lampLength = 1.0
+    const lampHeight = 1.0
     
     const lamps: ObjectProperties[] = [
         {
-            modelPath: './src/assets/models/cube.obj',
+            modelPath: './src/assets/models/plane.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, -0.5 ],
+            position: [ 0, 2.049, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
-            rotation: [ 0.0, 0.0, 0.0 ],
+            rotation: [ 180.0, 0.0, 0.0 ],
         },
         {
-            modelPath: './src/assets/models/cube.obj',
+            modelPath: './src/assets/models/plane.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, 0.5 ],
+            position: [ 0, 2.049, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
-            rotation: [ 0.0, 0.0, 0.0 ],
+            rotation: [ 180.0, 0.0, 0.0 ],
         }
     ]
     
@@ -766,24 +766,24 @@ export function createScene5 (): ObjectProperties[] {
         })
     }
 
-    const lampWidth = 0.1
-    const lampLength = 5.0
-    const lampHeight = 0.0125
+    const lampWidth = 0.025
+    const lampLength = 1.0
+    const lampHeight = 1.0
     
     const lamps: ObjectProperties[] = [
         {
-            modelPath: './src/assets/models/cube.obj',
+            modelPath: './src/assets/models/plane.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, -0.5 ],
+            position: [ 0, 2.049, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
-            rotation: [ 0.0, 0.0, 0.0 ],
+            rotation: [ 180.0, 0.0, 0.0 ],
         },
         {
-            modelPath: './src/assets/models/cube.obj',
+            modelPath: './src/assets/models/plane.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, 0.5 ],
+            position: [ 0, 2.049, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
-            rotation: [ 0.0, 0.0, 0.0 ],
+            rotation: [ 180.0, 0.0, 0.0 ],
         }
     ]
     
@@ -854,7 +854,7 @@ export function createScene6 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/plane.obj',
             material: whiteMaterial,
-            position: [ 0.0, 2.01, 0.0 ],
+            position: [ 0.0, 2.05, 0.0 ],
             scale: [ 1.0, 1.0, 0.25 ],
             rotation: [ 0.0, 0.0, 180.0 ],
         },
@@ -1216,7 +1216,7 @@ export function createScene12 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/plane.obj',
             material: blackMaterial,
-            position: [ 0.0, 2.01, 0.0 ],
+            position: [ 0.0, 2.05, 0.0 ],
             scale: [ 1.0, 1.0, 0.25 ],
             rotation: [ 0.0, 0.0, 180.0 ],
         },
@@ -1470,14 +1470,14 @@ export function createScene14 (): ObjectProperties[] {
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, -0.5 ],
+            position: [ 0, 2.0, -0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         },
         {
             modelPath: './src/assets/models/cube.obj',
             material: glowMaterial,
-            position: [ 0, 1.99, 0.5 ],
+            position: [ 0, 2.0, 0.5 ],
             scale: [ lampLength, lampHeight, lampWidth ],
             rotation: [ 0.0, 0.0, 0.0 ],
         }
@@ -1511,9 +1511,9 @@ export function createScene15 (): ObjectProperties[] {
         specularChance: 0.3,
         ior: 1.0,
         refractionChance: 1,
-        refractionColor: [ 1.0, 1.0, 1.0 ],
+        refractionColor: [ 0.0, 0.0, 0.0 ],
         sssColor: [ 1.0, 1.0, 1.0 ],
-        sssStrength: 2.0,
+        sssStrength: 0.0,
         sssRadius: 1.0,
     })
 
@@ -1526,7 +1526,7 @@ export function createScene15 (): ObjectProperties[] {
     const helixPitch = 10
     const sphereSize = 0.5
     // Colors for backbones and base pairs
-    const backboneColor = createGlowMaterial(0.2, 0.6, 1.0, 5.5) // Blue backbone
+    const backboneColor = createGlowMaterial(0.2, 0.6, 1.0, 1.5) // Blue backbone
     const basePairColor1 = createGlowMaterial(1.0, 0.8, 0.0, 0.25) // Yellow base pair part 1
     const basePairColor2 = createGlowMaterial(0.0, 1.0, 0.8, 0.25) // Cyan base pair part 2
 
