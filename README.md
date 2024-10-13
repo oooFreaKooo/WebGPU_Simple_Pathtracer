@@ -1,4 +1,3 @@
-```markdown
 # A Simple WebGPU Pathtracer
 
 Welcome to the repository of my WebGPU Pathtracer project! This project is a straightforward implementation of a pathtracer using WebGPU and TypeScript. It's designed to be a starting point for those interested in exploring the capabilities of WebGPU in rendering and graphics programming.
@@ -88,5 +87,3 @@ This project is open-source and available to anyone. You are free to use, modify
 ## Framework Overview
 ![core_diagram2](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/c56b46b3-366a-4dee-8c80-2b72880a8517)
 ![img2](https://github.com/user-attachments/assets/19779169-7231-4af8-83c4-5091cb28909d)
-
-```
