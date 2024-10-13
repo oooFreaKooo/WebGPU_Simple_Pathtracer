@@ -3,37 +3,38 @@
   "version": "1.0.0",
   "description": "",
   "main": "src/main.js",
+  "type": "module",
   "scripts": {
-    "start": "npm run build && npm run serve",
-    "install-missing-dependencies": "npm i",
-    "build": "webpack --config webpack.config.js",
-    "serve": "live-server --cors"
+    "dev": "vite --open",
+    "install-missing-dependencies": "yarn install",
+    "build": "vite build",
+    "serve": "vite preview",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "browser": {
     "fs": false,
-    "util": false,
+    "os": false,
     "path": false,
-    "os": false
+    "util": false
   },
   "keywords": [],
-  "author": "",
+  "author": "Roman Koller",
   "license": "ISC",
   "dependencies": {
-    "@types/jquery": "^3.5.30",
-    "@types/node": "^20.14.2",
-    "css-loader": "^7.1.2",
-    "gl-matrix": "^3.4.3",
-    "jquery": "^3.7.1",
-    "live-server": "^1.2.2",
-    "react": "^18.3.1",
-    "ts-loader": "^9.5.1",
-    "webgpu": "^0.1.16",
-    "webpack": "^5.92.0",
-    "webpack-cli": "^5.1.4"
+    "gl-matrix": "^3.4.3"
   },
   "devDependencies": {
-    "@webgpu/types": "^0.1.42",
+    "@types/gl-matrix": "^3.2.0",
+    "@types/node": "^22.7.4",
+    "@typescript-eslint/eslint-plugin": "^8.7.0",
+    "@typescript-eslint/parser": "^8.7.0",
+    "@webgpu/types": "^0.1.46",
+    "eslint": "^9.11.1",
     "ts-shader-loader": "^2.0.2",
-    "typescript": "^5.4.5"
-  }
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "vite-plugin-string": "^1.2.3"
+  },
+  "packageManager": "yarn@4.5.0"
 }

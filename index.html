@@ -271,21 +271,24 @@
     <button class="settings-btn" id="settingsBtn">⚙️ Settings</button>
 
     <div class="control-panel" id="controlPanel">
-      <button class="control-panel-toggle" id="controlPanelToggle">✖️</button>
+      <button class="control-panel-toggle"
+        id="controlPanelToggle">✖️</button>
       <div class="control-group">
         <div class="section">
           <h3>Scene Properties</h3>
 
           <div class="control-item">
             <label for="bounces">Bounces</label>
-            <input id="bounces" type="range" min="1" max="32" step="1"
+            <input id="bounces" type="range" min="1" max="32"
+              step="1"
               value="8" />
             <span class="slider-value" id="bouncesValue">8</span>
           </div>
 
           <div class="control-item">
             <label for="samples">Samples</label>
-            <input id="samples" type="range" min="1" max="32" step="1"
+            <input id="samples" type="range" min="1" max="32"
+              step="1"
               value="1" />
             <span class="slider-value" id="samplesValue">1</span>
           </div>
@@ -296,38 +299,25 @@
               value="135" />
             <span class="slider-value" id="fovValue">135</span>
           </div>
-
-          <div class="control-item">
-            <label for="focusDist">Focus Distance</label>
-            <input id="focusDist" type="range" min="0.1" max="100" step="0.1"
-              value="10" />
-            <span class="slider-value" id="focusDistValue">10.0</span>
-          </div>
-
-          <div class="control-item">
-            <label for="apertureSize">Aperture Size</label>
-            <input id="apertureSize" type="range" min="0" max="10" step="0.1"
-              value="0.5" />
-            <span class="slider-value" id="apertureSizeValue">0.5</span>
-          </div>
         </div>
 
-        <!-- Visual Effects Section -->
+        <!-- Post processing Section -->
         <div class="section">
-          <h3>Visual Effects</h3>
+          <h3>Post Processing</h3>
 
-          <div class="control-item">
-            <label for="vignetteStrength">Vignette Strength</label>
-            <input id="vignetteStrength" type="range" min="0" max="1"
-              step="0.01" value="0.5" />
-            <span class="slider-value" id="vignetteStrengthValue">0.50</span>
+          <div class="control-item checkbox-control">
+            <input id="gamma" type="checkbox" checked />
+            <label for="gamma">Gamma Correction</label>
           </div>
 
-          <div class="control-item">
-            <label for="vignetteRadius">Vignette Radius</label>
-            <input id="vignetteRadius" type="range" min="0" max="1" step="0.01"
-              value="0.5" />
-            <span class="slider-value" id="vignetteRadiusValue">0.50</span>
+          <div class="control-item checkbox-control">
+            <input id="aces" type="checkbox" checked />
+            <label for="aces">ACES Filmic Tone Mapping</label>
+          </div>
+
+          <div class="control-item checkbox-control">
+            <input id="filmic" type="checkbox" />
+            <label for="filmic">Filmic Tone Mapping</label>
           </div>
         </div>
 
@@ -337,9 +327,10 @@
 
           <div class="control-item">
             <label for="jitter">Jitter Scale</label>
-            <input id="jitter" type="range" min="0" max="1" step="0.01"
-              value="0.5" />
-            <span class="slider-value" id="jitterValue">0.50</span>
+            <input id="jitter" type="range" min="0" max="10"
+              step="0.1"
+              value="1.0" />
+            <span class="slider-value" id="jitterValue">1.0</span>
           </div>
 
           <div class="control-item checkbox-control">
@@ -347,9 +338,13 @@
             <label for="backfaceCulling">Backface Culling</label>
           </div>
 
-          <div class="control-item checkbox-control">
-            <input id="skyTexture" type="checkbox" />
-            <label for="skyTexture">Sky Texture</label>
+          <div class="control-item">
+            <label for="skyMode">Sky Mode</label>
+            <select id="skyMode">
+              <option value="0">Black Sky</option>
+              <option value="1">Procedural Sky</option>
+              <option value="2">Sky Texture</option>
+            </select>
           </div>
         </div>
       </div>
@@ -377,7 +372,8 @@
       </div>
     </div>
 
-    <script src="./dist/main.bundle.js"></script>
+    <script type="module" src="/src/main.ts"></script>
+
     <script>
     const settingsBtn = document.getElementById('settingsBtn');
     const controlPanel = document.getElementById('controlPanel');

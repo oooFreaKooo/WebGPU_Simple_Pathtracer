@@ -1,335 +1,146 @@
-import { Camera } from "./camera"
-import { vec3 } from "gl-matrix"
-import { Controls } from "./controls"
-import { ObjLoader } from "./obj-loader"
-import { Triangle } from "./triangle"
-import { AABB, Bin, Node } from "./node"
-import { ObjectProperties } from "../utils/helper"
-
-const MAX_VALUE = Number.POSITIVE_INFINITY
-const MIN_VALUE = Number.NEGATIVE_INFINITY
+import { Camera } from './camera'
+import { vec3 } from 'gl-matrix'
+import { Controls } from './controls'
+import { ObjLoader } from './obj-loader'
+import { TLAS } from './bvh/tlas'
+import { BLAS } from './bvh/blas'
+import { BLASInstance } from './bvh/blas-instance'
+import { Material } from './material'
+import { ObjectProperties } from '../utils/preset-scenes'
 
 export class Scene {
-  private cameraControls: Controls
-  private canvas: HTMLCanvasElement
-  private objectIDCount: number = 0 // starting at 0
-  objectMeshes: ObjLoader[] = []
-  camera: Camera
-  vignetteStrength: number = 0.5
-  vignetteRadius: number = 0.75
+    // Rendering settings
+    enableACES = 1.0
+    enableFilmic = 0.0
+    enableGammaCorrection = 1.0
 
-  // Data for the BVH
-  nodes: Node[]
-  nodesUsed: number = 0
-  triangleIndices: number[]
-  triangles: Triangle[]
-  enableSkytexture: number = 0
-  enableCulling: number = 1
-  maxBounces: number = 8
-  samples: number = 1
-  jitterScale: number = 1
+    skyMode: number = 0
+    enableCulling = 1
+    maxBounces = 8
+    samples = 1
+    jitterScale = 1.0
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.canvas = canvas
-    this.initialize()
-  }
+    // Camera and controls
+    camera: Camera = new Camera([ 0.01, 2.5, -7 ])
+    cameraControls: Controls
 
-  // scene settings
-  private initialize() {
-    this.camera = new Camera([0.01, 2.5, -7])
-    this.cameraControls = new Controls(this.canvas, this.camera)
-  }
+    // Object and material data
+    materials: Material[] = []
+    private objectMeshes: ObjLoader[] = []
+    private materialToIdxMap = new Map<Material, number>()
 
-  // creates objects using the ObjLoader
-  async createObjects(objects: ObjectProperties[]) {
-    for (const obj of objects) {
-      const { modelPath, material, position = [0, 0, 0], scale = [1, 1, 1], rotation = [0, 0, 0] } = obj
+    // BVH structures
+    blasArray: BLAS[] = []
+    blasInstanceArray: BLASInstance[] = []
+    private uniqueGeometries = new Map<string, BLAS>()
+    private totalBLASNodeCount = 0
+    private nextMeshID = 0
 
-      // settings for the new object
-      const objectMesh = new ObjLoader(material, position, scale, rotation, this.objectIDCount)
-      // create the object
-      await objectMesh.initialize(modelPath)
+    // Mapping relationships
+    blasTriangleOffsetMap = new Map<string, number>()
+    private blasNodeOffsetMap = new Map<string, number>()
+    private blasOffsetToMeshIDMap = new Map<number, number>()
+    private meshIDToBLAS = new Map<number, BLAS>()
 
-      // push the object into an array
-      this.objectMeshes.push(objectMesh)
+    // Top-Level Acceleration Structure
+    tlas!: TLAS
 
-      // make sure next object gets a new ID
-      this.objectIDCount++
-    }
-  }
-
-  async prepareBVH() {
-    this.triangles = []
-
-    // gather all triangles from all objects
-    this.objectMeshes.forEach((objectMesh) => {
-      objectMesh.triangles.forEach((triangle) => {
-        this.triangles.push(triangle)
-      })
-    })
-
-    // set an index for each triangle
-    this.triangleIndices = new Array(this.triangles.length)
-    for (var i: number = 0; i < this.triangles.length; i += 1) {
-      this.triangleIndices[i] = i
+    constructor (canvas: HTMLCanvasElement) {
+        this.cameraControls = new Controls(canvas, this.camera)
     }
 
-    // create empty nodes. 2*n-1 for a binary tree
-    this.nodes = new Array(2 * this.triangles.length - 1)
-    for (var i: number = 0; i < 2 * this.triangles.length - 1; i += 1) {
-      this.nodes[i] = new Node()
-    }
+    async createObjects (objects: ObjectProperties[]) {
+        for (const { modelPath, material, position = [ 0, 0, 0 ], scale = [ 1, 1, 1 ], rotation = [ 0, 0, 0 ] } of objects) {
 
-    // build the BVH
-    this.buildBVH()
-  }
+            const objectMesh = await this.loadObjectMesh(modelPath)
 
-  private buildBVH() {
-    // measures how long it took to build
-    console.time("Subdivision Time")
+            const blas = this.getOrCreateBLAS(modelPath, objectMesh.triangles)
 
-    // our root node contains all the triangles at first
-    var root = this.nodes[0]
-    root.leftFirst = 0
-    root.triCount = this.triangles.length
-    this.nodesUsed = 1
+            const meshID = this.nextMeshID++
 
-    this.updateNodeBounds(0)
-    this.subdivide(0)
+            this.mapMeshToBLAS(meshID, blas.nodeOffset, blas.blas)
 
-    console.timeEnd("Subdivision Time")
-  }
+            this.blasOffsetToMeshIDMap.set(blas.nodeOffset, meshID)
 
-  private updateNodeBounds(nodeIndex: number) {
-    var node = this.nodes[nodeIndex]
-    node.aabbMin = [MAX_VALUE, MAX_VALUE, MAX_VALUE]
-    node.aabbMax = [MIN_VALUE, MIN_VALUE, MIN_VALUE]
+            const materialIdx = this.getMaterialIndex(material)
 
-    for (var i = 0; i < node.triCount; i++) {
-      const leafTri = this.triangles[this.triangleIndices[node.leftFirst + i]]
-
-      leafTri.corners.forEach((corner) => {
-        vec3.min(node.aabbMin, node.aabbMin, corner)
-        vec3.max(node.aabbMax, node.aabbMax, corner)
-      })
-    }
-  }
-
-  // https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
-  // Recursively subdivide a node to optimize ray-triangle intersection tests
-  private subdivide(nodeIdx: number): void {
-    const node = this.nodes[nodeIdx]
-    if (node.triCount <= 2) return
-    // Determine the optimal plane to split the node triangles, aiming to minimize ray intersection tests
-    const { bestAxis, bestPos, bestCost } = this.findBestSplitPlane(node)
-
-    // If subdividing doesnt improve ray intersection performance, stop further subdivision
-    if (bestCost >= this.calculateNodeCost(node)) return
-
-    let i = node.leftFirst
-    let j = i + node.triCount - 1
-
-    // Organize triangles based on their spatial location relative to the optimal split plane
-    // This helps in quickly discarding irrelevant triangles during ray intersection tests
-    while (i <= j) {
-      if (this.triangles[this.triangleIndices[i]].centroid[bestAxis] < bestPos) {
-        i++
-      } else {
-        var temp: number = this.triangleIndices[i]
-        this.triangleIndices[i] = this.triangleIndices[j]
-        this.triangleIndices[j] = temp
-        j -= 1
-      }
-    }
-
-    const leftCount = i - node.leftFirst
-
-    // If all triangles end up on one side, its not beneficial to subdivide further
-    if (leftCount === 0 || leftCount === node.triCount) return
-
-    // Create child nodes to further refine the spatial hierarchy
-    const leftChildIdx = this.nodesUsed++
-    const rightChildIdx = this.nodesUsed++
-
-    this.nodes[leftChildIdx].leftFirst = node.leftFirst
-    this.nodes[leftChildIdx].triCount = leftCount
-    this.nodes[rightChildIdx].leftFirst = i
-    this.nodes[rightChildIdx].triCount = node.triCount - leftCount
-
-    // Update the current node to reference its children
-    node.leftFirst = leftChildIdx
-    node.triCount = 0
-
-    // Update bounding boxes for child nodes, which are used to quickly discard nodes during ray intersection tests
-    this.updateNodeBounds(leftChildIdx)
-    this.updateNodeBounds(rightChildIdx)
-
-    // Continue the subdivision process for the child nodes
-    this.subdivide(leftChildIdx)
-    this.subdivide(rightChildIdx)
-  }
-
-  // This function determines the best split plane for a given node in a spatial data structure
-  // The goal is to find an optimal axis and position to split the nodes triangles, minimizing the cost
-  private findBestSplitPlane(node: Node): { bestAxis: number; bestPos: number; bestCost: number } {
-    // Dynamic binning based on the number of triangles
-    const BINS = Math.ceil(Math.sqrt(node.triCount))
-
-    let bestCost = Infinity
-    let bestAxis = -1
-    let bestPos = 0
-
-    // Iterate over the three axes
-    for (let a = 0; a < 3; a++) {
-      let boundsMin = Infinity
-      let boundsMax = -Infinity
-
-      // Calculate the bounding box for the triangles in the node along the current axis
-      for (let i = 0; i < node.triCount; i++) {
-        const triangle = this.triangles[this.triangleIndices[node.leftFirst + i]]
-        boundsMin = Math.min(boundsMin, triangle.centroid[a])
-        boundsMax = Math.max(boundsMax, triangle.centroid[a])
-      }
-
-      // If all triangles have the same centroid on this axis, skip to the next axis
-      if (boundsMin == boundsMax) continue
-
-      // Initialize bins for spatial partitioning
-      const bin: Bin[] = Array(BINS)
-        .fill(null)
-        .map(() => new Bin())
-      const scale = BINS / (boundsMax - boundsMin)
-
-      // Assign triangles to bins based on their centroids
-      for (let i = 0; i < node.triCount; i++) {
-        const triangle = this.triangles[this.triangleIndices[node.leftFirst + i]]
-        const binIdx = Math.min(BINS - 1, Math.floor((triangle.centroid[a] - boundsMin) * scale))
-        bin[binIdx].triCount++
-        triangle.corners.forEach((corner) => bin[binIdx].bounds.grow(corner))
-      }
-
-      // Initialize arrays to store areas and counts of triangles to the left and right of each bin boundary
-      const leftArea = new Array(BINS - 1).fill(0)
-      const rightArea = new Array(BINS - 1).fill(0)
-      const leftCount = new Array(BINS - 1).fill(0)
-      const rightCount = new Array(BINS - 1).fill(0)
-      let leftBox = new AABB()
-      let rightBox = new AABB()
-      let leftSum = 0,
-        rightSum = 0
-
-      // Calculate areas and counts for each bin boundary
-      for (let i = 0; i < BINS - 1; i++) {
-        leftSum += bin[i].triCount
-        leftCount[i] = leftSum
-        leftBox.growByAABB(bin[i].bounds)
-        leftArea[i] = leftBox.area()
-        rightSum += bin[BINS - 1 - i].triCount
-        rightCount[BINS - 2 - i] = rightSum
-        rightBox.growByAABB(bin[BINS - 1 - i].bounds)
-        rightArea[BINS - 2 - i] = rightBox.area()
-      }
-
-      const scale2 = (boundsMax - boundsMin) / BINS
-
-      // Calculate the cost for each bin boundary and update the best split if a lower cost is found
-      for (let i = 0; i < BINS - 1; i++) {
-        const planeCost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i]
-        if (planeCost < bestCost) {
-          bestCost = planeCost
-          bestAxis = a
-          bestPos = boundsMin + scale2 * (i + 1)
+            this.createBLASInstance(position, scale, rotation, blas.nodeOffset, materialIdx)
         }
-      }
+
+        // Initialize TLAS after all objects are processed
+        this.tlas = new TLAS(this.blasInstanceArray, this.blasOffsetToMeshIDMap, this.meshIDToBLAS)
     }
 
-    return { bestAxis, bestPos, bestCost }
-  }
+    private async loadObjectMesh (modelPath: string): Promise<ObjLoader> {
 
-  private calculateNodeCost(node: Node): number {
-    const e = vec3.subtract(vec3.create(), node.aabbMax, node.aabbMin)
-    const surfaceArea = e[0] * e[1] + e[1] * e[2] + e[2] * e[0]
-    return node.triCount * surfaceArea
-  }
+        const objectMesh = new ObjLoader()
+
+        await objectMesh.initialize(modelPath)
+
+        this.objectMeshes.push(objectMesh)
+
+        return objectMesh
+    }
+
+    private getMaterialIndex (material: Material): number {
+
+        if (!this.materialToIdxMap.has(material)) {
+
+            this.materials.push(material)
+
+            this.materialToIdxMap.set(material, this.materials.length - 1)
+        }
+        return this.materialToIdxMap.get(material)!
+    }
+
+    private createBLASInstance (
+        position: Float32Array | number[],
+        scale: Float32Array | number[],
+        rotation: Float32Array | number[],
+        nodeOffset: number,
+        materialIdx: number
+    ) {
+        this.blasInstanceArray.push(
+            new BLASInstance(
+                vec3.fromValues(position[0], position[1], position[2]),
+                vec3.fromValues(scale[0], scale[1], scale[2]),
+                vec3.fromValues(rotation[0], rotation[1], rotation[2]),
+                nodeOffset,
+                materialIdx
+            )
+        )
+    }
+
+    private getOrCreateBLAS (modelPath: string, triangles: any[]): { blas: BLAS; nodeOffset: number } {
+        const existingBLAS = this.uniqueGeometries.get(modelPath)
+        if (existingBLAS) {
+            const nodeOffset = this.blasNodeOffsetMap.get(existingBLAS.id)!
+            return { blas: existingBLAS, nodeOffset }
+        }
+    
+        const blasID = `blas_${this.blasArray.length}`
+        const newBLAS = new BLAS(blasID, triangles)
+        const nodeOffset = this.totalBLASNodeCount
+    
+        this.storeBLAS(newBLAS, modelPath, nodeOffset)
+    
+        return { blas: newBLAS, nodeOffset }
+    }
+    
+    private storeBLAS (blas: BLAS, modelPath: string, nodeOffset: number) {
+        this.blasArray.push(blas)
+        this.uniqueGeometries.set(modelPath, blas)
+        this.blasNodeOffsetMap.set(blas.id, nodeOffset)
+        // Ensure both maps are updated if needed
+        this.totalBLASNodeCount += blas.m_nodes.length
+    }
+    
+
+    private mapMeshToBLAS (meshID: number, nodeOffset: number, blas: BLAS) {
+
+        this.blasOffsetToMeshIDMap.set(nodeOffset, meshID)
+        this.meshIDToBLAS.set(meshID, blas)
+    }
 }
 
-// WITHOUT BINNING
-/* subdivide2(nodeIdx: number): void {
-  const node = this.nodes[nodeIdx]
 
-  let bestAxis: number = -1
-  let bestPos: number = 0
-  let bestCost: number = Infinity
-
-  for (let axis = 0; axis < 3; axis++) {
-    for (let i = 0; i < node.triCount; i++) {
-      const triangle = this.triangles[this.triangleIndices[node.leftFirst + i]]
-      const candidatePos = triangle.centroid[axis]
-      const cost = this.evaluateSAH(node, axis, candidatePos)
-      if (cost < bestCost) {
-        bestPos = candidatePos
-        bestAxis = axis
-        bestCost = cost
-      }
-    }
-  }
-
-  if (bestCost >= this.calculateNodeCost(node)) return
-
-  let i = node.leftFirst
-  let j = i + node.triCount - 1
-  while (i <= j) {
-    if (this.triangles[this.triangleIndices[i]].centroid[bestAxis] < bestPos) {
-      i++
-    } else {
-      var temp: number = this.triangleIndices[i]
-      this.triangleIndices[i] = this.triangleIndices[j]
-      this.triangleIndices[j] = temp
-      j -= 1
-    }
-  }
-
-  const leftCount = i - node.leftFirst
-  if (leftCount == 0 || leftCount == node.triCount) return
-
-  const leftChildIdx = this.nodesUsed
-  this.nodesUsed++
-  const rightChildIdx = this.nodesUsed
-  this.nodesUsed++
-
-  this.nodes[leftChildIdx].leftFirst = node.leftFirst
-  this.nodes[leftChildIdx].triCount = leftCount
-
-  this.nodes[rightChildIdx].leftFirst = i
-  this.nodes[rightChildIdx].triCount = node.triCount - leftCount
-
-  node.leftFirst = leftChildIdx
-  node.triCount = 0
-
-  this.updateNodeBounds(leftChildIdx)
-  this.updateNodeBounds(rightChildIdx)
-
-  this.subdivide(leftChildIdx)
-  this.subdivide(rightChildIdx)
-}
-
-evaluateSAH(node: Node, axis: number, pos: number): number {
-  const leftBox = new AABB()
-  const rightBox = new AABB()
-  let leftCount = 0
-  let rightCount = 0
-
-  for (let i = 0; i < node.triCount; i++) {
-    const triangle = this.triangles[this.triangleIndices[node.leftFirst + i]]
-    if (triangle.centroid[axis] < pos) {
-      leftCount++
-      triangle.corners.forEach((corner) => leftBox.grow(corner))
-    } else {
-      rightCount++
-      triangle.corners.forEach((corner) => rightBox.grow(corner))
-    }
-  }
-
-  const cost = leftCount * leftBox.area() + rightCount * rightBox.area()
-  return cost > 0 ? cost : Infinity
-} */

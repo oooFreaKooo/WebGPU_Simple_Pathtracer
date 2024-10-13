@@ -4,18 +4,16 @@ struct Uniforms {
 	resetBuffer: f32,
 }
 
-struct ImageOutput {
-    vignette_strength: f32,
-    vignette_radius: f32,
+// 1.0 = on, 0.0 = off
+struct Settings {
+    enableGammaCorrection: f32,
+    enableACES: f32,
+    enableFilmic: f32,
 }
-
 
 @group(0) @binding(0) var<uniform> uniforms : Uniforms;
 @group(0) @binding(1) var<storage, read_write> framebuffer: array<vec4f>;
-@group(0) @binding(2) var<uniform> img : ImageOutput;
-
-const VIGNETTE_STRENGTH: f32 = 0.5;
-const VIGNETTE_RADIUS: f32 = 0.75;
+@group(0) @binding(2) var<uniform> settings : Settings;
 
 fn get2Dfrom1D(pos: vec2f) -> u32 {
 
@@ -37,7 +35,7 @@ fn filmic(x: vec3f) -> vec3f {
     let result = (X * (6.2 * X + 0.5)) / (X * (6.2 * X + 1.7) + 0.06);
     return pow(result, vec3(2.2));
 }
-  
+
 @fragment
 fn frag_main(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
     // Invert the y-coordinate
@@ -48,16 +46,9 @@ fn frag_main(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
     // Retrieve current and previous frame colors
     var color = framebuffer[i].xyz / uniforms.frameNum;
 
-    // Apply gamma correction
-    //color = filmic(color.xyz);
-    color = aces_approx(color.xyz);
-    color = pow(color.xyz, vec3f(1 / 2.2));
-
-    // Vignette effect
-    let screenPos = (fragCoord.xy / uniforms.screenDims) * 2.0 - vec2f(1.0);
-    let dist = length(screenPos);
-    let vignette = clamp(1.0 - img.vignette_strength * (dist - img.vignette_radius), 0.0, 1.0);
-    color *= vignette;
+    color = select(color, aces_approx(color.xyz), settings.enableACES == 1.0);
+    color = select(color, filmic(color.xyz), settings.enableFilmic == 1.0);
+    color = select(color, pow(color.xyz, vec3f(1 / 2.2)), settings.enableGammaCorrection == 1.0);
 
     // Reset buffer if needed
     if uniforms.resetBuffer == 1.0 {
