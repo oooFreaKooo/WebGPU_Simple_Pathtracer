@@ -1,8 +1,85 @@
 # A Simple WebGPU Pathtracer
 
-Welcome to the repository of my WebGPU Pathtracer project! This project is a straightforward implementation of a pathtracer using WebGPU and TypeScript. It's designed to be a starting point for those interested in exploring the capabilities of WebGPU in rendering and graphics programming.
+Welcome to the repository of my WebGPU Pathtracer project! This project showcases a path tracing implementation using WebGPU, WGSL, and TypeScript, built to explore advanced rendering techniques and demonstrate the capabilities of WebGPU in modern web environments.
+
+## Table of Contents
+
+- [Features](#features)
+- [Materials](#materials)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Optional: Share Your Local Project](#optional-share-your-local-project)
+- [Usage](#usage)
+- [License](#license)
+- [Framework Overview](#framework-overview)
 
 ![projektbild](https://github.com/user-attachments/assets/cba4d817-094c-4a78-8b2d-f365d7bd4f54)
+
+## Features
+
+- **Material Support**: 
+  - Albedo (Diffuse color) 
+  - Specular reflection and color
+  - Refractive materials with support for Index of Refraction and color
+  - Subsurface Scattering (SSS) with customizable color, strength, and radius
+  - Emission materials for glowing effects
+
+- **Acceleration Structures**: 
+  - Two-level BVH (TLAS & BLAS) acceleration structure
+  - SAH (Surface Area Heuristic) and binning optimization for faster ray traversal and object intersections
+
+- **Scene and Geometry Handling**: 
+  - **OBJ Loader**: Load a variety of 3D models from OBJ format
+  - Preset scenes with multiple preconfigured objects for easy setup
+
+- **Lighting and Sky Simulation**: 
+  - **Procedural Sky**: Dynamic sky rendering based on ray direction for immersive environments
+  - **Sky Texture Support**: Option to load custom sky textures
+
+- **Path Tracing Capabilities**: 
+  - Multiple bounce light transport simulation
+  - Supports diffuse, specular, and refractive interactions
+  - Importance sampling for efficient rendering
+  - Configurable maximum bounces and path termination thresholds for optimized performance
+
+## Materials
+
+Below is a breakdown of the materials supported by the pathtracer:
+
+```wgsl
+struct Material {
+    albedo: vec3f,             // Diffuse color
+    specChance: f32,           // Probability of specular reflection
+    specColor: vec3f,          // Specular color
+    roughness: f32,            // Roughness for specular and refractive surfaces
+    emissionColor: vec3f,      // Emission color
+    emissionStrength: f32,     // Emission strength
+    refrColor: vec3f,          // Refractive color
+    refrChance: f32,           // Probability of refraction
+    sssColor: vec3f,           // Subsurface scattering color
+    sssStrength: f32,          // Subsurface scattering strength
+    sssRadius: f32,            // Subsurface scattering radius
+    ior: f32,                  // Index of refraction for refractive materials
+}
+```
+
+## Project Structure
+
+Here's an overview of the directory structure:
+
+```
+src
+ ┣ assets
+ ┃ ┣ models (Various .obj files for different 3D models)
+ ┃ ┣ textures (Skybox and texture files for environment maps)
+ ┣ raytracer-own
+ ┃ ┣ core (BVH, scene management, and renderer)
+ ┃ ┣ utils (Helper functions, shader files, and type definitions)
+ ┗ main.ts (Main entry point for running the pathtracer)
+```
+
 ![dragon1](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/7f8c6265-2c88-486d-8ad9-17761430a193)
 ![sphereflake2](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/92c27dca-96e5-4ff2-a43c-effc1ed5baa6)
 ![manyobjects](https://github.com/oooFreaKooo/WebGPU_Simple_Pathtracer/assets/60832668/21047ea3-939c-4cda-8802-b2e59d3dee6d)
