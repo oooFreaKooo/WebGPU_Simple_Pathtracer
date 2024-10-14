@@ -306,8 +306,6 @@ export class Renderer {
             this.updateCamera()
         }
 
-        addEventListeners(this)
-
         // Create a Float32Array to hold the updated uniform data
         this.updatedUniformArray = new Float32Array([
             this.uniforms.screenDims[0],
@@ -325,6 +323,7 @@ export class Renderer {
         }
         this.loaded = true
 
+        addEventListeners(this)
         this.updateSettings()
         this.updateCamSettings()
         this.updateImgSettings()
