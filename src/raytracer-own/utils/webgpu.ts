@@ -58,7 +58,7 @@ export function createRenderPassDescriptor () {
         label: 'renderPass',
         colorAttachments: [
             {
-                clearValue: [ 0.3, 0.3, 0.3, 1 ],
+                clearValue: [ 0.0, 0.0, 0.0, 1.0 ],
                 loadOp: 'clear',
                 storeOp: 'store',
             },
@@ -77,4 +77,65 @@ export function createVertexBuffer (device: GPUDevice, bufferArray: Float32Array
     device.queue.writeBuffer(vertexBuffer, 0, bufferArray)
 
     return vertexBuffer
+}
+
+// Function to create a compute pipeline
+export function createComputePipeline (
+    device: GPUDevice,
+    shaderCode: string,
+    entryPoint: string = 'main',
+): GPUComputePipeline {
+    return device.createComputePipeline({
+        layout: 'auto',
+        compute: {
+            module: device.createShaderModule({ code: shaderCode }),
+            entryPoint: entryPoint,
+        },
+    })
+}
+  
+// Function to create multiple bind groups for a pipeline
+export function createBindGroups (
+    device: GPUDevice,
+    pipeline: GPUComputePipeline | GPURenderPipeline,
+    bindGroupEntries: Array<Array<GPUBindGroupEntry>>,
+): GPUBindGroup[] {
+    return bindGroupEntries.map((entries, index) => {
+        const layout = pipeline.getBindGroupLayout(index)
+        return device.createBindGroup({
+            layout: layout,
+            entries: entries,
+        })
+    })
+}
+  
+// Function to create a render pipeline
+export function createRenderPipeline (
+    device: GPUDevice,
+    vertexShaderCode: string,
+    fragmentShaderCode: string,
+    vertexEntryPoint: string,
+    fragmentEntryPoint: string,
+    vertexBuffers: GPUVertexBufferLayout[],
+    format: GPUTextureFormat,
+): GPURenderPipeline {
+    const vertexModule = device.createShaderModule({ code: vertexShaderCode })
+    const fragmentModule = device.createShaderModule({ code: fragmentShaderCode })
+    return device.createRenderPipeline({
+        layout: 'auto',
+        vertex: {
+            module: vertexModule,
+            entryPoint: vertexEntryPoint,
+            buffers: vertexBuffers,
+        },
+        fragment: {
+            module: fragmentModule,
+            entryPoint: fragmentEntryPoint,
+            targets: [
+                {
+                    format: format,
+                },
+            ],
+        },
+    })
 }

@@ -4,7 +4,7 @@ import screen_shader from '../utils/screen_shader.wgsl'
 import { Scene } from './scene'
 import { Deg2Rad, addEventListeners } from '../utils/helper'
 import { CubeMapMaterial } from './material'
-import { computePass, createRenderPassDescriptor, createVertexBuffer, renderPass } from '../utils/webgpu'
+import { computePass, createBindGroups, createComputePipeline, createRenderPassDescriptor, createRenderPipeline, createVertexBuffer, renderPass } from '../utils/webgpu'
 import { Triangle } from './triangle'
 import { BLASNode } from './bvh/blas'
 import { TLASNode } from './bvh/tlas'
@@ -133,172 +133,92 @@ export class Renderer {
     }
 
     async makeComputePipeline () {
-        this.ray_tracing_pipeline = this.device.createComputePipeline({
-            layout: 'auto',
-
-            compute: {
-                module: this.device.createShaderModule({ code: raytracer_kernel + bvh_traverse }),
-                entryPoint: 'main',
-            },
-        })
-
-        this.uniformBindGroup = this.device.createBindGroup({
-            layout: this.ray_tracing_pipeline.getBindGroupLayout(0),
-            entries: [
-                {
-                    binding: 0,
-                    resource: {
-                        buffer: this.uniformBuffer,
-                    },
-                },
-                {
-                    binding: 1,
-                    resource: {
-                        buffer: this.cameraBuffer,
-                    },
-                },
-                {
-                    binding: 2,
-                    resource: {
-                        buffer: this.settingsBuffer,
-                    },
-                },
-                {
-                    binding: 3,
-                    resource: {
-                        buffer: this.camsettingsBuffer,
-                    },
-                },
+        // Create compute pipeline
+        this.ray_tracing_pipeline = createComputePipeline(
+            this.device,
+            raytracer_kernel + bvh_traverse,
+            'main',
+        )
+      
+        // Prepare bind group entries
+        const uniformBindGroupEntries: GPUBindGroupEntry[] = [
+            { binding: 0, resource: { buffer: this.uniformBuffer } },
+            { binding: 1, resource: { buffer: this.cameraBuffer } },
+            { binding: 2, resource: { buffer: this.settingsBuffer } },
+            { binding: 3, resource: { buffer: this.camsettingsBuffer } },
+        ]
+      
+        const frameBufferBindGroupEntries: GPUBindGroupEntry[] = [
+            { binding: 0, resource: { buffer: this.frameBuffer } },
+        ]
+      
+        const objectBindGroupEntries: GPUBindGroupEntry[] = [
+            { binding: 0, resource: { buffer: this.triangleBuffer } },
+            { binding: 1, resource: { buffer: this.nodeBufferBlas } },
+            { binding: 2, resource: { buffer: this.blasInstanceBuffer } },
+            { binding: 3, resource: { buffer: this.nodeBufferTlas } },
+            { binding: 4, resource: { buffer: this.triangleIndexBuffer } },
+            { binding: 5, resource: { buffer: this.materialBuffer } },
+        ]
+      
+        const textureBindGroupEntries: GPUBindGroupEntry[] = [
+            { binding: 0, resource: this.sky_texture.view },
+            { binding: 1, resource: this.sky_texture.sampler },
+        ]
+      
+        // Create bind groups
+        const bindGroups = createBindGroups(
+            this.device,
+            this.ray_tracing_pipeline,
+            [
+                uniformBindGroupEntries,
+                frameBufferBindGroupEntries,
+                objectBindGroupEntries,
+                textureBindGroupEntries,
             ],
-        })
-
-        // Group 1: Framebuffer
-        this.frameBufferBindGroup = this.device.createBindGroup({
-            layout: this.ray_tracing_pipeline.getBindGroupLayout(1),
-            entries: [
-                {
-                    binding: 0,
-                    resource: {
-                        buffer: this.frameBuffer,
-                    },
-                },
-            ],
-        })
-
-        // Group 2: Object and BVH Data
-        this.objectBindGroup = this.device.createBindGroup({
-            layout: this.ray_tracing_pipeline.getBindGroupLayout(2),
-            entries: [
-                {
-                    binding: 0,
-                    resource: {
-                        buffer: this.triangleBuffer,
-                    },
-                },
-                {
-                    binding: 1,
-                    resource: {
-                        buffer: this.nodeBufferBlas,
-                    },
-                },
-                {
-                    binding: 2,
-                    resource: {
-                        buffer: this.blasInstanceBuffer,
-                    },
-                },
-                {
-                    binding: 3,
-                    resource: {
-                        buffer: this.nodeBufferTlas,
-                    },
-                },
-                {
-                    binding: 4,
-                    resource: {
-                        buffer: this.triangleIndexBuffer,
-                    },
-                },
-                {
-                    binding: 5,
-                    resource: {
-                        buffer: this.materialBuffer,
-                    },
-                },
-            ],
-        })
-
-        // Group 3: Textures and Samplers
-        this.textureBindGroup = this.device.createBindGroup({
-            layout: this.ray_tracing_pipeline.getBindGroupLayout(3),
-            entries: [
-                {
-                    binding: 0,
-                    resource: this.sky_texture.view,
-                },
-                {
-                    binding: 1,
-                    resource: this.sky_texture.sampler,
-                },
-            ],
-        })
+        );
+      
+        // Assign bind groups to properties
+        [
+            this.uniformBindGroup,
+            this.frameBufferBindGroup,
+            this.objectBindGroup,
+            this.textureBindGroup,
+        ] = bindGroups
     }
-
+      
     async makeRenderPipeline () {
-        this.render_output_pipeline = this.device.createRenderPipeline({
-            layout: 'auto',
-            label: 'render pipeline',
-            vertex: {
-                module: this.device.createShaderModule({
-                    code: screen_shader,
-                }),
-                entryPoint: 'vert_main',
-                buffers: [
-                    {
-                        arrayStride: 2 * 4, // 2 floats, 4 bytes each
-                        attributes: [ { shaderLocation: 0, offset: 0, format: 'float32x2' } ],
-                    },
+        const vertexBuffers: GPUVertexBufferLayout[] = [
+            {
+                arrayStride: 2 * 4, // 2 floats, 4 bytes each
+                attributes: [
+                    { shaderLocation: 0, offset: 0, format: 'float32x2' },
                 ],
             },
-
-            fragment: {
-                module: this.device.createShaderModule({
-                    code: screen_shader,
-                }),
-                entryPoint: 'frag_main',
-                targets: [
-                    {
-                        format: this.format,
-                    },
-                ],
-            },
-        })
-        // Two bind groups to render the last accumulated compute pass
-
-        this.renderOutputBindGroup = this.device.createBindGroup({
-            layout: this.render_output_pipeline.getBindGroupLayout(0),
-            entries: [
-                {
-                    binding: 0,
-                    resource: {
-                        buffer: this.uniformBuffer,
-                    },
-                },
-                {
-                    binding: 1,
-                    resource: {
-                        buffer: this.frameBuffer,
-                    },
-                },
-                {
-                    binding: 2,
-                    resource: {
-                        buffer: this.imgOutputBuffer,
-                    },
-                },
-            ],
-        })
-
+        ]
+      
+        this.render_output_pipeline = createRenderPipeline(
+            this.device,
+            screen_shader, // `screen_shader` contains both vertex and fragment code
+            screen_shader,
+            'vert_main',
+            'frag_main',
+            vertexBuffers,
+            this.format,
+        )
+      
+        const renderOutputBindGroupEntries: GPUBindGroupEntry[] = [
+            { binding: 0, resource: { buffer: this.uniformBuffer } },
+            { binding: 1, resource: { buffer: this.frameBuffer } },
+            { binding: 2, resource: { buffer: this.imgOutputBuffer } },
+        ]
+      
+        this.renderOutputBindGroup = createBindGroups(
+            this.device,
+            this.render_output_pipeline,
+            [ renderOutputBindGroupEntries ],
+        )[0]
+      
         this.renderPassDescriptor = createRenderPassDescriptor()
     }
 
