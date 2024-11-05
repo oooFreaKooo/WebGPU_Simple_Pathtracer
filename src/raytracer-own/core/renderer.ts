@@ -4,7 +4,7 @@ import screen_shader from '../utils/screen_shader.wgsl'
 import { Scene } from './scene'
 import { Deg2Rad, addEventListeners } from '../utils/helper'
 import { CubeMapMaterial } from './material'
-import { computePass, createBindGroups, createComputePipeline, createRenderPassDescriptor, createRenderPipeline, createVertexBuffer, renderPass } from '../utils/webgpu'
+import { computePass, createAndUpdateBlasInstanceBuffer, createAndUpdateBlasNodeBuffer, createAndUpdateMaterialBuffer, createAndUpdateTlasNodeBuffer, createAndUpdateTriangleBuffer, createBindGroups, createBuffer, createBufferWithData, createComputePipeline, createRenderPassDescriptor, createRenderPipeline, createVertexBuffer, renderPass, updateBuffer } from '../utils/webgpu'
 import { Triangle } from './triangle'
 import { BLASNode } from './bvh/blas'
 import { TLASNode } from './bvh/tlas'
@@ -120,11 +120,11 @@ export class Renderer {
         this.createImgOutputBuffer()
         this.createFrameBuffer()
         this.createCameraBuffer()
-        this.createMaterialBuffer()
-        this.createTriangleBuffer()
-        this.createBlasNodeBuffer()
-        this.createTlasNodeBuffer()
-        this.createBlasInstanceBuffer()
+        this.createAndUpdateMaterialBuffer()
+        this.createAndUpdateTriangleBuffer()
+        this.createAndUpdateBlasNodeBuffer()
+        this.createAndUpdateTlasNodeBuffer()
+        this.createAndUpdateBlasInstanceBuffer()
         this.createSettingsBuffer()
         this.createTriangleIndexBuffer()
         const vertexData = new Float32Array([ -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1 ])
@@ -248,11 +248,6 @@ export class Renderer {
         this.updateSettings()
         this.updateCamSettings()
         this.updateImgSettings()
-        this.updateMaterialData()
-        this.updateTriangleData()
-        this.updateBlasNodeData()
-        this.updateTlasNodeData()
-        this.updateBlasInstanceData()
 
         // Update the triangle count label
         const uploadTimeLabel = document.getElementById('triangles') as HTMLElement
@@ -283,13 +278,13 @@ export class Renderer {
     }
 
     private createUniformBuffer () {
-    // Set initial uniform values
+        // Set initial uniform values
         this.uniforms = {
             screenDims: [ this.canvas.width, this.canvas.height ],
             frameNum: 0,
             resetBuffer: 0,
         }
-
+      
         // Create a Float32Array to hold the uniform data
         const uniformArray = new Float32Array([
             this.uniforms.screenDims[0],
@@ -297,183 +292,67 @@ export class Renderer {
             this.uniforms.frameNum,
             this.uniforms.resetBuffer,
         ])
-
-        this.uniformBuffer = this.device.createBuffer({
-            label: 'Uniform buffer',
-            size: uniformArray.byteLength,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        })
-
-        this.device.queue.writeBuffer(this.uniformBuffer, 0, uniformArray)
-    }
-
-    private createImgOutputBuffer () {
-        const camDescriptor: GPUBufferDescriptor = {
-            size: 12,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        }
-        this.imgOutputBuffer = this.device.createBuffer(camDescriptor)
-    }
-
-    updateImgSettings () {
-        const camSettings = {
-            gamma: this.scene.enableGammaCorrection,
-            aces: this.scene.enableACES,
-            filmic: this.scene.enableFilmic,
-        }
-
-        this.device.queue.writeBuffer(this.imgOutputBuffer, 0, new Float32Array([ camSettings.gamma, camSettings.aces, camSettings.filmic ]), 0, 3)
-    }
-
-    private createFrameBuffer () {
-        const frameNum = new Float32Array(this.canvas.width * this.canvas.height * 4).fill(0)
-        this.frameBuffer = this.device.createBuffer({
-            label: 'Framebuffer',
-            size: frameNum.byteLength,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-        })
-        this.device.queue.writeBuffer(this.frameBuffer, 0, frameNum)
-    }
-
-    private createMaterialBuffer () {
-        const materialSize = 96 // Each Material is 80 bytes (24 floats * 4 bytes)
-        const bufferSize = materialSize * this.scene.materials.length
-        this.materialBuffer = this.device.createBuffer({
-            size: bufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        })
-    }
-
-    private updateMaterialData () {
-        const materialDataSize = 24 // 24 floats per material
-        const materialData = new Float32Array(materialDataSize * this.scene.materials.length)
-
-        for (let i = 0; i < this.scene.materials.length; i++) {
-            const material = this.scene.materials[i]
-            const baseIndex = materialDataSize * i
-
-            // Pack material properties into the array
-            materialData[baseIndex + 0] = material.albedo[0]
-            materialData[baseIndex + 1] = material.albedo[1]
-            materialData[baseIndex + 2] = material.albedo[2]
-            materialData[baseIndex + 3] = material.specularChance
-
-            materialData[baseIndex + 4] = material.specularColor[0]
-            materialData[baseIndex + 5] = material.specularColor[1]
-            materialData[baseIndex + 6] = material.specularColor[2]
-            materialData[baseIndex + 7] = material.roughness
-
-            materialData[baseIndex + 8] = material.emissionColor[0]
-            materialData[baseIndex + 9] = material.emissionColor[1]
-            materialData[baseIndex + 10] = material.emissionColor[2]
-            materialData[baseIndex + 11] = material.emissionStrength
-
-            materialData[baseIndex + 12] = material.refractionColor[0]
-            materialData[baseIndex + 13] = material.refractionColor[1]
-            materialData[baseIndex + 14] = material.refractionColor[2]
-            materialData[baseIndex + 15] = material.refractionChance
-
-            materialData[baseIndex + 16] = material.sssColor[0]
-            materialData[baseIndex + 17] = material.sssColor[1]
-            materialData[baseIndex + 18] = material.sssColor[2]
-            materialData[baseIndex + 19] = material.sssStrength
-
-            materialData[baseIndex + 20] = material.sssRadius
-            materialData[baseIndex + 21] = material.ior
-            materialData[baseIndex + 22] = 0.0
-            materialData[baseIndex + 23] = 0.0
-        }
-
-        this.device.queue.writeBuffer(
-            this.materialBuffer,
-            0,
-            materialData.buffer,
-            materialData.byteOffset,
-            materialData.byteLength
+      
+        this.uniformBuffer = createBufferWithData(
+            this.device,
+            'Uniform Buffer',
+            GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            uniformArray,
         )
     }
 
-
-
-    private createBlasInstanceBuffer () {
-    // Get BLAS instances from the scene
-        this.blasInstances = this.scene.blasInstanceArray
-
-        // Calculate buffer size
-        const instanceSize = 144 // Each BLASInstance is 144 bytes
-        const bufferSize = instanceSize * this.blasInstances.length
-
-        // Create the buffer
-        this.blasInstanceBuffer = this.device.createBuffer({
-            size: bufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        })
+    private createImgOutputBuffer () {
+        this.imgOutputBuffer = createBuffer(
+            this.device,
+            'Image Output Buffer',
+            GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            12, // 3 floats * 4 bytes
+        )
     }
 
-    private createTriangleBuffer () {
+    updateImgSettings () {
+        const camSettings = new Float32Array([
+            this.scene.enableGammaCorrection ? 1.0 : 0.0,
+            this.scene.enableACES ? 1.0 : 0.0,
+            this.scene.enableFilmic ? 1.0 : 0.0,
+        ])
+      
+        updateBuffer(this.device, this.imgOutputBuffer, camSettings)
+    }
+
+    private createFrameBuffer () {
+        const frameNum = new Float32Array(this.canvas.width * this.canvas.height * 4)
+        frameNum.fill(0)
+      
+        this.frameBuffer = createBufferWithData(
+            this.device,
+            'Framebuffer',
+            GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+            frameNum,
+        )
+    }
+
+    private createAndUpdateMaterialBuffer () {
+        this.materialBuffer = createAndUpdateMaterialBuffer(
+            this.device,
+            this.scene.materials,
+        )
+    }
+
+    private createAndUpdateTriangleBuffer () {
+        // Flatten all triangles from BLASes
+        this.allTriangles = []
         let triangleOffset = 0
         for (const blas of this.scene.blasArray) {
             this.scene.blasTriangleOffsetMap.set(blas.id, triangleOffset)
-            // Use a loop to push triangles
-            for (const triangle of blas.m_triangles) {
-                this.allTriangles.push(triangle)
-            }
+            this.allTriangles.push(...blas.m_triangles)
             triangleOffset += blas.m_triangles.length
         }
-    
-        const triangleSize = 96 // Each Triangle is 96 bytes (24 floats * 4 bytes)
-        const bufferSize = triangleSize * this.allTriangles.length
-    
-        this.triangleBuffer = this.device.createBuffer({
-            size: bufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        })
-    }
-    
-    
-    
-    private updateTriangleData () {
-        const triangleDataSize = 24 // Each triangle takes 24 floats
-        
-        const triangleData = new Float32Array(triangleDataSize * this.allTriangles.length)
-    
-        for (let i = 0; i < this.allTriangles.length; i++) {
-            const tri = this.allTriangles[i]
-    
-            // Store edge1 (3 floats for x, y, z, and 1 padding)
-            triangleData[triangleDataSize * i + 0] = tri.edge1[0]
-            triangleData[triangleDataSize * i + 1] = tri.edge1[1]
-            triangleData[triangleDataSize * i + 2] = tri.edge1[2]
-            triangleData[triangleDataSize * i + 3] = 0.0 // padding for alignment
-    
-            triangleData[triangleDataSize * i + 4] = tri.edge2[0]
-            triangleData[triangleDataSize * i + 5] = tri.edge2[1]
-            triangleData[triangleDataSize * i + 6] = tri.edge2[2]
-            triangleData[triangleDataSize * i + 7] = 0.0 // padding
-
-            triangleData[triangleDataSize * i + 8] = tri.corners[0][0]
-            triangleData[triangleDataSize * i + 9] = tri.corners[0][1]
-            triangleData[triangleDataSize * i + 10] = tri.corners[0][2]
-            triangleData[triangleDataSize * i + 11] = 0.0 // padding
-    
-            triangleData[triangleDataSize * i + 12] = tri.normals[0][0]
-            triangleData[triangleDataSize * i + 13] = tri.normals[0][1]
-            triangleData[triangleDataSize * i + 14] = tri.normals[0][2]
-            triangleData[triangleDataSize * i + 15] = 0.0 // padding
-    
-            triangleData[triangleDataSize * i + 16] = tri.normals[1][0]
-            triangleData[triangleDataSize * i + 17] = tri.normals[1][1]
-            triangleData[triangleDataSize * i + 18] = tri.normals[1][2]
-            triangleData[triangleDataSize * i + 19] = 0.0 // padding
-    
-            triangleData[triangleDataSize * i + 20] = tri.normals[2][0]
-            triangleData[triangleDataSize * i + 21] = tri.normals[2][1]
-            triangleData[triangleDataSize * i + 22] = tri.normals[2][2]
-            triangleData[triangleDataSize * i + 23] = 0.0 // padding
-        }
-    
-        // Write the updated buffer
-        this.device.queue.writeBuffer(this.triangleBuffer, 0, triangleData, 0, triangleDataSize * this.allTriangles.length)
+      
+        this.triangleBuffer = createAndUpdateTriangleBuffer(
+            this.device,
+            this.allTriangles,
+        )
     }
     
 
@@ -482,48 +361,37 @@ export class Renderer {
         for (const blas of this.scene.blasArray) {
             totalIndices += blas.m_triangleIndices.length
         }
-    
+      
         this.allTriangleIndices = new Uint32Array(totalIndices)
-    
+      
         let indexOffset = 0
         for (const blas of this.scene.blasArray) {
             const triangleOffset = this.scene.blasTriangleOffsetMap.get(blas.id)!
-            if (triangleOffset === undefined) {
-                console.error(`Triangle offset not found for BLAS ID: ${blas.id}`)
-                continue
-            }
-    
             for (let i = 0; i < blas.m_triangleIndices.length; i++) {
-                this.allTriangleIndices[indexOffset + i] = blas.m_triangleIndices[i] + triangleOffset
+                this.allTriangleIndices[indexOffset + i] =
+              blas.m_triangleIndices[i] + triangleOffset
             }
             indexOffset += blas.m_triangleIndices.length
         }
-    
-        const bufferSize = 4 * this.allTriangleIndices.length
-        this.triangleIndexBuffer = this.device.createBuffer({
-            size: bufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        })
-    
-        this.device.queue.writeBuffer(
-            this.triangleIndexBuffer,
-            0,
-            this.allTriangleIndices.buffer,
-            this.allTriangleIndices.byteOffset,
-            this.allTriangleIndices.byteLength
+      
+        this.triangleIndexBuffer = createBufferWithData(
+            this.device,
+            'Triangle Index Buffer',
+            GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            this.allTriangleIndices,
         )
     }
     
-    private createBlasNodeBuffer () {
+    private createAndUpdateBlasNodeBuffer () {
         let nodeOffset = 0
         this.allBlasNodes = []
-    
+      
         for (const blas of this.scene.blasArray) {
             const triangleIndexOffset = this.scene.blasTriangleOffsetMap.get(blas.id)
             const baseNodeOffset = nodeOffset
             for (const node of blas.m_nodes) {
                 if (node.triangleCount > 0) {
-                    node.leftFirst += triangleIndexOffset
+                    node.leftFirst += triangleIndexOffset!
                 } else {
                     node.leftFirst += baseNodeOffset
                 }
@@ -531,128 +399,30 @@ export class Renderer {
                 nodeOffset += 1
             }
         }
-    
-        // Create the BLAS node buffer
-        const nodeSize = 32
-        const bufferSize = nodeSize * this.allBlasNodes.length
-    
-        this.nodeBufferBlas = this.device.createBuffer({
-            size: bufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        })
-    
-        this.floatDataBlas = new Float32Array(this.allBlasNodes.length * 8)
-        this.uintDataBlas = new Uint32Array(this.floatDataBlas.buffer)
-    }
-    
-
-    private updateBlasNodeData () {
-        const nodeCount = this.allBlasNodes.length
-
-        for (let i = 0; i < nodeCount; i++) {
-            const node = this.allBlasNodes[i]
-            const baseIndex = i * 8 // 8 slots per node (3 + 1 + 3 + 1)
-
-            this.floatDataBlas[baseIndex + 0] = node.aabb.bmin[0]
-            this.floatDataBlas[baseIndex + 1] = node.aabb.bmin[1]
-            this.floatDataBlas[baseIndex + 2] = node.aabb.bmin[2]
-            this.uintDataBlas[baseIndex + 3] = node.leftFirst
-            this.floatDataBlas[baseIndex + 4] = node.aabb.bmax[0]
-            this.floatDataBlas[baseIndex + 5] = node.aabb.bmax[1]
-            this.floatDataBlas[baseIndex + 6] = node.aabb.bmax[2]
-            this.uintDataBlas[baseIndex + 7] = node.triangleCount
-        }
-
-        this.device.queue.writeBuffer(
-            this.nodeBufferBlas,
-            0,
-            this.floatDataBlas.buffer,
-            0,
-            nodeCount * 32 // 32 bytes per node
+      
+        this.nodeBufferBlas = createAndUpdateBlasNodeBuffer(
+            this.device,
+            this.allBlasNodes,
         )
     }
 
-    private createTlasNodeBuffer () {
+    private createAndUpdateTlasNodeBuffer () {
         this.tlasNodes = this.scene.tlas.m_tlasNodes
-
-        const nodeSize = 48 // Each TLASNode is 48 bytes
-        const bufferSize = nodeSize * this.tlasNodes.length
-
-        this.nodeBufferTlas = this.device.createBuffer({
-            size: bufferSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        })
-
-
-        this.floatDataTlas = new Float32Array(this.tlasNodes.length * 12)
-        this.uintDataTlas = new Uint32Array(this.floatDataTlas.buffer)
-    }
-
-    private updateTlasNodeData () {
-        const nodeCount = this.tlasNodes.length
-
-        for (let i = 0; i < nodeCount; i++) {
-            const node = this.tlasNodes[i]
-            const baseIndex = i * 12 // 12 slots per node (3 + 1 + 3 + 1 + 1 + 3 padding)
-
-            this.floatDataTlas[baseIndex + 0] = node.aabb.bmin[0]
-            this.floatDataTlas[baseIndex + 1] = node.aabb.bmin[1]
-            this.floatDataTlas[baseIndex + 2] = node.aabb.bmin[2]
-            this.uintDataTlas[baseIndex + 3] = node.left >= 0 ? node.left : 0
-            
-            this.floatDataTlas[baseIndex + 4] = node.aabb.bmax[0]
-            this.floatDataTlas[baseIndex + 5] = node.aabb.bmax[1]
-            this.floatDataTlas[baseIndex + 6] = node.aabb.bmax[2]
-            this.uintDataTlas[baseIndex + 7] = node.right >= 0 ? node.right : 0
-            
-            this.uintDataTlas[baseIndex + 8] = node.blas >= 0 ? node.blas : 0
-            this.uintDataTlas[baseIndex + 9] = 0
-            this.uintDataTlas[baseIndex + 10] = 0
-            this.uintDataTlas[baseIndex + 11] = 0
-        }
-
-        this.device.queue.writeBuffer(
-            this.nodeBufferTlas,
-            0,
-            this.floatDataTlas.buffer,
-            0,
-            nodeCount * 48 // 48 bytes per node
+      
+        this.nodeBufferTlas = createAndUpdateTlasNodeBuffer(
+            this.device,
+            this.tlasNodes,
         )
     }
 
-    private updateBlasInstanceData () {
-        const instanceCount = this.blasInstances.length
-        const floatData = new Float32Array(36 * instanceCount) // 36 floats per instance
-        const uintData = new Uint32Array(floatData.buffer)
-
-        for (let i = 0; i < instanceCount; i++) {
-            const instance = this.blasInstances[i]
-            const baseIndex = 36 * i
-
-            // Copy transform matrix (16 floats)
-            floatData.set(instance.transform, baseIndex)
-
-            // Copy inverse transform matrix (16 floats)
-            floatData.set(instance.transformInv, baseIndex + 16)
-
-            // Add blasOffset and materialIdx (as uint32)
-            uintData[baseIndex + 32] = instance.blasOffset
-            uintData[baseIndex + 33] = instance.materialIdx
-
-            // Padding to align to 16 bytes (2 floats)
-            floatData[baseIndex + 34] = 0.0
-            floatData[baseIndex + 35] = 0.0
-        }
-
-        // Write the data to the buffer
-        this.device.queue.writeBuffer(
-            this.blasInstanceBuffer,
-            0,
-            floatData.buffer,
-            floatData.byteOffset,
-            floatData.byteLength
+    private createAndUpdateBlasInstanceBuffer () {
+        // Get BLAS instances from the scene
+        this.blasInstances = this.scene.blasInstanceArray
+      
+        this.blasInstanceBuffer = createAndUpdateBlasInstanceBuffer(
+            this.device,
+            this.blasInstances,
         )
-
     }
 
     private createCameraBuffer () {
