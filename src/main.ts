@@ -1,4 +1,4 @@
-import { Application } from './raytracer-own/core/app'
+import { Application } from './core/app'
 
 async function mainFunc () {
     const canvas = document.createElement('canvas')
