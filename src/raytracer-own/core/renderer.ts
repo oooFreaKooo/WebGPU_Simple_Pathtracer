@@ -1,4 +1,5 @@
 import raytracer_kernel from '../utils/raytracer_kernel.wgsl'
+import bvh_traverse from '../utils/bvh_traverse.wgsl'
 import screen_shader from '../utils/screen_shader.wgsl'
 import { Scene } from './scene'
 import { Deg2Rad, addEventListeners } from '../utils/helper'
@@ -136,7 +137,7 @@ export class Renderer {
             layout: 'auto',
 
             compute: {
-                module: this.device.createShaderModule({ code: raytracer_kernel }),
+                module: this.device.createShaderModule({ code: raytracer_kernel + bvh_traverse }),
                 entryPoint: 'main',
             },
         })
