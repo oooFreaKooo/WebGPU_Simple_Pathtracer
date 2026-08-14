@@ -4,7 +4,7 @@ import screen_shader from '../shaders/screen_shader.wgsl'
 import { Scene } from './scene'
 import { Deg2Rad, addEventListeners } from '../utils/helper'
 import { CubeMapMaterial } from '../components/material'
-import { computePass, createAndUpdateBlasInstanceBuffer, createAndUpdateBlasNodeBuffer, createAndUpdateMaterialBuffer, createAndUpdateTlasNodeBuffer, createAndUpdateTriangleBuffer, createBindGroups, createBuffer, createBufferWithData, createComputePipeline, createRenderPassDescriptor, createRenderPipeline, createVertexBuffer, renderPass, updateBuffer } from '../utils/webgpu'
+import { computePass, createAndUpdateBlasInstanceBuffer, createAndUpdateBlasNodeBuffer, createAndUpdateMaterialBuffer, createAndUpdateTlasNodeBuffer, createAndUpdateTriangleBuffer, createBindGroups, createBuffer, createBufferWithData, createComputePipeline, createRenderPassDescriptor, createRenderPipeline, createVertexBuffer, renderPass, toGpuBufferSource, updateBuffer } from '../utils/webgpu'
 import { Triangle } from '../components/triangle'
 import { BLASNode } from '../bvh/blas'
 import { TLASNode } from '../bvh/tlas'
@@ -236,7 +236,7 @@ export class Renderer {
         ])
 
         // Write the updated data to the buffer
-        this.device.queue.writeBuffer(this.uniformBuffer, 0, this.updatedUniformArray)
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, toGpuBufferSource(this.updatedUniformArray))
 
         if (this.loaded) {
             // everything below will only load once
@@ -256,7 +256,6 @@ export class Renderer {
     }
 
     async createSkyTexture () {
-        const textureID = 4 // 0 = space, 2 = mars, 3 = town, 4 = garden
         const urls = [
             './src/assets/textures/skybox/right.png',
             './src/assets/textures/skybox/left.png',
@@ -266,15 +265,8 @@ export class Renderer {
             './src/assets/textures/skybox/back.png',
         ]
 
-        // modifies the urls with the ID
-        const modifiedUrls = urls.map((url) => {
-            const parts = url.split('.')
-            const newUrl = `${parts[0]}${parts[1]}${textureID}.${parts[2]}`
-            return newUrl
-        })
-
         this.sky_texture = new CubeMapMaterial()
-        await this.sky_texture.initialize(this.device, modifiedUrls)
+        await this.sky_texture.initialize(this.device, urls)
     }
 
     private createUniformBuffer () {
@@ -444,7 +436,7 @@ export class Renderer {
         this.device.queue.writeBuffer(
             this.cameraBuffer,
             0,
-            new Float32Array([
+            toGpuBufferSource(new Float32Array([
                 sceneData.cameraPos[0],
                 sceneData.cameraPos[1],
                 sceneData.cameraPos[2],
@@ -460,7 +452,7 @@ export class Renderer {
                 sceneData.cameraUp[0],
                 sceneData.cameraUp[1],
                 sceneData.cameraUp[2],
-            ]),
+            ])),
             0,
             15,
         )
@@ -487,7 +479,7 @@ export class Renderer {
         this.device.queue.writeBuffer(
             this.camsettingsBuffer,
             0,
-            new Float32Array([ camSettings.fov ]),
+            toGpuBufferSource(new Float32Array([ camSettings.fov ])),
             0,
             1,
         )
@@ -508,14 +500,14 @@ export class Renderer {
         this.device.queue.writeBuffer(
             this.settingsBuffer,
             0,
-            new Float32Array([
+            toGpuBufferSource(new Float32Array([
                 settingsData.maxBounces,
                 settingsData.samples,
                 settingsData.culling,
                 settingsData.skyMode,
                 settingsData.aspectRatio,
                 settingsData.jitterScale,
-            ]),
+            ])),
             0,
             6
         )

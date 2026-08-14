@@ -4,6 +4,10 @@ import { TLASNode } from '../bvh/tlas'
 import { Material } from '../components/material'
 import { Triangle } from '../components/triangle'
 
+export function toGpuBufferSource (data: Float32Array | Uint32Array): GPUAllowSharedBufferSource {
+    return data as unknown as GPUAllowSharedBufferSource
+}
+
 export function computePass (
     device: GPUDevice,
     computePipeline: GPUComputePipeline,
@@ -80,7 +84,7 @@ export function createVertexBuffer (device: GPUDevice, bufferArray: Float32Array
         size: bufferArray.byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     })
-    device.queue.writeBuffer(vertexBuffer, 0, bufferArray)
+    device.queue.writeBuffer(vertexBuffer, 0, toGpuBufferSource(bufferArray))
 
     return vertexBuffer
 }
@@ -158,7 +162,7 @@ export function createBufferWithData (
         size: data.byteLength,
         usage: usage,
     })
-    device.queue.writeBuffer(buffer, 0, data)
+    device.queue.writeBuffer(buffer, 0, toGpuBufferSource(data))
     return buffer
 }
   
@@ -183,7 +187,7 @@ export function updateBuffer (
     data: Float32Array | Uint32Array,
     offset: number = 0,
 ): void {
-    device.queue.writeBuffer(buffer, offset, data)
+    device.queue.writeBuffer(buffer, offset, toGpuBufferSource(data))
 }
 
 // Function to create and initialize a material buffer

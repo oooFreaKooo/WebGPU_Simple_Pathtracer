@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import vitePluginString from 'vite-plugin-string'
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
     root: './', 
@@ -21,8 +24,8 @@ export default defineConfig({
     },
     resolve: {
         alias: {
-            '@models': path.resolve(__dirname, 'src/assets/models'),
-            '@textures': path.resolve(__dirname, 'src/assets/textures'),
+            '@models': path.resolve(rootDir, 'src/assets/models'),
+            '@textures': path.resolve(rootDir, 'src/assets/textures'),
         },
         extensions: [ '.js', '.ts' ],
     },

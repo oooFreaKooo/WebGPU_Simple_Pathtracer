@@ -1,5 +1,4 @@
 import { Camera } from '../components/camera'
-import { vec3 } from 'gl-matrix'
 import { Controls } from '../components/controls'
 import { ObjLoader } from '../components/obj-loader'
 import { TLAS } from '../bvh/tlas'
@@ -7,6 +6,7 @@ import { BLAS } from '../bvh/blas'
 import { BLASInstance } from '../bvh/blas-instance'
 import { Material } from '../components/material'
 import { ObjectProperties } from '../utils/preset-scenes'
+import { Vec3Input } from '../utils/types'
 
 export class Scene {
     // Rendering settings
@@ -94,17 +94,17 @@ export class Scene {
     }
 
     private createBLASInstance (
-        position: Float32Array | number[],
-        scale: Float32Array | number[],
-        rotation: Float32Array | number[],
+        position: Vec3Input,
+        scale: Vec3Input,
+        rotation: Vec3Input,
         nodeOffset: number,
         materialIdx: number
     ) {
         this.blasInstanceArray.push(
             new BLASInstance(
-                vec3.fromValues(position[0], position[1], position[2]),
-                vec3.fromValues(scale[0], scale[1], scale[2]),
-                vec3.fromValues(rotation[0], rotation[1], rotation[2]),
+                position,
+                scale,
+                rotation,
                 nodeOffset,
                 materialIdx
             )

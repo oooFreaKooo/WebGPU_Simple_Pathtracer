@@ -1,5 +1,6 @@
-import { mat4, vec3 } from 'gl-matrix'
+import { mat4 } from 'gl-matrix'
 import { Deg2Rad } from '../utils/helper'
+import { Vec3Input } from '../utils/types'
 
 export class BLASInstance {
     transform: mat4
@@ -7,7 +8,7 @@ export class BLASInstance {
     blasOffset: number
     materialIdx: number
 
-    constructor (position: vec3, scale: vec3, rotation: vec3, blasOffset: number, materialIdx: number) {
+    constructor (position: Vec3Input, scale: Vec3Input, rotation: Vec3Input, blasOffset: number, materialIdx: number) {
         this.transform = mat4.create()
         this.transformInv = mat4.create()
         this.blasOffset = blasOffset

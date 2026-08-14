@@ -14,7 +14,10 @@ export default [
         },
         rules: {
             // General Best Practices
-            'no-unused-vars': 'warn',                // Warn on unused variables
+            'no-unused-vars': 'off',
+            '@typescript-eslint/no-unused-vars': [ 'warn', {
+                argsIgnorePattern: '^_',
+            } ],
             'no-console': 'off',                     // Allow console statements
             'eqeqeq': [ 'error', 'always' ],           // Require strict equality `===`
             'curly': [ 'error', 'all' ],               // Require curly braces for all control structures
@@ -30,7 +33,6 @@ export default [
             'space-before-function-paren': [ 'error', 'always' ], // Require space before function parentheses
 
             // TypeScript-Specific Rules
-            '@typescript-eslint/no-unused-vars': [ 'warn' ],  // TypeScript-specific unused variables rule
             '@typescript-eslint/no-explicit-any': 'off',    // Allow `any` type in TypeScript (can be adjusted as needed)
         },
     },

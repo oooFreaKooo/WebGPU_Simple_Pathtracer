@@ -1,15 +1,15 @@
 import { vec3 } from 'gl-matrix'
 import { Camera } from './camera'
 
-enum KeyCodes {
-  W = 'KeyW',
-  S = 'KeyS',
-  A = 'KeyA',
-  D = 'KeyD',
-  SPACE = 'Space',
-  LEFT_CONTROL = 'ControlLeft',
-  LEFT_SHIFT = 'ShiftLeft',
-}
+const KeyCodes = {
+    W: 'KeyW',
+    S: 'KeyS',
+    A: 'KeyA',
+    D: 'KeyD',
+    SPACE: 'Space',
+    LEFT_CONTROL: 'ControlLeft',
+    LEFT_SHIFT: 'ShiftLeft',
+} as const
 
 const SPEED = 5.0 // units per second for smoother movement
 const SENSITIVITY = 0.1

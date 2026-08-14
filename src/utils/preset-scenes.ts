@@ -1,12 +1,13 @@
 import { vec3 } from 'gl-matrix'
 import { Material } from '../components/material'
+import { Vec3Input, toVec3Array } from './types'
 
 export interface ObjectProperties {
     modelPath: string
     material: Material
-    position?: vec3
-    scale?: vec3
-    rotation?: vec3
+    position?: Vec3Input
+    scale?: Vec3Input
+    rotation?: Vec3Input
     objectID?: number
   }
 
@@ -1175,22 +1176,22 @@ export function createScene12 (): ObjectProperties[] {
         './src/assets/models/klein.obj',
         './src/assets/models/teapot.obj',
         './src/assets/models/sphere.obj',
-        './src/assets/models/water2.obj',
+        './src/assets/models/glasswater2.obj',
         './src/assets/models/donut.obj',
         './src/assets/models/horse.obj',
         './src/assets/models/couch.obj',
         './src/assets/models/monkey.obj',
     ]
-    const sizes = [
-        vec3.fromValues(0.28, 0.28, 0.28),
-        vec3.fromValues(0.13, 0.13, 0.13),
-        vec3.fromValues(0.12, 0.12, 0.12),
-        vec3.fromValues(0.8, 0.8, 0.8),
-        vec3.fromValues(0.3, 0.3, 0.3),
-        vec3.fromValues(0.6, 0.6, 0.6),
-        vec3.fromValues(0.65, 0.65, 0.65),
-        vec3.fromValues(0.25, 0.25, 0.25),
-        vec3.fromValues(0.5, 0.5, 0.5),
+    const sizes: Vec3Input[] = [
+        [ 0.28, 0.28, 0.28 ],
+        [ 0.13, 0.13, 0.13 ],
+        [ 0.12, 0.12, 0.12 ],
+        [ 0.8, 0.8, 0.8 ],
+        [ 0.3, 0.3, 0.3 ],
+        [ 0.6, 0.6, 0.6 ],
+        [ 0.65, 0.65, 0.65 ],
+        [ 0.25, 0.25, 0.25 ],
+        [ 0.5, 0.5, 0.5 ],
     ]
     const rotations = [ -45, -25, 0, -55, -45, -45, -35, -45, -145 ]
     const height = [ 0.25, 0.25, 0.25, 0.7, 0.25, 0.85, 0.25, 0.3, 0.85 ]
@@ -1363,8 +1364,8 @@ function createSphere (position: vec3, scale: vec3): ObjectProperties {
     return {
         modelPath: './src/assets/models/sphere.obj',
         material: shinyGoldMaterial,
-        position: position,
-        scale: scale,
+        position: toVec3Array(position),
+        scale: toVec3Array(scale),
     }
 }
 // Recursive function to create the Sphereflake fractal
@@ -1544,9 +1545,9 @@ export function createScene15 (): ObjectProperties[] {
         objectsToLoad.push({
             modelPath: './src/assets/models/sphere.obj',
             material: backboneColor,
-            position: vec3.fromValues(x1, y, z1),
-            scale: vec3.fromValues(sphereSize, sphereSize, sphereSize),
-            rotation: vec3.fromValues(0.0, 0.0, 0.0),
+            position: [ x1, y, z1 ],
+            scale: [ sphereSize, sphereSize, sphereSize ],
+            rotation: [ 0.0, 0.0, 0.0 ],
             objectID: objectsToLoad.length,
         })
 
@@ -1554,9 +1555,9 @@ export function createScene15 (): ObjectProperties[] {
         objectsToLoad.push({
             modelPath: './src/assets/models/sphere.obj',
             material: backboneColor,
-            position: vec3.fromValues(x2, y, z2),
-            scale: vec3.fromValues(sphereSize, sphereSize, sphereSize),
-            rotation: vec3.fromValues(0.0, 0.0, 0.0),
+            position: [ x2, y, z2 ],
+            scale: [ sphereSize, sphereSize, sphereSize ],
+            rotation: [ 0.0, 0.0, 0.0 ],
             objectID: objectsToLoad.length,
         })
 
@@ -1577,18 +1578,18 @@ export function createScene15 (): ObjectProperties[] {
         objectsToLoad.push({
             modelPath: './src/assets/models/cylinder.obj',
             material: basePairColor1,
-            position: midpoint1,
-            scale: cylinderScale,
-            rotation: rotation,
+            position: toVec3Array(midpoint1),
+            scale: toVec3Array(cylinderScale),
+            rotation: toVec3Array(rotation),
             objectID: objectsToLoad.length,
         })
 
         objectsToLoad.push({
             modelPath: './src/assets/models/cylinder.obj',
             material: basePairColor2,
-            position: midpoint2,
-            scale: cylinderScale,
-            rotation: rotation,
+            position: toVec3Array(midpoint2),
+            scale: toVec3Array(cylinderScale),
+            rotation: toVec3Array(rotation),
             objectID: objectsToLoad.length,
         })
     }
@@ -1610,9 +1611,9 @@ export function createScene15 (): ObjectProperties[] {
         objectsToLoad.push({
             modelPath: './src/assets/models/sphere.obj',
             material: createGlowMaterial(color[0], color[1], color[2], 10.0),
-            position: vec3.fromValues(x, y, z),
-            scale: vec3.fromValues(0.5, 0.5, 0.5),
-            rotation: vec3.fromValues(0.0, 0.0, 0.0),
+            position: [ x, y, z ],
+            scale: [ 0.5, 0.5, 0.5 ],
+            rotation: [ 0.0, 0.0, 0.0 ],
             objectID: objectsToLoad.length,
         })
     })
@@ -1650,13 +1651,13 @@ export function createScene15 (): ObjectProperties[] {
         objectsToLoad.push({
             modelPath: './src/assets/models/sphere.obj',
             material,
-            position,
-            scale,
-            rotation: vec3.fromValues(
+            position: toVec3Array(position),
+            scale: toVec3Array(scale),
+            rotation: [
                 Math.random() * Math.PI,
                 Math.random() * Math.PI,
-                Math.random() * Math.PI
-            ),
+                Math.random() * Math.PI,
+            ],
             objectID: objectsToLoad.length,
         })
     }
