@@ -3,8 +3,8 @@
 set -e
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)"
-TARGET_DIR="$REPO_ROOT/target/claude"
+REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../../../.." && pwd)"
+TARGET_DIR="$REPO_ROOT/target/webgpu-specs"
 WEBGPU="$TARGET_DIR/webgpu-spec"
 WGSL="$TARGET_DIR/wgsl-spec"
 
