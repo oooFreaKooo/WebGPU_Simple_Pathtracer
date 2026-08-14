@@ -10,8 +10,8 @@ import { BLASNode } from '../bvh/blas'
 import { TLASNode } from '../bvh/tlas'
 import { BLASInstance } from '../bvh/blas-instance'
 
-const frameTimeLabel: HTMLElement = <HTMLElement>document.getElementById('frame-time')
-const renderTimeLabel: HTMLElement = <HTMLElement>document.getElementById('render-time')
+const frameTimeLabel: HTMLElement | null = document.getElementById('stat-fps')
+const renderTimeLabel: HTMLElement | null = document.getElementById('stat-frames')
 
 export class Renderer {
     private canvas: HTMLCanvasElement
@@ -62,6 +62,7 @@ export class Renderer {
 
     private frametime: number = 0
     private loaded = false
+    initialized = false
     private updatedUniformArray: Float32Array
 
     private renderOutputBindGroup: GPUBindGroup
@@ -81,7 +82,55 @@ export class Renderer {
         await this.createAssets()
         await this.makeComputePipeline()
         await this.makeRenderPipeline()
+        this.initialized = true
         await this.renderLoop()
+    }
+
+    async reloadScene () {
+        if (!this.initialized) {
+            return
+        }
+
+        this.destroySceneBuffers()
+
+        this.createAndUpdateMaterialBuffer()
+        this.createAndUpdateTriangleBuffer()
+        this.createTriangleIndexBuffer()
+        this.createAndUpdateBlasNodeBuffer()
+        this.createAndUpdateTlasNodeBuffer()
+        this.createAndUpdateBlasInstanceBuffer()
+        this.resetFrameBuffer()
+
+        await this.makeComputePipeline()
+
+        this.frameNum = 0
+        this.totalFrametime = 0
+        this.totalFrames = 0
+        this.scene.camera.cameraIsMoving = true
+
+        this.updateSettings()
+        this.updateCamSettings()
+        this.updateImgSettings()
+
+        const triangleLabel = document.getElementById('stat-triangles')
+        if (triangleLabel) {
+            triangleLabel.textContent = this.allTriangles.length.toLocaleString()
+        }
+    }
+
+    private destroySceneBuffers () {
+        this.triangleBuffer?.destroy()
+        this.nodeBufferBlas?.destroy()
+        this.nodeBufferTlas?.destroy()
+        this.blasInstanceBuffer?.destroy()
+        this.triangleIndexBuffer?.destroy()
+        this.materialBuffer?.destroy()
+    }
+
+    private resetFrameBuffer () {
+        const frameData = new Float32Array(this.canvas.width * this.canvas.height * 4)
+        frameData.fill(0)
+        updateBuffer(this.device, this.frameBuffer, frameData)
     }
 
     async setupDevice () {
@@ -250,8 +299,10 @@ export class Renderer {
         this.updateImgSettings()
 
         // Update the triangle count label
-        const uploadTimeLabel = document.getElementById('triangles') as HTMLElement
-        uploadTimeLabel.innerText = this.allTriangles.length.toString()
+        const triangleLabel = document.getElementById('stat-triangles')
+        if (triangleLabel) {
+            triangleLabel.textContent = this.allTriangles.length.toLocaleString()
+        }
 
     }
 

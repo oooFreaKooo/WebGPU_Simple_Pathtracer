@@ -1,422 +1,667 @@
-<html>
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
 
-  <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebGPU
-      Pathtacer</title>
-    <link rel="icon" href="data:;base64,iVBORwOKGO=">
-    <style>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebGPU Pathtracer</title>
+  <link rel="icon" href="data:;base64,iVBORwOKGO=">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
     :root {
-      --bg-color: #f0f0f0;
-      --panel-bg: #ffffff;
-      --text-color: #333333;
-      --highlight-color: #4CAF50;
-      --shadow-light: #dddddd;
-      --shadow-dark: #bbbbbb;
-      --toggle-bg: #e0e0e0;
-      --toggle-checked: #4CAF50;
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+      --sidebar-width: 320px;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --transition: 180ms ease;
     }
 
-    .dark-mode {
-      --bg-color: #121212;
-      --panel-bg: #1e1e1e;
-      --text-color: #e0e0e0;
-      --highlight-color: #66BB6A;
-      --shadow-light: #333333;
-      --shadow-dark: #000000;
-      --toggle-bg: #333333;
-      --toggle-checked: #66BB6A;
+    [data-theme="dark"] {
+      --bg-app: #07080d;
+      --bg-sidebar: #0f1117;
+      --bg-elevated: #161922;
+      --bg-input: #1c2030;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.14);
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent: #22d3ee;
+      --accent-dim: rgba(34, 211, 238, 0.12);
+      --accent-hover: #06b6d4;
+      --shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+      --overlay: rgba(7, 8, 13, 0.72);
     }
 
-    * {
+    [data-theme="light"] {
+      --bg-app: #eef1f6;
+      --bg-sidebar: #ffffff;
+      --bg-elevated: #f8fafc;
+      --bg-input: #eef2f7;
+      --border: rgba(15, 23, 42, 0.08);
+      --border-strong: rgba(15, 23, 42, 0.14);
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent: #0891b2;
+      --accent-dim: rgba(8, 145, 178, 0.1);
+      --accent-hover: #0e7490;
+      --shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+      --overlay: rgba(15, 23, 42, 0.35);
+    }
+
+    *, *::before, *::after {
       box-sizing: border-box;
     }
 
-    html,
-    body {
+    html, body {
       margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: var(--font-sans);
+      background: var(--bg-app);
+      color: var(--text-primary);
+    }
+
+    .app {
+      display: flex;
       width: 100vw;
       height: 100vh;
-      background: var(--bg-color);
-      color: var(--text-color);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      height: 100%;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      transition: background-color 0.3s, color 0.3s;
-      overflow: hidden;
+      z-index: 20;
+      transition: transform var(--transition);
     }
 
-    .settings-btn {
-      position: fixed;
-      top: 15px;
-      right: 15px;
-      background: var(--highlight-color);
-      border: none;
-      color: #fff;
-      padding: 0.8em 1.2em;
-      cursor: pointer;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      transition: background 0.3s, transform 0.2s;
-      z-index: 1000;
+    .sidebar-header {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
     }
 
-    .settings-btn:hover {
-      background: darken(var(--highlight-color), 10%);
-      transform: translateY(-2px);
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 4px;
     }
 
-    .control-panel {
-      position: fixed;
-      top: 0;
-      right: 0;
-      width: 300px;
-      height: 100%;
-      background: var(--panel-bg);
-      box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
-      transform: translateX(100%);
-      transition: transform 0.3s ease-in-out;
-      padding: 20px;
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #6366f1);
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      box-shadow: 0 8px 20px rgba(34, 211, 238, 0.25);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand p {
+      margin: 0;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .sidebar-content {
+      flex: 1;
       overflow-y: auto;
-      z-index: 999;
+      padding: 16px 20px 24px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) transparent;
     }
 
-    .control-panel.open {
-      transform: translateX(0);
+    .sidebar-content::-webkit-scrollbar {
+      width: 6px;
     }
 
-    .control-panel-toggle {
-      position: absolute;
-      top: 20px;
-      left: -40px;
-      background: var(--highlight-color);
-      border: none;
-      color: #fff;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      cursor: pointer;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      transition: background 0.3s, transform 0.2s;
-    }
-
-    .control-panel-toggle:hover {
-      background: darken(var(--highlight-color), 10%);
-      transform: rotate(90deg);
-    }
-
-    .control-group {
-      margin-top: 60px;
+    .sidebar-content::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 99px;
     }
 
     .section {
-      margin-bottom: 30px;
+      margin-bottom: 24px;
     }
 
-    .section h3 {
-      margin-bottom: 15px;
-      font-size: 1.1em;
-      color: var(--highlight-color);
-      border-bottom: 2px solid var(--highlight-color);
-      padding-bottom: 5px;
+    .section-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin: 0 0 12px;
     }
 
-    .control-item {
-      display: flex;
-      align-items: center;
-      margin-bottom: 20px;
+    .scene-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px;
     }
 
-    .control-item label {
-      flex: 1;
-      font-size: 0.95em;
-      margin-right: 10px;
+    .scene-card label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
     }
 
-    .control-item input[type="range"] {
-      flex: 2;
-      margin-right: 10px;
-      -webkit-appearance: none;
-      appearance: none;
+    .scene-card select {
       width: 100%;
-      height: 6px;
-      border-radius: 3px;
-      background: var(--shadow-light);
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      color: var(--text-primary);
+      font: inherit;
+      font-size: 0.875rem;
+      cursor: pointer;
       outline: none;
-      transition: background 0.3s;
+      transition: border-color var(--transition);
     }
 
-    .control-item input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
+    .scene-card select:focus {
+      border-color: var(--accent);
+    }
+
+    .scene-card select:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .scene-description {
+      margin: 10px 0 0;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+
+    .control-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .control-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-row label {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+    }
+
+    .control-row .value {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--accent);
+      min-width: 36px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      grid-column: 1 / -1;
+      width: 100%;
+      height: 4px;
+      appearance: none;
+      background: var(--bg-input);
+      border-radius: 99px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
       appearance: none;
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background: var(--highlight-color);
+      background: var(--accent);
+      border: 2px solid var(--bg-sidebar);
+      box-shadow: 0 0 0 1px var(--accent);
+      transition: transform var(--transition);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+
+    .toggle-row span {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+    }
+
+    .toggle-row label {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
       cursor: pointer;
-      transition: background 0.3s, transform 0.2s;
     }
 
-    .control-item input[type="range"]::-webkit-slider-thumb:hover {
-      background: darken(var(--highlight-color), 10%);
-      transform: scale(1.2);
-    }
-
-    .slider-value {
+    .toggle {
+      position: relative;
       width: 40px;
-      text-align: right;
-      font-size: 0.9em;
+      height: 22px;
+      flex-shrink: 0;
     }
 
-    .checkbox-control {
-      display: flex;
-      align-items: center;
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
     }
 
-    .checkbox-control input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      margin-right: 10px;
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 99px;
       cursor: pointer;
-      accent-color: var(--highlight-color);
-      transition: transform 0.2s;
+      transition: background var(--transition), border-color var(--transition);
     }
 
-    .checkbox-control input[type="checkbox"]:hover {
-      transform: scale(1.1);
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: transform var(--transition), background var(--transition);
     }
 
-    .toggle-dark-mode {
-      display: flex;
-      align-items: center;
-      margin-top: 20px;
+    .toggle input:checked + .toggle-track {
+      background: var(--accent-dim);
+      border-color: var(--accent);
     }
 
-    .toggle-dark-mode input[type="checkbox"] {
-      width: 24px;
-      height: 24px;
-      margin-right: 10px;
+    .toggle input:checked + .toggle-track::after {
+      transform: translateX(18px);
+      background: var(--accent);
+    }
+
+    .select-row select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      color: var(--text-primary);
+      font: inherit;
+      font-size: 0.84rem;
+      outline: none;
       cursor: pointer;
-      accent-color: var(--highlight-color);
-      transition: transform 0.2s;
     }
 
-    .toggle-dark-mode input[type="checkbox"]:hover {
-      transform: scale(1.1);
+    .select-row select:focus {
+      border-color: var(--accent);
     }
 
-    .toggle-dark-mode label {
-      font-size: 1em;
-      cursor: pointer;
+    .sidebar-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .hint-card {
+      background: var(--accent-dim);
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      font-size: 0.75rem;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+
+    .hint-card kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-primary);
+    }
+
+    /* Viewport */
+    .viewport {
+      flex: 1;
+      position: relative;
+      min-width: 0;
+      background: #000;
     }
 
     #canvasContainer {
       width: 100%;
       height: 100%;
+      display: grid;
+      place-items: center;
     }
 
-    .time-container {
-      position: fixed;
-      color: var(--text-color);
-      top: 5px;
-      left: 50%;
-      transform: translateX(-50%);
+    #canvasContainer canvas {
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    .stats-bar {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
       display: flex;
-      padding: 10px 10px;
-      z-index: 1000;
+      flex-wrap: wrap;
+      gap: 8px;
+      pointer-events: none;
     }
 
-    .time-item {
-      margin: 0 15px;
-      text-align: center;
+    .stat-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 99px;
+      background: var(--overlay);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      font-size: 0.75rem;
     }
 
-    .time-item h3 {
-      margin-bottom: 5px;
-      font-size: 0.9em;
-      color: var(--highlight-color);
+    .stat-chip .label {
+      color: var(--text-muted);
+      font-weight: 500;
     }
 
-    .time-item span {
-      font-size: 0.9em;
-      color: var(--text-color);
+    .stat-chip .value {
+      font-family: var(--font-mono);
+      font-weight: 500;
+      color: var(--text-primary);
     }
 
-    /* Responsive Design */
-    @media (max-width: 768px) {
-      .control-panel {
-        width: 80%;
+    .mobile-toggle {
+      display: none;
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 15;
+      width: 44px;
+      height: 44px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--overlay);
+      backdrop-filter: blur(12px);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 1.2rem;
+    }
+
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 15;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition);
+    }
+
+    .sidebar-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: var(--overlay);
+      backdrop-filter: blur(8px);
+      z-index: 30;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition);
+    }
+
+    .loading-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .loading-overlay.error {
+      background: rgba(127, 29, 29, 0.85);
+    }
+
+    .loading-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .loading-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 900px) {
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        transform: translateX(-100%);
+        box-shadow: var(--shadow);
       }
 
-      .settings-btn {
-        padding: 0.6em 1em;
-        font-size: 0.9em;
+      .sidebar.open {
+        transform: translateX(0);
       }
 
-      .control-panel-toggle {
-        width: 35px;
-        height: 35px;
+      .mobile-toggle {
+        display: grid;
+        place-items: center;
       }
 
-      .time-item {
-        margin: 5px 0;
+      .sidebar-overlay {
+        display: block;
       }
     }
   </style>
-  </head>
+</head>
 
-  <body>
-    <button class="settings-btn" id="settingsBtn">⚙️ Settings</button>
-
-    <div class="control-panel" id="controlPanel">
-      <button class="control-panel-toggle"
-        id="controlPanelToggle">✖️</button>
-      <div class="control-group">
-        <div class="section">
-          <h3>Scene Properties</h3>
-
-          <div class="control-item">
-            <label for="bounces">Bounces</label>
-            <input id="bounces" type="range" min="1" max="32"
-              step="1"
-              value="8" />
-            <span class="slider-value" id="bouncesValue">8</span>
-          </div>
-
-          <div class="control-item">
-            <label for="samples">Samples</label>
-            <input id="samples" type="range" min="1" max="32"
-              step="1"
-              value="1" />
-            <span class="slider-value" id="samplesValue">1</span>
-          </div>
-
-          <div class="control-item">
-            <label for="fov">FOV</label>
-            <input id="fov" type="range" min="60" max="220" step="5"
-              value="135" />
-            <span class="slider-value" id="fovValue">135</span>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-icon">◈</div>
+          <div>
+            <h1>WebGPU Pathtracer</h1>
+            <p>Progressive GPU ray tracing</p>
           </div>
         </div>
+      </div>
 
-        <!-- Post processing Section -->
-        <div class="section">
-          <h3>Post Processing</h3>
-
-          <div class="control-item checkbox-control">
-            <input id="gamma" type="checkbox" checked />
-            <label for="gamma">Gamma Correction</label>
+      <div class="sidebar-content">
+        <section class="section">
+          <h2 class="section-title">Scene</h2>
+          <div class="scene-card">
+            <label for="sceneSelect">Select preset</label>
+            <select id="sceneSelect"></select>
+            <p class="scene-description" id="sceneDescription">Loading scene…</p>
           </div>
+        </section>
 
-          <div class="control-item checkbox-control">
-            <input id="aces" type="checkbox" checked />
-            <label for="aces">ACES Filmic Tone Mapping</label>
+        <section class="section">
+          <h2 class="section-title">Rendering</h2>
+          <div class="control-row">
+            <label for="bounces">Max bounces</label>
+            <span class="value" id="bouncesValue">8</span>
+            <input id="bounces" type="range" min="1" max="32" step="1" value="8">
           </div>
-
-          <div class="control-item checkbox-control">
-            <input id="filmic" type="checkbox" />
-            <label for="filmic">Filmic Tone Mapping</label>
+          <div class="control-row">
+            <label for="samples">Samples / pixel</label>
+            <span class="value" id="samplesValue">1</span>
+            <input id="samples" type="range" min="1" max="32" step="1" value="1">
           </div>
-        </div>
-
-        <!-- Advanced Settings Section -->
-        <div class="section">
-          <h3>Advanced Settings</h3>
-
-          <div class="control-item">
-            <label for="jitter">Jitter Scale</label>
-            <input id="jitter" type="range" min="0" max="10"
-              step="0.1"
-              value="1.0" />
-            <span class="slider-value" id="jitterValue">1.0</span>
+          <div class="control-row">
+            <label for="fov">Field of view</label>
+            <span class="value" id="fovValue">135</span>
+            <input id="fov" type="range" min="60" max="220" step="5" value="135">
           </div>
-
-          <div class="control-item checkbox-control">
-            <input id="backfaceCulling" type="checkbox" checked />
-            <label for="backfaceCulling">Backface Culling</label>
+          <div class="control-row">
+            <label for="jitter">Jitter scale</label>
+            <span class="value" id="jitterValue">1.0</span>
+            <input id="jitter" type="range" min="0" max="10" step="0.1" value="1.0">
           </div>
+        </section>
 
-          <div class="control-item">
-            <label for="skyMode">Sky Mode</label>
+        <section class="section">
+          <h2 class="section-title">Post Processing</h2>
+          <div class="toggle-row">
+            <span>Gamma correction</span>
+            <label class="toggle" for="gamma">
+              <input id="gamma" type="checkbox" checked>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+          <div class="toggle-row">
+            <span>ACES filmic</span>
+            <label class="toggle" for="aces">
+              <input id="aces" type="checkbox" checked>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+          <div class="toggle-row">
+            <span>Filmic tone map</span>
+            <label class="toggle" for="filmic">
+              <input id="filmic" type="checkbox">
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">Advanced</h2>
+          <div class="toggle-row">
+            <span>Backface culling</span>
+            <label class="toggle" for="backfaceCulling">
+              <input id="backfaceCulling" type="checkbox" checked>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+          <div class="select-row" style="margin-top: 12px;">
+            <label for="skyMode" class="section-title" style="margin-bottom: 8px;">Sky mode</label>
             <select id="skyMode">
-              <option value="0">Black Sky</option>
-              <option value="1">Procedural Sky</option>
-              <option value="2">Sky Texture</option>
+              <option value="0">Black sky</option>
+              <option value="1">Procedural sky</option>
+              <option value="2">Sky texture</option>
             </select>
           </div>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">Appearance</h2>
+          <div class="toggle-row">
+            <span>Dark mode</span>
+            <label class="toggle" for="themeToggle">
+              <input id="themeToggle" type="checkbox" checked>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+        </section>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="hint-card">
+          Click canvas to look around.<br>
+          <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move ·
+          <kbd>Space</kbd>/<kbd>Ctrl</kbd> up/down
+        </div>
+      </div>
+    </aside>
+
+    <main class="viewport">
+      <button class="mobile-toggle" id="sidebarToggle" aria-label="Toggle settings">☰</button>
+
+      <div class="stats-bar">
+        <div class="stat-chip">
+          <span class="label">Triangles</span>
+          <span class="value" id="stat-triangles">—</span>
+        </div>
+        <div class="stat-chip">
+          <span class="label">Samples</span>
+          <span class="value" id="stat-frames">0</span>
+        </div>
+        <div class="stat-chip">
+          <span class="label">FPS</span>
+          <span class="value" id="stat-fps">—</span>
         </div>
       </div>
 
-      <div class="toggle-dark-mode">
-        <input type="checkbox" id="darkModeToggle" checked />
-        <label for="darkModeToggle">Dark Mode</label>
-      </div>
-
-    </div>
-
-    <div class="container">
       <div id="canvasContainer"></div>
-    </div>
 
-    <div class="time-container">
-      <div class="time-item">
-        <span id="triangles"></span><span> triangles</span>
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+          <div class="spinner"></div>
+          <span class="loading-label">Loading scene…</span>
+        </div>
       </div>
-      <div class="time-item">
-        <span id="render-time"></span><span> frames</span>
-      </div>
-      <div class="time-item">
-        <span id="frame-time"></span><span> fps</span>
-      </div>
-    </div>
+    </main>
+  </div>
 
-    <script type="module" src="/src/main.ts"></script>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-    <script>
-    const settingsBtn = document.getElementById('settingsBtn');
-    const controlPanel = document.getElementById('controlPanel');
-    const controlPanelToggle = document.getElementById('controlPanelToggle');
-    const darkModeToggle = document.getElementById('darkModeToggle');
-
-    settingsBtn.addEventListener('click', () => {
-      controlPanel.classList.toggle('open');
-    });
-
-    controlPanelToggle.addEventListener('click', () => {
-      controlPanel.classList.remove('open');
-    });
-
-
-
-    // Check if dark mode was previously enabled
-    if (localStorage.getItem('dark-mode') === 'enabled') {
-      document.body.classList.add('dark-mode');
-      darkModeToggle.checked = true;
-    } else {
-      darkModeToggle.checked = false;
-    }
-
-    darkModeToggle.addEventListener('change', () => {
-      document.body.classList.toggle('dark-mode');
-      // Save preference in local storage
-      if (document.body.classList.contains('dark-mode')) {
-        localStorage.setItem('dark-mode', 'enabled');
-      } else {
-        localStorage.setItem('dark-mode', 'disabled');
-      }
-    });
-
-    // Update slider values dynamically
-    const sliders = document.querySelectorAll('input[type="range"]');
-    sliders.forEach(slider => {
-      slider.addEventListener('input', (e) => {
-        const valueSpan = document.getElementById(`${e.target.id}Value`);
-        valueSpan.textContent = e.target.value;
-      });
-    });
-  </script>
-  </body>
+  <script type="module" src="/src/main.ts"></script>
+</body>
 
 </html>

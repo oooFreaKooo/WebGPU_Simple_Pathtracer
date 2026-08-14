@@ -1,3 +1,4 @@
+import { vec3 } from 'gl-matrix'
 import { Camera } from '../components/camera'
 import { Controls } from '../components/controls'
 import { ObjLoader } from '../components/obj-loader'
@@ -47,6 +48,26 @@ export class Scene {
 
     constructor (canvas: HTMLCanvasElement) {
         this.cameraControls = new Controls(canvas, this.camera)
+    }
+
+    reset () {
+        this.materials = []
+        this.objectMeshes = []
+        this.materialToIdxMap.clear()
+        this.blasArray = []
+        this.blasInstanceArray = []
+        this.uniqueGeometries.clear()
+        this.totalBLASNodeCount = 0
+        this.nextMeshID = 0
+        this.blasTriangleOffsetMap.clear()
+        this.blasNodeOffsetMap.clear()
+        this.blasOffsetToMeshIDMap.clear()
+        this.meshIDToBLAS.clear()
+
+        vec3.set(this.camera.position, 0.01, 2.5, -7)
+        this.camera.theta = 0
+        this.camera.phi = 0
+        this.camera.recalculate_vectors()
     }
 
     async createObjects (objects: ObjectProperties[]) {
