@@ -143,16 +143,6 @@ To get started with this project, follow these simple steps:
 
    This will launch the pathtracer on a local development server (typically available at `http://localhost:3000/`). If you want to automatically open the browser, Vite has already been configured to do so.
 
-### Optional: Share Your Local Project
-
-If you want to share your local project with others over the internet, you can use tools like `ngrok` to create a secure tunnel to your local server. To do so, run the following command:
-
-```bash
-ngrok http 5173
-```
-
-Replace `5173` with the port number your project is running on. This will provide a public URL that you can share with others.
-
 ## Usage
 
 Feel free to explore and modify the code to learn more about WebGPU and path tracing. This project is a great starting point for anyone looking to delve into advanced graphics programming with modern web technologies.

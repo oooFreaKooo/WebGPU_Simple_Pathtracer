@@ -22,19 +22,19 @@
   "author": "Roman Koller",
   "license": "ISC",
   "dependencies": {
-    "gl-matrix": "^3.4.3"
+    "gl-matrix": "^3.4.4"
   },
   "devDependencies": {
     "@types/gl-matrix": "^3.2.0",
-    "@types/node": "^22.7.4",
-    "@typescript-eslint/eslint-plugin": "^8.7.0",
-    "@typescript-eslint/parser": "^8.7.0",
-    "@webgpu/types": "^0.1.46",
-    "eslint": "^9.11.1",
-    "ts-shader-loader": "^2.0.2",
-    "typescript": "^5.6.2",
-    "vite": "^6.4.3",
+    "@types/node": "^26.2.0",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/parser": "^8.67.0",
+    "@webgpu/types": "^0.1.71",
+    "eslint": "^10.8.1",
+    "ts-shader-loader": "^2.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.1",
     "vite-plugin-string": "^1.2.3"
   },
-  "packageManager": "yarn@4.5.0"
+  "packageManager": "yarn@4.18.0"
 }
